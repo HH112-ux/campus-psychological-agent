@@ -1,0 +1,40 @@
+# 开发/部署基础设施（对齐开发文档：FastAPI + MongoDB + Nginx 单机起步）
+# 本地如已安装原生 MongoDB，可跳过 mongo 服务；backend 默认连 localhost:27017。
+services:
+  mongo:
+    image: mongo:7
+    container_name: xinyu-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    command: ["mongod", "--bind_ip_all"]
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: xinyu-nginx
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    profiles: ["prod"]   # 本地开发默认不启动，上线时启用
+
+  api:
+    build: .
+    container_name: xinyu-api
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      - mongo
+    expose:
+      - "8000"
+    profiles: ["prod"]
+
+volumes:
+  mongo-data:

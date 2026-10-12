@@ -1,0 +1,17 @@
+[project]
+name = "xinyu-backend"
+version = "0.1.0"
+description = "心屿 · 校园心理咨询智能陪伴 Agent 后端"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
