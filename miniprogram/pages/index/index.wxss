@@ -1,0 +1,73 @@
+/* pages/index/index.wxss —— P0 占位首页样式 */
+.hero {
+  text-align: center;
+  padding: 40rpx 0 48rpx;
+}
+
+.logo {
+  font-size: 72rpx;
+  font-weight: 600;
+  color: #4C8BF5;
+  letter-spacing: 8rpx;
+}
+
+.subtitle {
+  margin-top: 16rpx;
+  font-size: 30rpx;
+  color: #646A73;
+}
+
+.badge {
+  display: inline-block;
+  margin-top: 24rpx;
+  padding: 8rpx 24rpx;
+  font-size: 24rpx;
+  color: #4C8BF5;
+  background: #E8F0FE;
+  border-radius: 24rpx;
+}
+
+.card {
+  background: #FFFFFF;
+  border-radius: 20rpx;
+  padding: 32rpx;
+  margin-bottom: 28rpx;
+  box-shadow: 0 4rpx 16rpx rgba(31, 35, 41, 0.04);
+}
+
+.card-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  margin-bottom: 16rpx;
+}
+
+.card-desc {
+  font-size: 28rpx;
+  line-height: 1.7;
+  color: #646A73;
+}
+
+.health-status {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #1F2329;
+  margin-bottom: 8rpx;
+}
+
+.health-desc {
+  font-size: 26rpx;
+  color: #646A73;
+  line-height: 1.6;
+  margin-bottom: 28rpx;
+}
+
+.primary-btn {
+  border-radius: 14rpx;
+}
+
+.footer {
+  margin-top: 16rpx;
+  text-align: center;
+  font-size: 24rpx;
+  color: #8F959E;
+}

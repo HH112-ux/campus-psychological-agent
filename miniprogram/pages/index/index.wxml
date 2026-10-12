@@ -1,0 +1,26 @@
+<!--pages/index/index.wxml —— P0 占位首页-->
+<view class="container">
+  <view class="hero">
+    <view class="logo">心屿</view>
+    <view class="subtitle">校园心理咨询智能陪伴</view>
+    <view class="badge">P0 环境与基建 · v{{version}}</view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">当前阶段</view>
+    <view class="card-desc">
+      这是 P0 占位首页，用于验证小程序工程可正常编译启动。对话、情绪记录等正式页面将在 P2 起逐步上线。
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">后端连通性检测</view>
+    <view class="health-status">{{healthText}}</view>
+    <view class="health-desc">{{healthDesc}}</view>
+    <button class="primary-btn" type="primary" loading="{{checking}}" bindtap="checkHealth">
+      检测 /health
+    </button>
+  </view>
+
+  <view class="footer">如遇连接问题，请确认后端运行在 127.0.0.1:8000</view>
+</view>
