@@ -42,8 +42,10 @@ FastAPI + LangChain + 智谱 GLM（主模型 + 轻量档）+ 微信小程序原�
 ## 快速开始
 
 1. 阅读 `CONTRIBUTING.md`，按提交规范开发。
-2. 按阶段文档推进，每个阶段验收通过后打里程碑 tag（见 CONTRIBUTING）。
-3. 密钥一律放 `.env`（不入库），参考 `backend/.env.example`（P0 建立时提供）。
+2. 后端：见 `backend/README.md`（venv → init_db → uvicorn，验收 `GET /health` 返回 200 且 `db: connected`）。
+3. 小程序：见 `miniprogram/README.md`（微信开发者工具导入 `miniprogram/`，P0 显示占位首页）。
+4. 按阶段文档推进，每个阶段验收通过后打里程碑 tag（见 CONTRIBUTING）。
+5. 密钥一律放 `.env`（不入库），参考 `backend/.env.example`。
 
 ## 安全红线（验收一票否决）
 
