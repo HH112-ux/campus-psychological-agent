@@ -10,10 +10,15 @@
 campus-psychological-agent/
 ├── backend/               # FastAPI 后端（P0 起逐步搭建）
 ├── miniprogram/           # 微信小程序原生工程（P0 起逐步搭建）
-├── docs/                  # 过程文档（评估集、评审记录等）
+├── docs/                  # 工程规范：任务拆分 / 版本策略 / 危机词库变更流程
+│   ├── task-management.md
+│   ├── versioning.md
+│   └── crisis-lexicon-workflow.md
 ├── campus-agent-dev-doc/  # 开发文档（交互原型 + 功能需求 + 技术方案）
 ├── campus-agent-api-doc/  # API 文档（接口契约）
 ├── CONTRIBUTING.md        # 开发流程与提交规范（必读）
+├── SECURITY.md            # 安全策略（漏洞报告 / 密钥 / 数据保护）
+├── CHANGELOG.md           # 变更日志
 └── .gitmessage            # git commit 消息模板
 ```
 

@@ -2,6 +2,8 @@
 
 本文件是本仓库的强制开发约定，与《开发文档》《API 文档》配套使用。所有协作者（含 AI 助手）必须遵守。
 
+配套规范（同为强制约定）：任务拆分 `docs/task-management.md`、版本与发布 `docs/versioning.md`、危机词库变更 `docs/crisis-lexicon-workflow.md`、安全策略 `SECURITY.md`。
+
 ## 1. 分支模型
 
 采用轻量主干开发（trunk-based），适配 1–2 人小团队。
@@ -88,6 +90,7 @@ git commit            # 未带 -m 时会自动加载 .gitmessage 模板
 1. 在 `main` 上打里程碑 tag：`git tag -a <tag> -m "<说明>"`。
 2. tag 命名：`m1`、`m2` … `m5`（演示节点）或 `v0.1.0`（可提审版本）。示例：`git tag -a m1 -m "M1：真机20轮对话+危机卡片通过"`。
 3. 阶段验收清单以《开发文档》每阶段"验收"为准，未通过验收不得打 tag、不得进入下一阶段主干开发。
+4. 里程碑 tag 与版本 tag（`vX.Y.Z`）分工、发版检查清单见 `docs/versioning.md`；每次功能合入 `main` 同步更新一行 `CHANGELOG.md`。
 
 | 里程碑 | 对应阶段 | 打 tag 条件 |
 |---|---|---|
@@ -106,6 +109,7 @@ git commit            # 未带 -m 时会自动加载 .gitmessage 模板
   - 密钥只进 `.env`（模板 `.env.example`），`*.pem / *.key / .env` 已在 `.gitignore`，发现误提交立即处理；
   - 日志不得出现对话原文与用户敏感字段；接口日志只留接口、耗时、错误码、脱敏 ID；
   - 所有查询强制 `user_id` 过滤，跨用户访问一律 404。
+- 密钥管理、依赖漏洞扫描与泄露应急响应的完整约定见 `SECURITY.md`；危机词库的任何改动（含热更新）必须先走 `docs/crisis-lexicon-workflow.md` 五步闭环。
 
 ## 6. 评审约定（多人协作时）
 
