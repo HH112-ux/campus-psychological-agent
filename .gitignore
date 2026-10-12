@@ -1,0 +1,46 @@
+# ===== macOS =====
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ===== Python / FastAPI =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# ===== 微信小程序 / Node =====
+node_modules/
+miniprogram/miniprogram_npm/
+miniprogram_npm/
+*.min.js.map
+
+# ===== 环境与密钥（严禁提交）=====
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# ===== 编辑器 / 工具缓存 =====
+.idea/
+.vscode/
+*.swp
+*.swo
+.trae-html-share-packages/
+.DS_Store
+
+# ===== 日志与临时文件 =====
+*.log
+tmp/
+temp/

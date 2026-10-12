@@ -1,0 +1,20 @@
+# <type>(<scope>): <subject>
+
+# ---- type（必填，选其一）----
+# feat   新功能          fix    缺陷修复
+# docs   仅文档变更      style  格式调整（不影响逻辑）
+# refactor 重构（行为不变）  perf 性能优化
+# test   测试相关        build  构建/依赖
+# chore  杂项            revert 回滚
+
+# ---- 规范 ----
+# subject 用中文，动词开头，≤50 字，说明"做了什么"，句末不加句号。
+# 一次提交只包含一个逻辑变更。示例：
+#   feat(auth): 完成微信登录换取 JWT 全链路
+#   fix(stream): 修复 SSE 断帧导致气泡缺失
+#   test(crisis): 新增 20 条危机测试用例
+# 禁止 "update code" / "fix bug" / "修改" 这类无信息描述。
+
+# ---- body（需要时填写，说明为什么与影响面）----
+#
+# BREAKING CHANGE: 描述破坏性变更
