@@ -264,6 +264,7 @@ def test_records_timeline_merges_sources(client, db, fake_llm):
     msg_item = next(it for it in d["items"] if it["source"] == "message")
     assert msg_item["evidence"] == "越学越慌，睡不着"
     assert msg_item["session_title"] and msg_item["session_title"].startswith("最近有点焦虑")
+    assert msg_item["session_id"] == sid  # 供"定位到来源对话"跳转
     checkin_item = next(it for it in d["items"] if it["source"] == "checkin")
     assert checkin_item["evidence"] is None and checkin_item["session_title"] is None
 

@@ -22,6 +22,7 @@
 - P1 限流：内存固定窗口单机内测（登录 10 次/分/IP、消息 30 条/时/用户、读 60 次/分/用户），代码注释标注生产需替换为 Nginx/Redis。
 - P1 小程序：静默登录封装（自动携带 JWT、401 静默刷新并自动重放）；SSE 流式对话页（`enableChunked` + 跨 chunk 安全 UTF-8 解码、按 `\n\n` 断帧、10s 无增量中断、旧基础库自动降级非流式）；高危卡片置顶常驻 / mid 卡片插入流、一键拨打热线；会话列表（新建/进入/重命名/删除）；高危卡片在重进会话时依据 `crisis_high_shown` 恢复。
 - P1 测试：后端 46 项 pytest 全绿（28 项危机红线用例含 18 个高危变体与 6 个防误报、15 项 P1 认证/会话/消息集成测试 mock LLM、3 项 P0），ruff 无 error；小程序 SSE 解码经 Node 模拟逐字节/分块/大块三种切分验证通过。
+- P2 小程序完整页面：四 TabBar 结构（首页/对话/情绪日志/我的）按原型落地；首页打卡 + 开始倾诉入口、对话页输入框长度限制（2000 字）与键盘适配（adjust-position + 安全区）、会话列表（新建/继续/重命名/删除/空态）、等待/网络错误/空列表三状态、登录态过期静默续期（401 刷新重放）；日志时间线条目支持"定位到来源对话"（records 返回 session_id）与"当日打卡备注编辑"（复用 upsert 接口）；全流程（打卡 → 倾诉 → 看历史 → 删除会话）API 链路验证无阻塞缺陷。
 - P3 情绪识别管道：轻量模型 `glm-4-flash` 对本轮消息（含前两轮上下文）输出结构化 JSON（六类情绪 + 强度 1-10 + evidence + risk_level + strategy_hint），5s 预算内完成，失败不阻塞回复、不写错误数据（宁可缺失）；结果回填 assistant 消息 emotion 字段并写入 `emotion_records`；SSE 新增 `emotion` 事件（delta 全部下发后、done 之前），非流式响应带 `emotion` 字段；策略层按最近情绪注入身体优先 / 转介等话术。
 - P3 每日打卡：五档情绪（calm/ok/low/anxious/irritable → 强度 2/4/6/7/6）按「用户 + 日期」upsert、连续天数 streak、记忆型问候（按最近情绪记录套固定模板，不调大模型）；`/users/me` 扩展 `checkin_streak` + `memory_greeting`。
 - P3 情绪日志：`GET /emotion/records`（对话 + 打卡双来源合并、情绪筛选、时间倒序分页、会话标题两跳关联、打卡 mood 归一化到六类枚举）；`GET /emotion/trends`（day/week/month 粒度、7/30 天窗口、日均强度与上周对比、主导情绪、无记录置 null 不补 0）。

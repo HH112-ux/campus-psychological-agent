@@ -102,9 +102,11 @@ Page({
     const query = `/api/v1/emotion/records?page=${page}&page_size=20`
       + (this.data.filter ? `&emotion=${this.data.filter}` : '')
     return api.get(query).then((d) => {
+      const todayStr = new Date().toISOString().slice(0, 10)
       const decorated = (d.items || []).map((it) => {
         const meta = EMOTION_META[it.emotion] || { emoji: '🌿', text: it.emotion, color: '#8f959e' }
-        return { ...it, emoji: meta.emoji, label: meta.text, color: meta.color, timeText: this.fmtTime(it.created_at) }
+        const canEditNote = it.source === 'checkin' && (it.created_at || '').slice(0, 10) === todayStr
+        return { ...it, emoji: meta.emoji, label: meta.text, color: meta.color, timeText: this.fmtTime(it.created_at), canEditNote }
       })
       this.setData({
         items: reset ? decorated : this.data.items.concat(decorated),
@@ -133,5 +135,41 @@ Page({
     this.loadRecords(true)
       .catch(() => wx.showToast({ title: '加载失败', icon: 'none' }))
       .finally(() => this.setData({ loading: false }))
+  },
+
+  // 时间线条目交互（P2/P3 spec）：对话来源 → 定位到来源会话；当日打卡 → 编辑备注
+  onItemTap(e) {
+    const { id } = e.currentTarget.dataset
+    const item = this.data.items.find((it) => it.record_id === id)
+    if (!item) return
+    if (item.source === 'message') {
+      if (item.session_id) {
+        wx.reLaunch({ url: `/pages/chat/chat?session_id=${item.session_id}` })
+      } else {
+        wx.showToast({ title: '对话已删除，仅保留记录', icon: 'none' })
+      }
+    } else if (item.canEditNote) {
+      this.editCheckinNote(item)
+    }
+  },
+
+  editCheckinNote(item) {
+    wx.showModal({
+      title: '补充今天的备注',
+      editable: true,
+      placeholderText: '记录此刻的心情细节（200 字内）',
+      content: item.note || '',
+      success: (res) => {
+        if (!res.confirm) return
+        const note = (res.content || '').trim().slice(0, 200)
+        api
+          .post('/api/v1/emotion/checkins', { mood: item.mood, note: note || null })
+          .then(() => {
+            wx.showToast({ title: '已更新', icon: 'success' })
+            this.refresh()
+          })
+          .catch((err) => wx.showToast({ title: (err && err.message) || '更新失败', icon: 'none' }))
+      },
+    })
   },
 })

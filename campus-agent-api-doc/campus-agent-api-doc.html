@@ -443,11 +443,11 @@ sequenceDiagram
       "risk_level": "none", "session_title": "深夜的考试焦虑",
       "created_at": "2026-10-12T23:47:06+08:00" },
     { "record_id": "671b3a01...", "source": "checkin", "ref_id": "671b3a01...",
-      "emotion": "depressed", "intensity": 6, "evidence": null, "note": "上午出分了，比预期低一些",
+      "emotion": "depressed", "mood": "low", "intensity": 6, "evidence": null, "note": "上午出分了，比预期低一些",
       "risk_level": "none", "session_title": null,
       "created_at": "2026-10-12T12:30:00+08:00" }
   ] } }</pre>
-      <p class="note-line">打卡 mood 在合并时归一化为六类枚举（low→depressed、irritable→angry），与对话来源情绪口径一致；checkin 条目附 <code class="inline">note</code>（打卡备注，无则为 null），message 条目附 <code class="inline">evidence</code>。</p>
+      <p class="note-line">打卡 mood 在合并时归一化为六类枚举（low→depressed、irritable→angry），与对话来源情绪口径一致；checkin 条目附原始 <code class="inline">mood</code>（当日备注编辑回传用）与 <code class="inline">note</code>（打卡备注，无则为 null）；message 条目附 <code class="inline">evidence</code> 与 <code class="inline">session_id</code>（定位来源对话跳转用）。</p>
 
       <h3 class="ep-anchor" id="ep-emotion-trends"><span class="badge get">GET</span> /api/v1/emotion/trends</h3>
       <p>趋势聚合，服务端完成计算，小程序只渲染。</p>

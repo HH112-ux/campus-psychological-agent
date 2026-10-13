@@ -185,6 +185,12 @@
   line-height: 1.5;
 }
 
+.tl-action {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #4c8bf5;
+}
+
 .empty {
   padding: 80rpx 0 60rpx;
   text-align: center;

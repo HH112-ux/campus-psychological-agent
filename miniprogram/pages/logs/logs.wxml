@@ -37,7 +37,7 @@
 
   <!-- 时间线 -->
   <view class="timeline">
-    <view class="tl-item" wx:for="{{items}}" wx:key="record_id">
+    <view class="tl-item" wx:for="{{items}}" wx:key="record_id" data-id="{{item.record_id}}" bindtap="onItemTap">
       <view class="tl-badge" style="background: {{item.color}}1A; color: {{item.color}}">
         {{item.emoji}}
       </view>
@@ -50,6 +50,8 @@
         <view class="tl-src">{{item.source === 'message' ? '来自对话' : '每日打卡'}}{{item.session_title ? '「' + item.session_title + '」' : ''}}</view>
         <view wx:if="{{item.evidence}}" class="tl-evidence">“{{item.evidence}}”</view>
         <view wx:elif="{{item.note}}" class="tl-evidence">备注：{{item.note}}</view>
+        <view wx:if="{{item.canEditNote}}" class="tl-action">✎ 编辑今日备注</view>
+        <view wx:elif="{{item.source === 'message' && item.session_id}}" class="tl-action">定位到对话 ›</view>
       </view>
     </view>
 

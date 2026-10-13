@@ -58,8 +58,11 @@ async def _collect_checkins(user_id: ObjectId, start: datetime, end: datetime):
     return docs
 
 
-async def _session_titles_for(ref_ids: set) -> dict:
-    """ref_id（用户消息 id）→ 会话标题 的映射（message → session 两跳关联）。"""
+async def _session_meta_for(ref_ids: set) -> dict:
+    """ref_id（用户消息 id）→ {session_id, title} 映射（message → session 两跳关联）。
+
+    session_id 供日志页"点击时间线条目 → 定位到来源对话"跳转使用。
+    """
     if not ref_ids:
         return {}
     msg_ids = {ObjectId(r) for r in ref_ids if r}
@@ -74,7 +77,7 @@ async def _session_titles_for(ref_ids: set) -> dict:
     }
     session_ids = set(ref_to_session.values())
     if not session_ids:
-        return {}
+        return {ref: {"session_id": None, "title": None} for ref in ref_to_session}
     titles = {
         str(s["_id"]): s.get("title")
         async for s in mongo.db[COLL_SESSIONS].find(
@@ -82,22 +85,28 @@ async def _session_titles_for(ref_ids: set) -> dict:
         )
     }
     return {
-        ref: titles.get(str(sid)) for ref, sid in ref_to_session.items()
+        ref: {
+            "session_id": str(sid),
+            "title": titles.get(str(sid)),
+        }
+        for ref, sid in ref_to_session.items()
     }
 
 
-def _serialize_record(doc: dict, session_titles: dict) -> dict:
-    """对话来源情绪记录 → 时间线条目。"""
+def _serialize_record(doc: dict, session_meta: dict) -> dict:
+    """对话来源情绪记录 → 时间线条目（session_id 供"定位到来源对话"跳转）。"""
     ref_id = str(doc["ref_id"]) if doc.get("ref_id") else None
+    meta = session_meta.get(ref_id, {}) if ref_id else {}
     return {
         "record_id": str(doc["_id"]),
         "source": "message",
         "ref_id": ref_id,
+        "session_id": meta.get("session_id"),
         "emotion": doc.get("emotion"),
         "intensity": doc.get("intensity"),
         "evidence": doc.get("evidence"),
         "risk_level": doc.get("risk_level", "none"),
-        "session_title": session_titles.get(ref_id),
+        "session_title": meta.get("title"),
         "created_at": to_iso(doc.get("created_at")) if doc.get("created_at") else None,
     }
 
@@ -109,6 +118,7 @@ def _serialize_checkin(doc: dict) -> dict:
         "source": "checkin",
         "ref_id": str(doc["_id"]),
         "emotion": doc.get("emotion") or _CHECKIN_EMOTION_MAP.get(doc.get("mood"), doc.get("mood")),
+        "mood": doc.get("mood"),  # 原始打卡档位，供"当日备注编辑"回传
         "intensity": doc.get("intensity"),
         "evidence": None,
         "note": doc.get("note"),
@@ -138,11 +148,11 @@ async def list_records(
     emo_docs = await _collect_emotion_records(user_id, start, end)
     checkin_docs = await _collect_checkins(user_id, start, end)
 
-    session_titles = await _session_titles_for(
+    session_meta = await _session_meta_for(
         {str(d.get("ref_id")) for d in emo_docs if d.get("ref_id")}
     )
 
-    items = [_serialize_record(d, session_titles) for d in emo_docs]
+    items = [_serialize_record(d, session_meta) for d in emo_docs]
     items.extend(_serialize_checkin(d) for d in checkin_docs)
     if emotion:
         items = [it for it in items if it["emotion"] == emotion]
