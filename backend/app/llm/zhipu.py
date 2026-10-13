@@ -31,8 +31,18 @@ class ZhipuProvider(LLMProvider):
             "Content-Type": "application/json",
         }
 
-    async def generate(self, messages: list[dict], temperature: float = 0.7, max_tokens: int = 1024) -> str:
+    def _timeout(self) -> httpx.Timeout:
+        # 流式下 read 表示“两个数据块之间”的最大间隔，持续有数据就不会整体超时
         settings = get_settings()
+        return httpx.Timeout(
+            settings.model_timeout_seconds,
+            connect=10.0,
+            read=settings.model_timeout_seconds,
+            write=10.0,
+            pool=10.0,
+        )
+
+    async def generate(self, messages: list[dict], temperature: float = 0.7, max_tokens: int = 1024) -> str:
         payload = {
             "model": self.model,
             "messages": messages,
@@ -40,14 +50,13 @@ class ZhipuProvider(LLMProvider):
             "max_tokens": max_tokens,
             "stream": False,
         }
-        async with httpx.AsyncClient(timeout=settings.model_timeout_seconds) as client:
+        async with httpx.AsyncClient(timeout=self._timeout()) as client:
             resp = await client.post(f"{self.base_url}{_CHAT_PATH}", headers=self._headers(), json=payload)
             resp.raise_for_status()
             data = resp.json()
             return data["choices"][0]["message"]["content"]
 
     async def stream(self, messages: list[dict], temperature: float = 0.7, max_tokens: int = 1024) -> AsyncIterator[str]:
-        settings = get_settings()
         payload = {
             "model": self.model,
             "messages": messages,
@@ -55,7 +64,7 @@ class ZhipuProvider(LLMProvider):
             "max_tokens": max_tokens,
             "stream": True,
         }
-        async with httpx.AsyncClient(timeout=settings.model_timeout_seconds) as client:
+        async with httpx.AsyncClient(timeout=self._timeout()) as client:
             async with client.stream("POST", f"{self.base_url}{_CHAT_PATH}", headers=self._headers(), json=payload) as resp:
                 resp.raise_for_status()
                 async for line in resp.aiter_lines():

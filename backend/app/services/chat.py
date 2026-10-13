@@ -1,0 +1,261 @@
+"""消息对话主链路（开发文档 F2 时序）。
+
+身份校验 → 轮次/长度校验 → 限流 → 本地危机词库检测
+  · high：不调大模型，固定危机话术 + crisis 事件（先于 delta）
+  · mid：正常流式生成，结束后下发 crisis 卡片
+  · none：正常流式生成
+→ user/assistant 各落库 → 窗口近 20 轮记忆 → 智谱流式（超时/异常重试 1 次，仍失败降级）。
+
+对外暴露：
+- prepare_turn：在创建 StreamingResponse 之前完成，使校验错误能以普通 JSON 返回；
+- reply_nonstream：非流式 JSON 模式（弱网降级路径）；
+- stream_events：流式模式，产出 (event, data) 元组，由路由层编码为 SSE 帧。
+情绪 emotion 事件为 P3 能力，本阶段不下发（协议允许缺失，不阻塞）。
+"""
+from __future__ import annotations
+
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
+
+from app.config import get_settings
+from app.core.exceptions import CODE_CONTENT_INVALID, CODE_SESSION_ROUND_LIMIT, BizError
+from app.core.ratelimit import hit_message_rate
+from app.core.timeutil import now_cst, to_iso
+from app.db.indexes import COLL_MESSAGES, COLL_SESSIONS
+from app.db.mongo import mongo
+from app.llm.zhipu import ZhipuProvider
+from app.services import memory
+from app.services.crisis import (
+    CrisisResult,
+    detect_risk,
+    get_resources,
+    record_risk_event,
+)
+from app.services.crisis_data import HIGH_CRISIS_REPLY
+from app.services.prompts import build_system_prompt
+
+# 大模型完全不可用时的预设共情话术（F2 降级兜底）
+DEGRADED_REPLY = "我还在，刚才走神了，你愿意再说一遍吗"
+
+# 主对话采样温度（温暖、有自然变化）；单次回复 ≤120 字
+CHAT_TEMPERATURE = 0.8
+CHAT_MAX_TOKENS = 400
+
+
+@dataclass
+class Turn:
+    user: dict
+    session: dict
+    content: str
+    user_message_id: str
+    crisis: CrisisResult
+    crisis_payload: dict | None = None
+    risk_level: str = "none"
+
+
+async def _insert_message(
+    session_id, role: str, content: str, risk_level: str = "none", degraded: bool = False
+):
+    doc = {
+        "session_id": session_id,
+        "role": role,
+        "content": content,
+        "emotion": None,  # P3 填充
+        "risk_level": risk_level,
+        "feedback": None,
+        "degraded": degraded,
+        "created_at": now_cst(),
+    }
+    result = await mongo.db[COLL_MESSAGES].insert_one(doc)
+    return result.inserted_id
+
+
+async def prepare_turn(user: dict, session: dict, raw_content: str) -> Turn:
+    """校验 + 危机检测 + 落 user 消息 + 更新会话；返回 Turn。"""
+    settings = get_settings()
+    text = raw_content.strip()
+    if not text or len(text) > settings.message_max_length:
+        raise BizError(
+            CODE_CONTENT_INVALID, "消息内容不能为空，且不能超过 2000 字", http_status=422
+        )
+
+    # 应用层限流：30 条/小时/用户
+    await hit_message_rate(str(user["_id"]))
+
+    # 轮次上限：50 轮
+    if session.get("rounds", 0) >= settings.session_round_limit:
+        raise BizError(
+            CODE_SESSION_ROUND_LIMIT,
+            "这个话题聊得很深了，建议开个新会话",
+            http_status=429,
+        )
+
+    # 1) 落 user 消息（meta 事件需要其 id）
+    user_msg_id = await _insert_message(session["_id"], "user", text, risk_level="none")
+
+    # 2) 危机本地检测
+    crisis = await detect_risk(text, session)
+
+    # 3) 更新会话：最近活跃时间 + 首条消息回填标题 + 二级词累计分
+    session_set: dict = {"last_msg_at": now_cst()}
+    if not session.get("title"):
+        session_set["title"] = text[:12]
+    if crisis.score_added:
+        session_set["crisis_score"] = crisis.new_score
+
+    crisis_payload: dict | None = None
+    risk_level = "none"
+    if crisis.hit:
+        resources = (await get_resources())["resources"]
+        risk_level = crisis.level
+        if crisis.level == "high":
+            # 首次 high 弹卡片；之后不重复弹（常驻入口由前端保持）
+            show_card = not session.get("crisis_high_shown", False)
+            if show_card:
+                session_set["crisis_high_shown"] = True
+            await record_risk_event(
+                user["_id"], session["_id"], "high",
+                crisis.l1_matches + crisis.l2_matches,
+            )
+        else:
+            # mid：本会话未弹过任何卡片时弹一次（已 high 常驻则不重复）
+            shown = session.get("crisis_high_shown", False) or session.get("crisis_mid_shown", False)
+            show_card = not shown
+            if show_card:
+                session_set["crisis_mid_shown"] = True
+            await record_risk_event(
+                user["_id"], session["_id"], "mid", crisis.l2_matches
+            )
+        crisis_payload = {
+            "level": crisis.level,
+            "show_card": show_card,
+            "resources": resources,
+        }
+
+    if session_set:
+        await mongo.db[COLL_SESSIONS].update_one(
+            {"_id": session["_id"]}, {"$set": session_set}
+        )
+
+    return Turn(
+        user=user,
+        session=session,
+        content=text,
+        user_message_id=str(user_msg_id),
+        crisis=crisis,
+        crisis_payload=crisis_payload,
+        risk_level=risk_level,
+    )
+
+
+async def _finalize(turn: Turn, assistant_text: str, degraded: bool) -> str:
+    """落 assistant 消息 + 会话轮次 +1，返回 message_id。"""
+    msg_id = await _insert_message(
+        turn.session["_id"],
+        "assistant",
+        assistant_text,
+        risk_level=turn.risk_level,
+        degraded=degraded,
+    )
+    await mongo.db[COLL_SESSIONS].update_one(
+        {"_id": turn.session["_id"]}, {"$inc": {"rounds": 1}}
+    )
+    return str(msg_id)
+
+
+async def _build_messages(turn: Turn) -> list[dict]:
+    history = await memory.load_window(turn.session["_id"])
+    return [
+        {"role": "system", "content": build_system_prompt()},
+        *history,
+        {"role": "user", "content": turn.content},
+    ]
+
+
+async def _generate_nonstream(turn: Turn) -> tuple[str, bool]:
+    """非流式生成，失败重试 1 次；仍失败返回降级话术。"""
+    messages = await _build_messages(turn)
+    provider = ZhipuProvider()
+    for _ in range(2):
+        try:
+            text = await provider.generate(
+                messages, temperature=CHAT_TEMPERATURE, max_tokens=CHAT_MAX_TOKENS
+            )
+            if text and text.strip():
+                return text.strip(), False
+        except Exception:  # noqa: BLE001
+            continue
+    return DEGRADED_REPLY, True
+
+
+async def _collect_stream(turn: Turn) -> tuple[list[str], bool]:
+    """流式生成并收集全部增量；无内容时重试 1 次，再失败降级；已收到部分则保留。"""
+    messages = await _build_messages(turn)
+    provider = ZhipuProvider()
+    chunks: list[str] = []
+    try:
+        async for delta in provider.stream(
+            messages, temperature=CHAT_TEMPERATURE, max_tokens=CHAT_MAX_TOKENS
+        ):
+            chunks.append(delta)
+    except Exception:
+        if chunks:
+            # 已有部分内容：保留已收文本，按成功结束
+            return chunks, False
+        # 无任何内容：重试一次
+        try:
+            async for delta in provider.stream(
+                messages, temperature=CHAT_TEMPERATURE, max_tokens=CHAT_MAX_TOKENS
+            ):
+                chunks.append(delta)
+        except Exception:
+            return [DEGRADED_REPLY], True
+    full = "".join(chunks)
+    if not full.strip():
+        return [DEGRADED_REPLY], True
+    return chunks, False
+
+
+# ---------- 非流式 ----------
+async def reply_nonstream(turn: Turn) -> dict:
+    if turn.crisis.level == "high":
+        assistant_text, degraded = HIGH_CRISIS_REPLY, False
+    else:
+        assistant_text, degraded = await _generate_nonstream(turn)
+
+    message_id = await _finalize(turn, assistant_text, degraded)
+    return {
+        "message_id": message_id,
+        "assistant_reply": assistant_text,
+        "emotion": None,
+        "risk_level": turn.risk_level,
+        "crisis": turn.crisis_payload,
+        "degraded": degraded,
+        "created_at": to_iso(now_cst()),
+    }
+
+
+# ---------- 流式（SSE 事件） ----------
+async def stream_events(turn: Turn) -> AsyncIterator[tuple[str, dict]]:
+    yield "meta", {"user_message_id": turn.user_message_id}
+
+    # high：crisis 先于任何 delta，且不调大模型
+    if turn.crisis.level == "high":
+        yield "crisis", turn.crisis_payload
+        yield "delta", {"content": HIGH_CRISIS_REPLY}
+        message_id = await _finalize(turn, HIGH_CRISIS_REPLY, False)
+        yield "done", {"message_id": message_id, "degraded": False}
+        return
+
+    # none / mid：流式生成
+    chunks, degraded = await _collect_stream(turn)
+    for piece in chunks:
+        yield "delta", {"content": piece}
+    assistant_text = "".join(chunks)
+    message_id = await _finalize(turn, assistant_text, degraded)
+
+    # mid：流结束后插入求助卡片
+    if turn.crisis.level == "mid" and turn.crisis_payload:
+        yield "crisis", turn.crisis_payload
+
+    yield "done", {"message_id": message_id, "degraded": degraded}

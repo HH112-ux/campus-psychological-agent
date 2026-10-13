@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api.routes import health
+from app.api.routes import auth, crisis, health, messages, sessions, users
 from app.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.db.mongo import mongo
@@ -30,7 +30,13 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     register_exception_handlers(app)
+    # 危机资源为公开接口，与健康检查一样无需鉴权；其余路由内部强制 JWT
     app.include_router(health.router)
+    app.include_router(crisis.router)
+    app.include_router(auth.router)
+    app.include_router(users.router)
+    app.include_router(sessions.router)
+    app.include_router(messages.router)
     return app
 
 
