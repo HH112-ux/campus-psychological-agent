@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "和小屿聊聊",
+  "usingComponents": {
+    "crisis-card": "/components/crisis-card/crisis-card"
+  }
+}

@@ -1,0 +1,39 @@
+<!-- pages/sessions/sessions.wxml -->
+<view class="page">
+  <view class="hero">
+    <view class="hero-title">心屿</view>
+    <view class="hero-sub">在这里，你可以放心说。我是小屿，陪你把情绪慢慢理清楚。</view>
+  </view>
+
+  <view class="new-btn" bindtap="newChat">
+    <view class="new-btn-plus">＋</view>
+    <view class="new-btn-text">开始一段新对话</view>
+  </view>
+
+  <view class="section-title" wx:if="{{items.length}}">最近的对话</view>
+
+  <view class="list">
+    <view class="item" wx:for="{{items}}" wx:key="session_id" data-id="{{item.session_id}}" bindtap="openChat">
+      <view class="item-main">
+        <view class="item-title">{{item.title}}</view>
+        <view class="item-meta">
+          <text>{{item.rounds}} 轮对话</text>
+          <text wx:if="{{item.timeText}}" class="item-time">· {{item.timeText}}</text>
+        </view>
+      </view>
+      <view class="item-ops">
+        <view class="op" catchtap="rename" data-id="{{item.session_id}}" data-title="{{item.title}}">改名</view>
+        <view class="op op--danger" catchtap="remove" data-id="{{item.session_id}}">删除</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="empty" wx:if="{{loaded && !items.length && !loading}}">
+    <view class="empty-emoji">🌱</view>
+    <view class="empty-text">还没有对话，从上方“开始一段新对话”说起吧</view>
+  </view>
+
+  <view class="privacy" bindtap="openDiagnose">
+    对话内容仅用于为你提供陪伴，危机信息会按安全规则处理。点此进行连接诊断。
+  </view>
+</view>

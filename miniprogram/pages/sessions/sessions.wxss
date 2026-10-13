@@ -1,0 +1,122 @@
+/* pages/sessions/sessions.wxss */
+.page {
+  min-height: 100vh;
+  padding: 40rpx 32rpx 60rpx;
+  box-sizing: border-box;
+}
+.hero {
+  padding: 24rpx 8rpx 32rpx;
+}
+.hero-title {
+  font-size: 64rpx;
+  font-weight: 800;
+  color: #2a5bd7;
+  letter-spacing: 4rpx;
+}
+.hero-sub {
+  margin-top: 16rpx;
+  font-size: 28rpx;
+  line-height: 1.7;
+  color: #5a5f69;
+}
+
+.new-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  height: 96rpx;
+  border-radius: 24rpx;
+  background: linear-gradient(135deg, #4c8bf5, #6ea2ff);
+  color: #fff;
+  box-shadow: 0 8rpx 24rpx rgba(76, 139, 245, 0.28);
+}
+.new-btn-plus {
+  font-size: 40rpx;
+  line-height: 1;
+}
+.new-btn-text {
+  font-size: 31rpx;
+  font-weight: 600;
+}
+
+.section-title {
+  margin: 40rpx 8rpx 16rpx;
+  font-size: 26rpx;
+  color: #8a9099;
+  font-weight: 600;
+}
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+.item {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border-radius: 22rpx;
+  padding: 28rpx 26rpx;
+  box-shadow: 0 2rpx 12rpx rgba(31, 35, 41, 0.05);
+}
+.item-main {
+  flex: 1;
+  min-width: 0;
+}
+.item-title {
+  font-size: 31rpx;
+  font-weight: 600;
+  color: #1f2329;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.item-meta {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #9aa0a8;
+}
+.item-time {
+  margin-left: 6rpx;
+}
+.item-ops {
+  display: flex;
+  gap: 16rpx;
+  margin-left: 16rpx;
+}
+.op {
+  flex-shrink: 0;
+  font-size: 25rpx;
+  color: #4c8bf5;
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
+  background: #eef4ff;
+}
+.op--danger {
+  color: #e23b2a;
+  background: #fdecea;
+}
+
+.empty {
+  margin-top: 120rpx;
+  text-align: center;
+}
+.empty-emoji {
+  font-size: 72rpx;
+}
+.empty-text {
+  margin-top: 20rpx;
+  font-size: 27rpx;
+  color: #8a9099;
+  padding: 0 60rpx;
+  line-height: 1.7;
+}
+
+.privacy {
+  margin-top: 80rpx;
+  text-align: center;
+  font-size: 22rpx;
+  color: #a8aeb6;
+  line-height: 1.7;
+  padding: 0 40rpx;
+}

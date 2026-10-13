@@ -1,15 +1,15 @@
-<!--pages/index/index.wxml —— P0 占位首页-->
+<!--pages/index/index.wxml —— 连接诊断（开发自检页）-->
 <view class="container">
   <view class="hero">
     <view class="logo">心屿</view>
     <view class="subtitle">校园心理咨询智能陪伴</view>
-    <view class="badge">P0 环境与基建 · v{{version}}</view>
+    <view class="badge">P1 对话闭环 · v{{version}}</view>
   </view>
 
   <view class="card">
-    <view class="card-title">当前阶段</view>
+    <view class="card-title">这是什么页面</view>
     <view class="card-desc">
-      这是 P0 占位首页，用于验证小程序工程可正常编译启动。对话、情绪记录等正式页面将在 P2 起逐步上线。
+      连接诊断页用于确认小程序与后端的网络是否打通。正式对话请返回首页，从“开始一段新对话”进入。
     </view>
   </view>
 
@@ -22,5 +22,5 @@
     </button>
   </view>
 
-  <view class="footer">如遇连接问题，请确认后端运行在 127.0.0.1:8000</view>
+  <view class="footer">如遇连接问题，请确认后端运行在 127.0.0.1:8000，并在开发者工具中勾选“不校验合法域名”</view>
 </view>

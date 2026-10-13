@@ -1,0 +1,77 @@
+<!-- pages/chat/chat.wxml -->
+<view class="page">
+  <scroll-view class="msg-scroll" scroll-y scroll-into-view="{{scrollTo}}" scroll-with-animation enhanced show-scrollbar="{{false}}">
+    <view class="msg-inner">
+      <!-- 高危卡片：置顶常驻，不可关闭 -->
+      <crisis-card
+        wx:if="{{highCard}}"
+        level="high"
+        resources="{{highCard.resources}}"
+        closable="{{false}}"
+      />
+
+      <block wx:for="{{messages}}" wx:key="key">
+        <!-- mid 卡片：插在对话流中，可关闭 -->
+        <crisis-card
+          wx:if="{{item.card === 'mid'}}"
+          id="{{item.key}}"
+          class="inline-card"
+          level="mid"
+          resources="{{item.resources}}"
+          closable="{{true}}"
+          data-key="{{item.key}}"
+          bind:dismiss="onDismissMid"
+        />
+
+        <!-- 用户气泡 -->
+        <view wx:elif="{{item.role === 'user'}}" id="{{item.key}}" class="row row--user">
+          <view class="bubble bubble--user">{{item.content}}</view>
+        </view>
+
+        <!-- 小屿气泡 -->
+        <view wx:else id="{{item.key}}" class="row row--ai">
+          <view class="avatar">小屿</view>
+          <view class="bubble bubble--ai">
+            <view wx:if="{{item.content}}" class="bubble-text">{{item.content}}</view>
+            <view wx:else class="typing">
+              <view class="dot"></view><view class="dot"></view><view class="dot"></view>
+            </view>
+            <view wx:if="{{item.degraded && item.content}}" class="degraded">连接不稳定，已为你保留</view>
+          </view>
+        </view>
+      </block>
+
+      <!-- 全局正在输入（兜底） -->
+      <view wx:if="{{typing}}" class="row row--ai">
+        <view class="avatar">小屿</view>
+        <view class="bubble bubble--ai bubble--hint">小屿正在输入…</view>
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 输入区 -->
+  <view class="composer">
+    <view class="composer-box">
+      <textarea
+        class="composer-input"
+        value="{{inputValue}}"
+        placeholder="说点什么，我在听…"
+        placeholder-class="composer-ph"
+        auto-height
+        maxlength="{{-1}}"
+        bindinput="onInput"
+        bindconfirm="send"
+        adjust-position="{{true}}"
+        show-confirm-bar="{{false}}"
+        disable-default-padding
+      />
+      <view class="composer-foot">
+        <text class="word-count {{inputValue.length > maxLen ? 'word-count--over' : ''}}">{{inputValue.length}}/{{maxLen}}</text>
+      </view>
+    </view>
+    <view
+      class="send-btn {{!canSend ? 'send-btn--disabled' : ''}}"
+      bindtap="send"
+    >发送</view>
+  </view>
+</view>

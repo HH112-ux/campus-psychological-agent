@@ -1,0 +1,33 @@
+<!-- components/crisis-card/crisis-card.wxml -->
+<view class="crisis-card crisis-card--{{level}}">
+  <view class="cc-head">
+    <view class="cc-badge">{{level === 'high' ? '紧急求助' : '温柔提醒'}}</view>
+    <view wx:if="{{closable}}" class="cc-close" bindtap="onDismiss">×</view>
+  </view>
+  <view class="cc-title">{{title}}</view>
+  <view class="cc-subtitle">{{subtitle}}</view>
+
+  <view class="cc-list">
+    <view
+      class="cc-item {{item._callable ? '' : 'cc-item--disabled'}}"
+      wx:for="{{_items}}"
+      wx:key="id"
+      data-phone="{{item.phone}}"
+      data-callable="{{item._callable}}"
+      bindtap="onCall"
+    >
+      <view class="cc-item-main">
+        <view class="cc-item-name">{{item.name}}</view>
+        <view class="cc-item-meta">{{item.hours}} · {{item.note}}</view>
+      </view>
+      <view class="cc-item-right">
+        <view class="cc-phone">{{item.phone}}</view>
+        <view class="cc-call">{{item._callable ? '拨打' : '待补充'}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="cc-foot" wx:if="{{level === 'high'}}">
+    情况紧急或无法保证自身安全时，请立即拨打 <text class="cc-emergency">120 / 110</text>，或前往最近医院急诊。
+  </view>
+</view>

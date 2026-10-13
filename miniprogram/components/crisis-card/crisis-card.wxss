@@ -1,0 +1,115 @@
+/* components/crisis-card/crisis-card.wxss */
+.crisis-card {
+  border-radius: 24rpx;
+  padding: 28rpx 28rpx 24rpx;
+  margin: 16rpx 0;
+  box-sizing: border-box;
+}
+.crisis-card--high {
+  background: linear-gradient(135deg, #fff1ef 0%, #ffe3dd 100%);
+  border: 2rpx solid #ffb8a8;
+}
+.crisis-card--mid {
+  background: linear-gradient(135deg, #fff8ec 0%, #fff1d6 100%);
+  border: 2rpx solid #f5d599;
+}
+.cc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.cc-badge {
+  font-size: 22rpx;
+  font-weight: 600;
+  padding: 4rpx 16rpx;
+  border-radius: 999rpx;
+}
+.crisis-card--high .cc-badge {
+  background: #f4503e;
+  color: #fff;
+}
+.crisis-card--mid .cc-badge {
+  background: #e8a33d;
+  color: #fff;
+}
+.cc-close {
+  width: 48rpx;
+  height: 48rpx;
+  line-height: 44rpx;
+  text-align: center;
+  font-size: 40rpx;
+  color: #999;
+}
+.cc-title {
+  margin-top: 16rpx;
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #1f2329;
+}
+.cc-subtitle {
+  margin-top: 10rpx;
+  font-size: 27rpx;
+  line-height: 1.6;
+  color: #5a5f69;
+}
+.cc-list {
+  margin-top: 20rpx;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 18rpx;
+  overflow: hidden;
+}
+.cc-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22rpx 24rpx;
+}
+.cc-item + .cc-item {
+  border-top: 2rpx solid rgba(0, 0, 0, 0.05);
+}
+.cc-item-main {
+  flex: 1;
+  min-width: 0;
+}
+.cc-item-name {
+  font-size: 29rpx;
+  font-weight: 600;
+  color: #1f2329;
+}
+.cc-item-meta {
+  margin-top: 6rpx;
+  font-size: 23rpx;
+  color: #8a9099;
+}
+.cc-item-right {
+  text-align: right;
+  margin-left: 20rpx;
+}
+.cc-phone {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #e8602b;
+  letter-spacing: 0.5rpx;
+}
+.cc-call {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #e8602b;
+}
+.cc-item--disabled {
+  opacity: 0.55;
+}
+.cc-item--disabled .cc-phone,
+.cc-item--disabled .cc-call {
+  color: #a0a4ab;
+}
+.cc-foot {
+  margin-top: 18rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #8a5a4f;
+}
+.cc-emergency {
+  font-weight: 700;
+  color: #e23b2a;
+}
