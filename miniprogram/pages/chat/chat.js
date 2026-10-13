@@ -4,6 +4,22 @@ const { openSse } = require('../../utils/sse')
 
 const MAX_LEN = 2000
 
+// 情绪角标展示映射（P3：对话页本轮识别）
+const EMOTION_META = {
+  anxious: { text: '焦虑', colorClass: 'emotion-badge--red' },
+  depressed: { text: '低落', colorClass: 'emotion-badge--blue' },
+  calm: { text: '平静', colorClass: 'emotion-badge--green' },
+  ok: { text: '还行', colorClass: 'emotion-badge--green' },
+  angry: { text: '烦躁', colorClass: 'emotion-badge--orange' },
+  other: { text: '其他', colorClass: 'emotion-badge--gray' },
+}
+
+function decorateEmotion(emo) {
+  if (!emo) return null
+  const meta = EMOTION_META[emo.type] || { text: emo.type, colorClass: 'emotion-badge--gray' }
+  return { ...emo, emotionText: meta.text, colorClass: meta.colorClass }
+}
+
 Page({
   data: {
     sessionId: '',
@@ -41,7 +57,7 @@ Page({
             content: '最多保留 3 个进行中的对话，请先在列表删除一个旧会话。',
             showCancel: false,
             confirmText: '我知道了',
-            success: () => wx.navigateBack(),
+            success: () => wx.switchTab({ url: '/pages/index/index' }),
           })
         } else {
           wx.showToast({ title: (err && err.message) || '加载失败', icon: 'none' })
@@ -93,6 +109,7 @@ Page({
           role: m.role,
           content: m.content,
           degraded: m.degraded || false,
+          emotion: decorateEmotion(m.emotion),
         })
       })
       const patch = { messages: msgs, seq }
@@ -181,6 +198,9 @@ Page({
           this.scrollToBottom()
         } else if (event === 'crisis') {
           this.applyCrisis(payload)
+        } else if (event === 'emotion') {
+          // P3：本轮情绪识别角标（type / intensity / evidence）
+          this._patchAi({ emotion: decorateEmotion(payload) })
         } else if (event === 'done') {
           this.finishTurn(payload.degraded)
         } else if (event === 'error') {
@@ -209,7 +229,11 @@ Page({
       .then((d) => {
         if (d.crisis) this.applyCrisis(d.crisis)
         this._streamText = d.assistant_reply || ''
-        this._patchAi({ content: d.assistant_reply || '', degraded: !!d.degraded })
+        this._patchAi({
+          content: d.assistant_reply || '',
+          degraded: !!d.degraded,
+          emotion: decorateEmotion(d.emotion),
+        })
         this.finishTurn(!!d.degraded)
       })
       .catch((err) => {

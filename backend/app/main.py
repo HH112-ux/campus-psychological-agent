@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api.routes import auth, crisis, health, messages, sessions, users
+from app.api.routes import auth, crisis, emotion, health, messages, sessions, users
 from app.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.db.mongo import mongo
@@ -37,6 +37,7 @@ def create_app() -> FastAPI:
     app.include_router(users.router)
     app.include_router(sessions.router)
     app.include_router(messages.router)
+    app.include_router(emotion.router)
     return app
 
 

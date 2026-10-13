@@ -1,0 +1,33 @@
+<!-- pages/mine/mine.wxml —— 我的 -->
+<view class="page">
+  <view class="profile">
+    <view class="avatar">{{avatarChar}}</view>
+    <view class="profile-main">
+      <view class="nickname">{{nickname}}</view>
+      <view class="profile-sub">仅使用昵称与头像，不收集学号、手机号等身份信息</view>
+    </view>
+  </view>
+
+  <view class="cell" bindtap="openSessions">
+    <view class="cell-icon">🗂</view>
+    <view class="cell-title">历史会话</view>
+    <view class="cell-arrow">›</view>
+  </view>
+
+  <view class="group-title">心理求助热线（免费 · 24 小时）</view>
+  <view class="hotline" wx:for="{{resources}}" wx:key="id" data-phone="{{item.phone}}" bindtap="callHotline">
+    <view class="hotline-main">
+      <view class="hotline-name">{{item.name}}</view>
+      <view class="hotline-meta">{{item.hours}} · {{item.note}}</view>
+    </view>
+    <view class="hotline-phone">{{item.phone}}</view>
+  </view>
+
+  <view class="cell" bindtap="showDisclaimer">
+    <view class="cell-icon">⚠</view>
+    <view class="cell-title">关于与免责声明</view>
+    <view class="cell-arrow">›</view>
+  </view>
+
+  <view class="version">心屿 v{{version}}</view>
+</view>

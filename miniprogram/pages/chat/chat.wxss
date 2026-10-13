@@ -75,6 +75,38 @@
   color: #b0883a;
 }
 
+/* P3 情绪识别角标 */
+.emotion-badge {
+  display: inline-block;
+  margin-top: 12rpx;
+  padding: 4rpx 16rpx;
+  border-radius: 12rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  background: #f0f2f5;
+  color: #646a73;
+}
+.emotion-badge--red {
+  background: #fdecea;
+  color: #d93a2b;
+}
+.emotion-badge--blue {
+  background: #e9eefb;
+  color: #3d6ad6;
+}
+.emotion-badge--green {
+  background: #e8f6ec;
+  color: #2f8f52;
+}
+.emotion-badge--orange {
+  background: #fdf3e8;
+  color: #cf7b1d;
+}
+.emotion-badge--gray {
+  background: #f0f2f5;
+  color: #646a73;
+}
+
 /* 正在输入动画 */
 .typing {
   display: flex;

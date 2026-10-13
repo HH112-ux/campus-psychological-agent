@@ -42,8 +42,8 @@ FastAPI + LangChain + 智谱 GLM（主模型 + 轻量档）+ 微信小程序原�
 ## 快速开始
 
 1. 阅读 `CONTRIBUTING.md`，按提交规范开发。
-2. 后端：见 `backend/README.md`（venv → init_db → seed_crisis 播种危机词库 → uvicorn，验收 `GET /health` 返回 200 且 `db: connected`，pytest 46 项全绿）。
-3. 小程序：见 `miniprogram/README.md`（微信开发者工具导入 `miniprogram/`，P1 已具备会话列表、流式对话页与危机求助卡片；本地无 `WX_SECRET` 时后端走 mock 登录）。
+2. 后端：见 `backend/README.md`（venv → init_db → seed_crisis 播种危机词库 → uvicorn，验收 `GET /health` 返回 200 且 `db: connected`，pytest 62 项全绿）。
+3. 小程序：见 `miniprogram/README.md`（微信开发者工具导入 `miniprogram/`，P3 已具备四 TabBar 首页打卡、情绪日志与对话情绪角标；本地无 `WX_SECRET` 时后端走 mock 登录）。
 4. 按阶段文档推进，每个阶段验收通过后打里程碑 tag（见 CONTRIBUTING）。
 5. 密钥一律放 `.env`（不入库），参考 `backend/.env.example`。
 

@@ -1,4 +1,4 @@
-// pages/sessions/sessions.js —— 会话列表（首页）
+// pages/sessions/sessions.js —— 历史会话列表（我的 → 历史会话）
 const api = require('../../utils/api')
 
 Page({
@@ -55,12 +55,14 @@ Page({
       })
       return
     }
-    wx.navigateTo({ url: '/pages/chat/chat' })
+    // 对话页是 tab，reLaunch 可携带全新会话（onLoad 自动新建）
+    wx.reLaunch({ url: '/pages/chat/chat' })
   },
 
   openChat(e) {
     const id = e.currentTarget.dataset.id
-    wx.navigateTo({ url: `/pages/chat/chat?session_id=${id}` })
+    // tab 页不可 navigateTo，用 reLaunch 携带 session_id
+    wx.reLaunch({ url: `/pages/chat/chat?session_id=${id}` })
   },
 
   rename(e) {
@@ -99,7 +101,4 @@ Page({
     })
   },
 
-  openDiagnose() {
-    wx.navigateTo({ url: '/pages/index/index' })
-  },
 })

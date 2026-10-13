@@ -10,7 +10,10 @@
 - prepare_turn：在创建 StreamingResponse 之前完成，使校验错误能以普通 JSON 返回；
 - reply_nonstream：非流式 JSON 模式（弱网降级路径）；
 - stream_events：流式模式，产出 (event, data) 元组，由路由层编码为 SSE 帧。
-情绪 emotion 事件为 P3 能力，本阶段不下发（协议允许缺失，不阻塞）。
+
+情绪链路（P3）：回复增量全部下发后、done 事件前异步等待情绪分析（带超时），
+成功时流内下发 emotion 事件、回填 assistant 消息 emotion 并写 emotion_records；
+分析失败不阻塞（协议允许 emotion 事件缺失）。high 危机路径不触发情绪分析。
 """
 from __future__ import annotations
 
@@ -23,7 +26,9 @@ from app.core.ratelimit import hit_message_rate
 from app.core.timeutil import now_cst, to_iso
 from app.db.indexes import COLL_MESSAGES, COLL_SESSIONS
 from app.db.mongo import mongo
+from app.db.oid import parse_oid
 from app.llm.zhipu import ZhipuProvider
+from app.services import emotion as emotion_svc
 from app.services import memory
 from app.services.crisis import (
     CrisisResult,
@@ -165,8 +170,10 @@ async def _finalize(turn: Turn, assistant_text: str, degraded: bool) -> str:
 
 async def _build_messages(turn: Turn) -> list[dict]:
     history = await memory.load_window(turn.session["_id"])
+    # 策略层：注入本会话最近一轮情绪分析结果（F3），无记录则用中性占位
+    latest_emotion = await emotion_svc.latest_session_emotion(turn.session["_id"])
     return [
-        {"role": "system", "content": build_system_prompt()},
+        {"role": "system", "content": build_system_prompt(latest_emotion=latest_emotion)},
         *history,
         {"role": "user", "content": turn.content},
     ]
@@ -224,10 +231,20 @@ async def reply_nonstream(turn: Turn) -> dict:
         assistant_text, degraded = await _generate_nonstream(turn)
 
     message_id = await _finalize(turn, assistant_text, degraded)
+    emotion = None
+    if turn.crisis.level != "high":
+        # 回复落库后做情绪分析：成功回填 assistant 消息并写 emotion_records
+        emotion = await emotion_svc.analyze_turn(
+            turn.user["_id"],
+            turn.session["_id"],
+            parse_oid(turn.user_message_id),
+            parse_oid(message_id),
+            turn.content,
+        )
     return {
         "message_id": message_id,
         "assistant_reply": assistant_text,
-        "emotion": None,
+        "emotion": emotion,
         "risk_level": turn.risk_level,
         "crisis": turn.crisis_payload,
         "degraded": degraded,
@@ -257,5 +274,16 @@ async def stream_events(turn: Turn) -> AsyncIterator[tuple[str, dict]]:
     # mid：流结束后插入求助卡片
     if turn.crisis.level == "mid" and turn.crisis_payload:
         yield "crisis", turn.crisis_payload
+
+    # 情绪分析（P3）：done 之前下发 emotion 事件；失败/超时则协议允许缺失
+    emotion = await emotion_svc.analyze_turn(
+        turn.user["_id"],
+        turn.session["_id"],
+        parse_oid(turn.user_message_id),
+        parse_oid(message_id),
+        turn.content,
+    )
+    if emotion:
+        yield "emotion", emotion
 
     yield "done", {"message_id": message_id, "degraded": degraded}

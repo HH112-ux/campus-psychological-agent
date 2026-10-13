@@ -1,0 +1,64 @@
+<!-- pages/logs/logs.wxml —— 情绪日志：趋势 + 时间线 -->
+<view class="page">
+  <!-- 趋势卡 -->
+  <view class="trend-card">
+    <view class="trend-head">
+      <view class="trend-title">
+        <text wx:if="{{streak}}" class="streak-badge">🔥 已连续记录 {{streak}} 天</text>
+        <text wx:else class="streak-badge streak-badge--dim">还没有连续记录</text>
+      </view>
+      <view class="trend-desc">{{trendDesc}}</view>
+      <view wx:if="{{dominantText}}" class="trend-dom">{{dominantText}}</view>
+    </view>
+    <view class="chart">
+      <view class="bar-col" wx:for="{{bars}}" wx:key="date">
+        <view class="bar-track">
+          <view
+            class="bar {{item.avg === null ? 'bar--empty' : ''}}"
+            style="height: {{item.height}}%"
+          ></view>
+        </view>
+        <view class="bar-label">{{item.label}}</view>
+      </view>
+    </view>
+    <view class="chart-legend">近 7 天情绪强度（1–10，无记录日跳过不补 0）</view>
+  </view>
+
+  <!-- 筛选 -->
+  <view class="filters">
+    <view
+      wx:for="{{filters}}"
+      wx:key="key"
+      class="chip {{filter === item.key ? 'chip--on' : ''}}"
+      data-key="{{item.key}}"
+      bindtap="onFilterTap"
+    >{{item.label}}</view>
+  </view>
+
+  <!-- 时间线 -->
+  <view class="timeline">
+    <view class="tl-item" wx:for="{{items}}" wx:key="record_id">
+      <view class="tl-badge" style="background: {{item.color}}1A; color: {{item.color}}">
+        {{item.emoji}}
+      </view>
+      <view class="tl-main">
+        <view class="tl-head">
+          <text class="tl-label" style="color: {{item.color}}">{{item.label}}</text>
+          <text class="tl-int">{{item.intensity}}/10</text>
+          <text class="tl-time">{{item.timeText}}</text>
+        </view>
+        <view class="tl-src">{{item.source === 'message' ? '来自对话' : '每日打卡'}}{{item.session_title ? '「' + item.session_title + '」' : ''}}</view>
+        <view wx:if="{{item.evidence}}" class="tl-evidence">“{{item.evidence}}”</view>
+        <view wx:elif="{{item.note}}" class="tl-evidence">备注：{{item.note}}</view>
+      </view>
+    </view>
+
+    <view wx:if="{{!loading && !items.length}}" class="empty">
+      <view class="empty-emoji">🌱</view>
+      <view class="empty-text">和我说说今天，日志会自动长出来</view>
+    </view>
+
+    <view wx:if="{{loading}}" class="loading">加载中…</view>
+    <view wx:if="{{!loading && !hasMore && items.length}}" class="loading">已经到底啦</view>
+  </view>
+</view>

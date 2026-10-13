@@ -1,73 +1,228 @@
-/* pages/index/index.wxss —— P0 占位首页样式 */
+/* pages/index/index.wxss —— 首页样式 */
+.page {
+  padding: 32rpx 32rpx 48rpx;
+  box-sizing: border-box;
+}
+
 .hero {
-  text-align: center;
-  padding: 40rpx 0 48rpx;
+  padding: 24rpx 8rpx 32rpx;
 }
 
-.logo {
-  font-size: 72rpx;
+.hero-title {
+  font-size: 44rpx;
   font-weight: 600;
-  color: #4C8BF5;
-  letter-spacing: 8rpx;
+  color: #1f2329;
 }
 
-.subtitle {
-  margin-top: 16rpx;
+.hero-sub {
+  margin-top: 12rpx;
+  font-size: 28rpx;
+  color: #646a73;
+}
+
+.quote-card {
+  background: linear-gradient(135deg, #e8f0fe, #f0f6ff);
+  border-radius: 20rpx;
+  padding: 28rpx 32rpx;
+  margin-bottom: 24rpx;
+}
+
+.quote-text {
   font-size: 30rpx;
-  color: #646A73;
+  color: #2d4f8f;
+  line-height: 1.6;
 }
 
-.badge {
-  display: inline-block;
-  margin-top: 24rpx;
-  padding: 8rpx 24rpx;
+.quote-foot {
+  margin-top: 10rpx;
   font-size: 24rpx;
-  color: #4C8BF5;
-  background: #E8F0FE;
-  border-radius: 24rpx;
+  color: #7d8fb3;
+  text-align: right;
+}
+
+.memory-card {
+  display: flex;
+  align-items: flex-start;
+  background: #fffbe9;
+  border-radius: 20rpx;
+  padding: 24rpx 28rpx;
+  margin-bottom: 24rpx;
+}
+
+.memory-icon {
+  font-size: 40rpx;
+  margin-right: 16rpx;
+}
+
+.memory-text {
+  font-size: 28rpx;
+  color: #6b5b2e;
+  line-height: 1.6;
+  flex: 1;
 }
 
 .card {
-  background: #FFFFFF;
+  background: #ffffff;
   border-radius: 20rpx;
   padding: 32rpx;
-  margin-bottom: 28rpx;
+  margin-bottom: 24rpx;
   box-shadow: 0 4rpx 16rpx rgba(31, 35, 41, 0.04);
 }
 
 .card-title {
-  font-size: 32rpx;
-  font-weight: 600;
-  margin-bottom: 16rpx;
-}
-
-.card-desc {
-  font-size: 28rpx;
-  line-height: 1.7;
-  color: #646A73;
-}
-
-.health-status {
   font-size: 34rpx;
   font-weight: 600;
-  color: #1F2329;
-  margin-bottom: 8rpx;
+  margin-bottom: 24rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.health-desc {
-  font-size: 26rpx;
-  color: #646A73;
-  line-height: 1.6;
-  margin-bottom: 28rpx;
-}
-
-.primary-btn {
-  border-radius: 14rpx;
-}
-
-.footer {
-  margin-top: 16rpx;
-  text-align: center;
+.card-date {
   font-size: 24rpx;
-  color: #8F959E;
+  font-weight: 400;
+  color: #8f959e;
+}
+
+.mood-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.mood-item {
+  width: 120rpx;
+  padding: 20rpx 0 16rpx;
+  text-align: center;
+  background: #f5f7fa;
+  border-radius: 16rpx;
+  border: 2rpx solid transparent;
+  transition: transform 0.1s ease;
+}
+
+.mood-item--on {
+  background: #e8f0fe;
+  border-color: #4c8bf5;
+  transform: translateY(-6rpx);
+}
+
+.mood-emoji {
+  font-size: 48rpx;
+}
+
+.mood-label {
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  color: #1f2329;
+}
+
+.note-box {
+  position: relative;
+  margin-top: 24rpx;
+}
+
+.note-input {
+  width: 100%;
+  min-height: 96rpx;
+  background: #f5f7fa;
+  border-radius: 16rpx;
+  padding: 20rpx 24rpx 44rpx;
+  box-sizing: border-box;
+  font-size: 28rpx;
+}
+
+.note-ph {
+  color: #a6adb8;
+}
+
+.note-count {
+  position: absolute;
+  right: 20rpx;
+  bottom: 14rpx;
+  font-size: 22rpx;
+  color: #8f959e;
+}
+
+.submit-btn {
+  margin-top: 24rpx;
+  height: 88rpx;
+  line-height: 88rpx;
+  text-align: center;
+  background: #4c8bf5;
+  color: #fff;
+  font-size: 32rpx;
+  border-radius: 16rpx;
+}
+
+.submit-btn--disabled {
+  background: #c6d6f2;
+}
+
+.done-card {
+  display: flex;
+  align-items: center;
+  background: #eef4ff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+}
+
+.done-emoji {
+  font-size: 56rpx;
+  margin-right: 20rpx;
+}
+
+.done-main {
+  flex: 1;
+}
+
+.done-line {
+  font-size: 30rpx;
+  color: #1f2329;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.streak-badge {
+  margin-left: 12rpx;
+  font-size: 24rpx;
+  color: #d97706;
+  background: #fff7e6;
+  border-radius: 12rpx;
+  padding: 4rpx 14rpx;
+}
+
+.done-note {
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  color: #646a73;
+}
+
+.chat-entry {
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  border-radius: 20rpx;
+  padding: 32rpx;
+  box-shadow: 0 4rpx 16rpx rgba(31, 35, 41, 0.04);
+}
+
+.chat-entry-main {
+  flex: 1;
+}
+
+.chat-entry-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #1f2329;
+}
+
+.chat-entry-sub {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #8f959e;
+}
+
+.chat-entry-arrow {
+  font-size: 40rpx;
+  color: #c2c9d4;
 }

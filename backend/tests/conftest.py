@@ -19,6 +19,8 @@ import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.db.indexes import (  # noqa: E402
+    COLL_CHECKINS,
+    COLL_EMOTION_RECORDS,
     COLL_MESSAGES,
     COLL_RISK_EVENTS,
     COLL_SESSIONS,
@@ -27,7 +29,14 @@ from app.db.indexes import (  # noqa: E402
 from app.db.mongo import mongo  # noqa: E402
 from app.main import app  # noqa: E402
 
-_CLEAN_COLLS = [COLL_USERS, COLL_SESSIONS, COLL_MESSAGES, COLL_RISK_EVENTS]
+_CLEAN_COLLS = [
+    COLL_USERS,
+    COLL_SESSIONS,
+    COLL_MESSAGES,
+    COLL_RISK_EVENTS,
+    COLL_EMOTION_RECORDS,
+    COLL_CHECKINS,
+]
 
 
 @pytest.fixture(scope="session")

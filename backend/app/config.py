@@ -11,7 +11,7 @@ class Settings(BaseSettings):
 
     # 应用
     app_name: str = "xinyu-backend"
-    app_version: str = "0.1.0"
+    app_version: str = "0.2.0"
     env: str = "dev"  # dev | prod
     debug: bool = False
 
@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     # 限流与降级
     user_message_hourly_limit: int = 30
     model_timeout_seconds: float = 30.0
+
+    # 情绪分析（P3）：单轮分析硬超时，超过即跳过本轮记录（保证 done 不被长期阻塞）
+    emotion_analysis_timeout_seconds: float = 5.0
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

@@ -1,11 +1,19 @@
-/* app.wxss —— 全局样式（P0 占位） */
+/* app.wxss —— 全局样式（P3） */
 page {
-  background: #F5F7FA;
+  background: #f5f7fa;
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
-  color: #1F2329;
+  color: #1f2329;
+  font-size: 30rpx;
 }
 
 .container {
   padding: 48rpx 40rpx;
   box-sizing: border-box;
+}
+
+/* 通用卡片（首页/日志/我的共用外观基线） */
+.card {
+  background: #ffffff;
+  border-radius: 20rpx;
+  box-shadow: 0 4rpx 16rpx rgba(31, 35, 41, 0.04);
 }

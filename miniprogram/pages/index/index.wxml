@@ -1,26 +1,80 @@
-<!--pages/index/index.wxml —— 连接诊断（开发自检页）-->
-<view class="container">
+<!-- pages/index/index.wxml —— 首页：问候 + 打卡 + 开始倾诉 -->
+<view class="page">
   <view class="hero">
-    <view class="logo">心屿</view>
-    <view class="subtitle">校园心理咨询智能陪伴</view>
-    <view class="badge">P1 对话闭环 · v{{version}}</view>
+    <view class="hero-title">{{greeting}}</view>
+    <view class="hero-sub">小屿一直在这里，随时听你说</view>
   </view>
 
+  <!-- 每日一句 -->
+  <view class="quote-card">
+    <view class="quote-text">“{{dailyQuote}}”</view>
+    <view class="quote-foot">——今天也辛苦了</view>
+  </view>
+
+  <!-- 记忆型问候（基于最近情绪记录，固定话术模板） -->
+  <view wx:if="{{memoryGreeting}}" class="memory-card">
+    <view class="memory-icon">🧸</view>
+    <view class="memory-text">{{memoryGreeting}}</view>
+  </view>
+
+  <!-- 打卡区 -->
   <view class="card">
-    <view class="card-title">这是什么页面</view>
-    <view class="card-desc">
-      连接诊断页用于确认小程序与后端的网络是否打通。正式对话请返回首页，从“开始一段新对话”进入。
+    <view class="card-title">
+      今天感觉怎么样？
+      <text class="card-date">{{todayCheckin ? '已记录' : '点一下记录此刻情绪'}}</text>
     </view>
+
+    <!-- 已打卡卡片 -->
+    <view wx:if="{{todayCheckin}}" class="done-card">
+      <view class="done-emoji">{{todayCheckin.moodEmoji}}</view>
+      <view class="done-main">
+        <view class="done-line">
+          {{todayCheckin.moodText}} · 强度 {{todayCheckin.intensity}}/10
+          <text wx:if="{{streak}}" class="streak-badge">🔥 连续 {{streak}} 天</text>
+        </view>
+        <view wx:if="{{todayCheckin.note}}" class="done-note">备注：{{todayCheckin.note}}</view>
+      </view>
+    </view>
+
+    <block wx:else>
+      <view class="mood-row">
+        <view
+          wx:for="{{moods}}"
+          wx:key="key"
+          class="mood-item {{selected === item.key ? 'mood-item--on' : ''}}"
+          data-key="{{item.key}}"
+          bindtap="selectMood"
+        >
+          <view class="mood-emoji">{{item.emoji}}</view>
+          <view class="mood-label">{{item.label}}</view>
+        </view>
+      </view>
+
+      <view class="note-box">
+        <textarea
+          class="note-input"
+          value="{{note}}"
+          placeholder="写下原因会更好（可选，限 200 字）"
+          placeholder-class="note-ph"
+          maxlength="200"
+          auto-height
+          bindinput="onNoteInput"
+        />
+        <view class="note-count">{{note.length}}/200</view>
+      </view>
+
+      <view class="submit-btn {{!selected ? 'submit-btn--disabled' : ''}}" bindtap="submitCheckin">
+        记录此刻情绪
+      </view>
+    </block>
   </view>
 
-  <view class="card">
-    <view class="card-title">后端连通性检测</view>
-    <view class="health-status">{{healthText}}</view>
-    <view class="health-desc">{{healthDesc}}</view>
-    <button class="primary-btn" type="primary" loading="{{checking}}" bindtap="checkHealth">
-      检测 /health
-    </button>
+  <!-- 开始倾诉 -->
+  <view class="chat-entry" bindtap="startChat">
+    <view class="chat-entry-main">
+      <view class="chat-entry-title">开始倾诉</view>
+      <view class="chat-entry-sub">与 AI 陪伴者「小屿」一对一对话 · 内容仅自己可见</view>
+    </view>
+    <view class="chat-entry-arrow">›</view>
   </view>
-
-  <view class="footer">如遇连接问题，请确认后端运行在 127.0.0.1:8000，并在开发者工具中勾选“不校验合法域名”</view>
 </view>
