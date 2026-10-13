@@ -23,6 +23,7 @@ function decorateEmotion(emo) {
 Page({
   data: {
     sessionId: '',
+    ready: false, // 会话初始化（登录+建会话/加载历史）完成前不可发送
     messages: [], // {key, role, content, degraded} 或 {key, card:'mid', resources}
     inputValue: '',
     sending: false,
@@ -49,6 +50,14 @@ Page({
           return this.loadDetail()
         }
         return this.createSession()
+      })
+      .then(() => {
+        // 就绪后同步刷新发送可用态（用户可能已在输入框敲好内容）
+        const v = this.data.inputValue
+        this.setData({
+          ready: true,
+          canSend: v.trim().length > 0 && v.length <= MAX_LEN && !this.data.sending,
+        })
       })
       .catch((err) => {
         if (err && err.code === 2003) {
@@ -125,7 +134,7 @@ Page({
     const v = e.detail.value
     this.setData({
       inputValue: v,
-      canSend: v.trim().length > 0 && v.length <= MAX_LEN && !this.data.sending,
+      canSend: v.trim().length > 0 && v.length <= MAX_LEN && !this.data.sending && this.data.ready,
     })
   },
 
@@ -137,8 +146,12 @@ Page({
       wx.showToast({ title: `单次最多 ${MAX_LEN} 字`, icon: 'none' })
       return
     }
+    if (!this.data.ready) {
+      wx.showToast({ title: '对话正在准备中，请稍候', icon: 'none' })
+      return
+    }
     if (!this.data.sessionId) {
-      wx.showToast({ title: '会话还没准备好', icon: 'none' })
+      wx.showToast({ title: '会话还没准备好，请稍候再试', icon: 'none' })
       return
     }
 
