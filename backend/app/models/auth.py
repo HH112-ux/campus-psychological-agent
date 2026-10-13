@@ -12,3 +12,13 @@ class WxLoginRequest(BaseModel):
 
 class RefreshRequest(BaseModel):
     refresh_token: str = Field(min_length=1)
+
+
+class ConsentRequest(BaseModel):
+    agree: bool = Field(description="是否同意隐私政策")
+    policy_version: str | None = Field(default=None, description="隐私政策版本号")
+
+
+class EraseRequest(BaseModel):
+    confirm_text: str = Field(description='必须等于"删除"，防止误触')
+

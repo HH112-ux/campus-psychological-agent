@@ -6,6 +6,11 @@
 
 ### 新增
 
+- P4 对话内容应用层加密：AES-256-GCM（`app/core/crypto.py`），密钥 `DATA_ENCRYPTION_KEY`（base64url 32 字节）；dev 未配置时透明存储、prod 强制要求；消息落库加密、读取解密，明文老数据兼容平滑迁移；日志脱敏 `redact`。
+- P4 模型危机双保险：情绪分析 `risk_level=high` 时，即使本地词库未命中也写 `risk_events`（trigger=model）并升级会话 `crisis_high_shown`；SSE 流在 emotion 事件后追加 crisis 事件（携带求助资源，触发时机在 delta 之后、done 之前）。
+- P4 隐私与数据权利：`POST /users/me/consent`（记录隐私同意+政策版本）、`GET /users/me/data/export`（PIPL 行权，导出用户/会话/消息/情绪/打卡/风险事件，对话内容解密后导出）、`DELETE /users/me/data`（软删 + 30 天可登录撤销，期满物理删除，须输入「删除」确认）。
+- P4 测试：`test_crypto.py`（加解密往返/明文兼容/密钥校验）、`test_privacy.py`（consent/export/erase 接口与 400 拒绝路径）。
+
 - 仓库基线：开发文档、API 文档、贡献规范（CONTRIBUTING）入库，建立 main 分支与 m0 里程碑。
 - 任务拆分规范：按 F1–F6 功能编号拆分任务，关联阶段与 API 接口（docs/task-management.md）。
 - 版本与发布策略：SemVer + m/v 双 tag 规则（docs/versioning.md）。

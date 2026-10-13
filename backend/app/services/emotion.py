@@ -23,8 +23,9 @@ from collections.abc import Sequence
 from bson import ObjectId
 
 from app.config import get_settings
+from app.core.crypto import decrypt
 from app.core.timeutil import now_cst
-from app.db.indexes import COLL_EMOTION_RECORDS, COLL_MESSAGES
+from app.db.indexes import COLL_EMOTION_RECORDS, COLL_MESSAGES, COLL_SESSIONS
 from app.db.mongo import mongo
 from app.llm.zhipu import ZhipuProvider
 from app.models.emotion import EmotionAnalysis
@@ -176,7 +177,7 @@ async def _build_analysis_messages(
     history = [m async for m in cursor]
     history.reverse()
     messages = [{"role": "system", "content": _EMOTION_SYSTEM_INSTRUCTION}]
-    messages.extend({"role": m["role"], "content": m["content"]} for m in history)
+    messages.extend({"role": m["role"], "content": decrypt(m.get("content"))} for m in history)
     messages.append({"role": "user", "content": current_content})
     return messages
 
@@ -243,6 +244,7 @@ async def analyze_turn(
         "type": analysis.emotion,
         "intensity": analysis.intensity,
         "evidence": analysis.evidence,
+        "risk_level": analysis.risk_level,  # P4：返回 risk_level 供 chat 链路做异步兜底
     }
     # 1) 回填 assistant 消息（会话详情可读，供前后端抽查一致）
     if mongo.db is not None:
@@ -264,6 +266,32 @@ async def analyze_turn(
                 "created_at": now_cst(),
             }
         )
+
+    # P4 危机双保险：模型 risk_level=high 时异步兜底——即使本地词库未命中，
+    # 也记录风险事件并升级会话状态，下一轮将展示危机卡片
+    if analysis.risk_level == "high":
+        from app.db.indexes import COLL_RISK_EVENTS
+
+        await mongo.db[COLL_RISK_EVENTS].insert_one(
+            {
+                "user_id": user_id,
+                "session_id": session_id,
+                "level": "high",
+                "trigger": "model",
+                "matched": [analysis.evidence] if analysis.evidence else [],
+                "created_at": now_cst(),
+            }
+        )
+        # 升级会话危机状态
+        await mongo.db[COLL_SESSIONS].update_one(
+            {"_id": session_id},
+            {"$set": {"crisis_high_shown": True}},
+        )
+        logger.warning(
+            "模型 risk_level=high 兜底触发 user=%s session=%s",
+            user_id, session_id,
+        )
+
     return emotion
 
 

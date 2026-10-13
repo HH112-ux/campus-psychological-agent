@@ -4,6 +4,7 @@ from __future__ import annotations
 from bson import ObjectId
 
 from app.config import get_settings
+from app.core.crypto import decrypt
 from app.core.exceptions import (
     CODE_NOT_FOUND,
     CODE_RESOURCE_FORBIDDEN,
@@ -104,7 +105,7 @@ def _serialize_message(m: dict) -> dict:
     item = {
         "message_id": str(m["_id"]),
         "role": m.get("role"),
-        "content": m.get("content"),
+        "content": decrypt(m.get("content")),  # P4：解密
         "created_at": to_iso(m.get("created_at")) if m.get("created_at") else None,
     }
     if m.get("role") == "assistant":

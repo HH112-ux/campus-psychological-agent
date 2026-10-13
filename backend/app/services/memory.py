@@ -9,6 +9,7 @@ from __future__ import annotations
 from bson import ObjectId
 
 from app.config import get_settings
+from app.core.crypto import decrypt
 from app.db.indexes import COLL_MESSAGES
 from app.db.mongo import mongo
 
@@ -26,4 +27,4 @@ async def load_window(session_id: ObjectId, rounds: int | None = None) -> list[d
     )
     msgs = [m async for m in cursor]
     msgs.reverse()
-    return [{"role": m["role"], "content": m["content"]} for m in msgs]
+    return [{"role": m["role"], "content": decrypt(m.get("content"))} for m in msgs]

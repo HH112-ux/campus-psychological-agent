@@ -21,6 +21,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
 from app.config import get_settings
+from app.core.crypto import encrypt
 from app.core.exceptions import CODE_CONTENT_INVALID, CODE_SESSION_ROUND_LIMIT, BizError
 from app.core.ratelimit import hit_message_rate
 from app.core.timeutil import now_cst, to_iso
@@ -64,7 +65,7 @@ async def _insert_message(
     doc = {
         "session_id": session_id,
         "role": role,
-        "content": content,
+        "content": encrypt(content),  # P4：应用层加密存储
         "emotion": None,  # P3 填充
         "risk_level": risk_level,
         "feedback": None,
@@ -285,5 +286,14 @@ async def stream_events(turn: Turn) -> AsyncIterator[tuple[str, dict]]:
     )
     if emotion:
         yield "emotion", emotion
+        # P4 危机双保险：模型 risk_level=high 时追加 crisis 事件（异步兜底）
+        if emotion.get("risk_level") == "high":
+            resources = (await get_resources())["resources"]
+            yield "crisis", {
+                "level": "high",
+                "show_card": True,
+                "resources": resources,
+                "trigger": "model",
+            }
 
     yield "done", {"message_id": message_id, "degraded": degraded}
