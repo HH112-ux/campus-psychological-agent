@@ -13,4 +13,4 @@
 - 安全策略：漏洞报告、密钥管理、依赖安全、数据保护与应急响应（SECURITY.md）。
 - P0 后端脚手架：FastAPI 应用入口、统一响应/异常、配置中心（pydantic-settings）、motor 连接与 8 个集合索引、智谱 LLM Provider（含 SSE 流式）、`/health` 路由、init_db/test_llm 脚本、pytest 与 ruff 配置、Dockerfile 与 docker-compose。
 - P0 小程序占位工程：原生框架可编译启动，占位首页含 `/health` 连通性检测。
-- P0 验收：`GET /health` 返回 200 且 `db: connected`，pytest 3 项全绿，ruff 无 error；智谱真实调用待配置 API Key。
+- P0 验收：`GET /health` 返回 200 且 `db: connected`，pytest 3 项全绿，ruff 无 error；智谱 `glm-4-air`（主对话）/ `glm-4-flash`（轻量）双档位真实调用均已实测返回。
