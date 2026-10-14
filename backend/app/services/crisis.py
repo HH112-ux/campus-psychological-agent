@@ -14,7 +14,12 @@ from dataclasses import dataclass, field
 from bson import ObjectId
 
 from app.core.timeutil import now_cst, to_iso
-from app.db.indexes import COLL_CRISIS_LEXICON, COLL_CRISIS_RESOURCES, COLL_RISK_EVENTS
+from app.db.indexes import (
+    COLL_CRISIS_LEXICON,
+    COLL_CRISIS_RESOURCES,
+    COLL_RISK_EVENTS,
+    COLL_SESSIONS,
+)
 from app.db.mongo import mongo
 from app.services.crisis_data import (
     FALLBACK_RESOURCES,
@@ -105,9 +110,16 @@ def evaluate(norm_text: str, session: dict, l1: list[str], l2: list[str]) -> Cri
 
 
 async def record_risk_event(
-    user_id: ObjectId, session_id: ObjectId, level: str, matched: list[str]
+    user_id: ObjectId,
+    session_id: ObjectId,
+    level: str,
+    matched: list[str],
+    trigger: str = "lexicon",
 ) -> None:
-    """写 risk_events（仅命中词，不写对话原文），留存 ≥12 个月供审计。"""
+    """写 risk_events（仅命中词，不写对话原文），留存 ≥12 个月供审计。
+
+    trigger："lexicon"（本地词库命中）或 "model"（模型 risk_level 异步兜底）。
+    """
     if mongo.db is None:
         return
     await mongo.db[COLL_RISK_EVENTS].insert_one(
@@ -115,11 +127,92 @@ async def record_risk_event(
             "user_id": user_id,
             "session_id": session_id,
             "level": level,
-            "trigger": "lexicon",
+            "trigger": trigger,
             "matched": matched,
             "created_at": now_cst(),
         }
     )
+
+
+async def handle_model_risk(
+    user_id: ObjectId,
+    session_id: ObjectId,
+    evidence: str | None,
+) -> None:
+    """P4 危机双保险：模型 risk_level=high 时的异步兜底处理。
+
+    即使本地词库未命中，也：
+    1. 记录 risk_events（trigger="model"）供审计；
+    2. 升级会话 crisis_high_shown=True，使下一轮展示危机卡片。
+
+    此函数封装"模型判 high 后应该做什么"，避免 emotion.py 直接操作 DB 集合。
+    """
+    await record_risk_event(
+        user_id, session_id, "high",
+        matched=[evidence] if evidence else [],
+        trigger="model",
+    )
+    await mongo.db[COLL_SESSIONS].update_one(
+        {"_id": session_id},
+        {"$set": {"crisis_high_shown": True}},
+    )
+
+
+async def handle_detection(
+    text: str,
+    session: dict,
+) -> tuple[CrisisResult, dict | None, dict]:
+    """危机检测 + 会话状态更新 + 风险事件记录（chat.prepare_turn 内聚）。
+
+    返回 (crisis_result, crisis_payload, session_set)：
+    - crisis_result：检测结果（含命中级别、命中词、累计分）
+    - crisis_payload：前端展示用的危机卡片数据，未命中时为 None
+    - session_set：需要 $set 的字段字典（crisis_score / crisis_high_shown / crisis_mid_shown）
+
+    此函数封装"消息进来后危机侧应该做什么"，chat 只管校验+落库+编排。
+    """
+    crisis = await detect_risk(text, session)
+    session_set: dict = {}
+    crisis_payload: dict | None = None
+
+    if crisis.score_added:
+        session_set["crisis_score"] = crisis.new_score
+
+    if crisis.hit:
+        resources = (await get_resources())["resources"]
+        if crisis.level == "high":
+            show_card = not session.get("crisis_high_shown", False)
+            if show_card:
+                session_set["crisis_high_shown"] = True
+            await record_risk_event(
+                session.get("user_id", session.get("_id")),
+                session["_id"],
+                "high",
+                crisis.l1_matches + crisis.l2_matches,
+                trigger="lexicon",
+            )
+        else:
+            shown = (
+                session.get("crisis_high_shown", False)
+                or session.get("crisis_mid_shown", False)
+            )
+            show_card = not shown
+            if show_card:
+                session_set["crisis_mid_shown"] = True
+            await record_risk_event(
+                session.get("user_id", session.get("_id")),
+                session["_id"],
+                "mid",
+                crisis.l2_matches,
+                trigger="lexicon",
+            )
+        crisis_payload = {
+            "level": crisis.level,
+            "show_card": show_card,
+            "resources": resources,
+        }
+
+    return crisis, crisis_payload, session_set
 
 
 async def get_resources() -> dict:

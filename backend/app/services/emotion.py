@@ -25,10 +25,11 @@ from bson import ObjectId
 from app.config import get_settings
 from app.core.crypto import decrypt
 from app.core.timeutil import now_cst
-from app.db.indexes import COLL_EMOTION_RECORDS, COLL_MESSAGES, COLL_SESSIONS
+from app.db.indexes import COLL_EMOTION_RECORDS, COLL_MESSAGES
 from app.db.mongo import mongo
 from app.llm.zhipu import ZhipuProvider
 from app.models.emotion import EmotionAnalysis
+from app.services.crisis import handle_model_risk
 
 logger = logging.getLogger(__name__)
 
@@ -282,23 +283,7 @@ async def analyze_turn(
     # P4 危机双保险：模型 risk_level=high 时异步兜底——即使本地词库未命中，
     # 也记录风险事件并升级会话状态，下一轮将展示危机卡片
     if analysis.risk_level == "high":
-        from app.db.indexes import COLL_RISK_EVENTS
-
-        await mongo.db[COLL_RISK_EVENTS].insert_one(
-            {
-                "user_id": user_id,
-                "session_id": session_id,
-                "level": "high",
-                "trigger": "model",
-                "matched": [analysis.evidence] if analysis.evidence else [],
-                "created_at": now_cst(),
-            }
-        )
-        # 升级会话危机状态
-        await mongo.db[COLL_SESSIONS].update_one(
-            {"_id": session_id},
-            {"$set": {"crisis_high_shown": True}},
-        )
+        await handle_model_risk(user_id, session_id, analysis.evidence)
         logger.warning(
             "模型 risk_level=high 兜底触发 user=%s session=%s",
             user_id, session_id,

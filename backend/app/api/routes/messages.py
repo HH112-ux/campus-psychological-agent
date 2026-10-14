@@ -11,16 +11,13 @@ from app.core.deps import get_current_user
 from app.core.exceptions import (
     CODE_BUSINESS_VALIDATION,
     CODE_MODEL_UNAVAILABLE,
-    CODE_NOT_FOUND,
-    CODE_RESOURCE_FORBIDDEN,
     BizError,
 )
 from app.core.responses import ok_response
-from app.db.indexes import COLL_MESSAGES, COLL_SESSIONS
-from app.db.mongo import mongo
 from app.db.oid import parse_oid
 from app.models.message import FeedbackRequest, MessageSend
 from app.services import chat
+from app.services import messages as messages_svc
 from app.services import sessions as sessions_svc
 
 router = APIRouter(prefix="/api/v1", tags=["messages"])
@@ -65,17 +62,8 @@ async def message_feedback(
     if body.rating == "dislike" and not body.reason:
         raise BizError(CODE_BUSINESS_VALIDATION, "点踩时需要选择一个原因", http_status=400)
 
-    msg = await mongo.db[COLL_MESSAGES].find_one(
-        {"_id": parse_oid(message_id), "role": "assistant"}
-    )
-    if msg is None:
-        raise BizError(CODE_NOT_FOUND, "回复不存在", http_status=404)
-    session = await mongo.db[COLL_SESSIONS].find_one({"_id": msg.get("session_id")})
-    if session is None or session.get("user_id") != current_user["_id"]:
-        raise BizError(CODE_RESOURCE_FORBIDDEN, "回复不存在", http_status=404)
-
-    await mongo.db[COLL_MESSAGES].update_one(
-        {"_id": msg["_id"]}, {"$set": {"feedback": {"rating": body.rating, "reason": body.reason}}}
+    await messages_svc.record_feedback(
+        parse_oid(message_id), current_user["_id"], body.rating, body.reason
     )
     message = "已记录，谢谢你的反馈，我会改进" if body.rating == "dislike" else "谢谢你的认可"
     return ok_response(None, message=message)

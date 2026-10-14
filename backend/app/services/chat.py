@@ -20,6 +20,8 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
+from bson import ObjectId
+
 from app.config import get_settings
 from app.core.crypto import encrypt
 from app.core.exceptions import CODE_CONTENT_INVALID, CODE_SESSION_ROUND_LIMIT, BizError
@@ -33,9 +35,8 @@ from app.services import emotion as emotion_svc
 from app.services import memory
 from app.services.crisis import (
     CrisisResult,
-    detect_risk,
     get_resources,
-    record_risk_event,
+    handle_detection,
 )
 from app.services.crisis_data import HIGH_CRISIS_REPLY
 from app.services.prompts import build_system_prompt
@@ -76,8 +77,13 @@ async def _insert_message(
     return result.inserted_id
 
 
-async def prepare_turn(user: dict, session: dict, raw_content: str) -> Turn:
-    """校验 + 危机检测 + 落 user 消息 + 更新会话；返回 Turn。"""
+async def _pre_turn(
+    user: dict, session: dict, raw_content: str
+) -> tuple[str, ObjectId]:
+    """前置校验 + 限流 + 轮次检查 + 落 user 消息。
+
+    返回 (清洗后的文本, user_message_id)。校验失败直接抛 BizError。
+    """
     settings = get_settings()
     text = raw_content.strip()
     if not text or len(text) > settings.message_max_length:
@@ -96,47 +102,28 @@ async def prepare_turn(user: dict, session: dict, raw_content: str) -> Turn:
             http_status=429,
         )
 
-    # 1) 落 user 消息（meta 事件需要其 id）
+    # 落 user 消息（meta 事件需要其 id）
     user_msg_id = await _insert_message(session["_id"], "user", text, risk_level="none")
+    return text, user_msg_id
 
-    # 2) 危机本地检测
-    crisis = await detect_risk(text, session)
 
-    # 3) 更新会话：最近活跃时间 + 首条消息回填标题 + 二级词累计分
+async def prepare_turn(user: dict, session: dict, raw_content: str) -> Turn:
+    """编排：校验 → 危机检测 → 会话更新；返回 Turn。
+
+    前置校验与落 user 消息由 _pre_turn 处理，危机侧由 crisis.handle_detection 处理。
+    prepare_turn 只做串联和会话更新的最后一步。
+    """
+    text, user_msg_id = await _pre_turn(user, session, raw_content)
+
+    # 危机检测 + 风险事件 + 会话状态（crisis 模块内聚）
+    crisis, crisis_payload, crisis_session_set = await handle_detection(text, session)
+    risk_level = crisis.level if crisis.hit else "none"
+
+    # 更新会话：最近活跃时间 + 首条消息回填标题 + 危机侧字段
     session_set: dict = {"last_msg_at": now_cst()}
     if not session.get("title"):
         session_set["title"] = text[:12]
-    if crisis.score_added:
-        session_set["crisis_score"] = crisis.new_score
-
-    crisis_payload: dict | None = None
-    risk_level = "none"
-    if crisis.hit:
-        resources = (await get_resources())["resources"]
-        risk_level = crisis.level
-        if crisis.level == "high":
-            # 首次 high 弹卡片；之后不重复弹（常驻入口由前端保持）
-            show_card = not session.get("crisis_high_shown", False)
-            if show_card:
-                session_set["crisis_high_shown"] = True
-            await record_risk_event(
-                user["_id"], session["_id"], "high",
-                crisis.l1_matches + crisis.l2_matches,
-            )
-        else:
-            # mid：本会话未弹过任何卡片时弹一次（已 high 常驻则不重复）
-            shown = session.get("crisis_high_shown", False) or session.get("crisis_mid_shown", False)
-            show_card = not shown
-            if show_card:
-                session_set["crisis_mid_shown"] = True
-            await record_risk_event(
-                user["_id"], session["_id"], "mid", crisis.l2_matches
-            )
-        crisis_payload = {
-            "level": crisis.level,
-            "show_card": show_card,
-            "resources": resources,
-        }
+    session_set.update(crisis_session_set)
 
     if session_set:
         await mongo.db[COLL_SESSIONS].update_one(

@@ -4,7 +4,6 @@
 对话延迟采样用隔离用户、非流式，单轮真实调用。
 """
 import asyncio
-import json
 import time
 import urllib.request
 

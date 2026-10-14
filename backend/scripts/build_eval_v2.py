@@ -1,5 +1,6 @@
 """P5 扩充评估集：v1(45条) + 强度黄金标注 + 12 条新样本（常规6+对抗6）→ emotion_eval_v2.json（57条）。"""
 import json
+from collections import Counter
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parent / "eval_data" / "emotion_eval_v1.json"
@@ -53,7 +54,6 @@ for it in NEW:
 assert len(out) >= 50
 adv = [i for i in out if i["id"].startswith("adv-")]
 assert len(adv) >= 10
-from collections import Counter
 print("总条数:", len(out), "| 对抗:", len(adv), "| 按类:", dict(Counter(i["label"] for i in out)))
 DST.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
 print("written:", DST)
