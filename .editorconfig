@@ -1,0 +1,24 @@
+# EditorConfig：全项目统一文件格式（EditorConfig 通用实践）
+# 配合 .gitattributes 使用：格式以 .editorconfig 为准，版本库行尾由 gitattributes 强制 LF
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+[*.py]
+indent_size = 4
+max_line_length = 110
+
+[*.js]
+indent_size = 2
+
+[*.{wxml,wxss,json,yml,yaml,toml,html,css}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false

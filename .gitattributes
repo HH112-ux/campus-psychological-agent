@@ -1,0 +1,43 @@
+# Git 属性：统一换行与二进制标记（GitHub 通用实践）
+# 文本文件统一 LF；二进制文件禁止 diff/合并
+
+# 默认：所有文本按 LF 归一化（提交时转 LF，检出时按平台）
+* text=auto eol=lf
+
+# 明确声明为文本的文件类型
+*.py text eol=lf
+*.js text eol=lf
+*.wxml text eol=lf
+*.wxss text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.txt text eol=lf
+*.mmd text eol=lf
+*.gitmessage text eol=lf
+*.example text eol=lf
+
+# 二进制文件：不 diff、不合并
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.docx binary
+*.doc binary
+*.xlsx binary
+*.xls binary
+*.pdf binary
+*.zip binary
+*.gz binary
+
+# 编辑器/系统文件按二进制忽略处理
+.DS_Store binary

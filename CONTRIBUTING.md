@@ -121,3 +121,9 @@ git commit            # 未带 -m 时会自动加载 .gitmessage 模板
 - 接口行为变化 → 同步更新《API 文档》（campus-agent-api-doc）。
 - 功能/规则变化 → 同步更新《开发文档》（campus-agent-dev-doc）。
 - 提示词版本变化（prompt_v1→v2）→ 在文档中记录版本对比，并先跑回归评估集。
+
+## 8. 文件与上传规则
+
+- 文档一律 Markdown（.md），不生成 HTML 文档；命名、格式与项目结构见 `docs/repo-governance.md`。
+- 上传范围（什么入库/不入库）与 Push 检查清单见 `docs/repo-governance.md` 第三节；`.gitignore` 已双保险覆盖。
+- PR / Issue 模板在 `.github/`，合并前按模板自查。

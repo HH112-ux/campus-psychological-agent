@@ -41,6 +41,16 @@ secrets/
 .trae-html-share-packages/
 .DS_Store
 
+# ===== 工具生成目录（不入库）=====
+{{pkgetc}}/
+*.tmp
+
+# ===== 本地文档与 Office 临时文件（不入库）=====
+*.docx
+*.doc
+*.pdf
+~$*
+
 # ===== 日志与临时文件 =====
 *.log
 tmp/

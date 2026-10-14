@@ -8,19 +8,24 @@
 
 ```
 campus-psychological-agent/
-├── backend/               # FastAPI 后端（P0 起逐步搭建）
-├── miniprogram/           # 微信小程序原生工程（P0 起逐步搭建）
-├── docs/                  # 工程规范：任务拆分 / 版本策略 / 危机词库变更流程
+├── backend/               # FastAPI 后端
+├── miniprogram/           # 微信小程序原生工程
+├── docs/                  # 工程规范与阶段留档（全部 Markdown）
+│   ├── repo-governance.md # 命名 / 文件格式 / Git-GitHub 上传规则（新增必读）
 │   ├── task-management.md
 │   ├── versioning.md
 │   └── crisis-lexicon-workflow.md
 ├── campus-agent-dev-doc/  # 开发文档（Markdown 版；交互原型见同名 HTML）
 ├── campus-agent-api-doc/  # API 文档（Markdown 版已并入本 README「API 文档」章节）
+├── .github/               # GitHub 模板（PR / Issue）
 ├── CONTRIBUTING.md        # 开发流程与提交规范（必读）
 ├── SECURITY.md            # 安全策略（漏洞报告 / 密钥 / 数据保护）
 ├── CHANGELOG.md           # 变更日志
 └── .gitmessage            # git commit 消息模板
 ```
+
+> 仓库规则速览：文档一律 **Markdown**；命名/格式与「什么入库、什么不入库」见
+> `docs/repo-governance.md`；提交规范见 `CONTRIBUTING.md`。
 
 ## 技术栈（立项固定）
 

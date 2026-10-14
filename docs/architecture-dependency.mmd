@@ -1,0 +1,212 @@
+graph TD
+    subgraph Routes["🔵 API Routes （api/routes/）"]
+        direction TB
+        R_auth["auth.py"]
+        R_messages["messages.py"]
+        R_sessions["sessions.py"]
+        R_emotion["emotion.py"]
+        R_users["users.py"]
+        R_crisis["crisis.py"]
+        R_health["health.py"]
+    end
+
+    subgraph Services["🟢 Services （app/services/）"]
+        direction TB
+        S_chat["chat.py<br/>prepare_turn / reply / stream"]
+        S_emotion["emotion.py<br/>analyze_turn / parse"]
+        S_crisis["crisis.py<br/>detect_risk / handle_detection<br/>handle_model_risk / record_risk_event"]
+        S_sessions["sessions.py<br/>CRUD / get_owned"]
+        S_messages["messages.py ⭐<br/>record_feedback"]
+        S_privacy["privacy.py<br/>consent / export / erase"]
+        S_memory["memory.py<br/>load_window"]
+        S_checkins["checkins.py<br/>upsert / streak"]
+        S_emotion_logs["emotion_logs.py<br/>trends / timeline"]
+        S_users["users.py<br/>user CRUD"]
+        S_wechat["wechat.py<br/>code2session"]
+        S_crisis_data["crisis_data.py<br/>LEVEL1/2_PHRASES / RESOURCES"]
+        S_prompts["prompts.py<br/>build_system_prompt"]
+    end
+
+    subgraph Core["🟡 Core （app/core/）"]
+        direction TB
+        C_config["config.py<br/>Pydantic Settings"]
+        C_crypto["crypto.py<br/>AES-256-GCM encrypt/decrypt"]
+        C_security["security.py<br/>PyJWT HS256"]
+        C_ratelimit["ratelimit.py<br/>in-memory fixed-window"]
+        C_exceptions["exceptions.py<br/>BizError / error codes"]
+        C_deps["deps.py<br/>get_current_user"]
+        C_timeutil["timeutil.py<br/>CST / ISO"]
+        C_responses["responses.py<br/>ok_response / fail"]
+    end
+
+    subgraph Db["⚪ Db （app/db/）"]
+        direction TB
+        D_mongo["mongo.py<br/>MongoManager"]
+        D_indexes["indexes.py<br/>COLL_* / _INDEX_SPECS"]
+        D_oid["oid.py<br/>parse_oid"]
+    end
+
+    subgraph Llm["🟣 LLM （app/llm/）"]
+        direction TB
+        L_zhipu["zhipu.py<br/>ZhipuProvider"]
+    end
+
+    subgraph Models["⚫ Models （app/models/）"]
+        direction TB
+        M_auth["auth.py<br/>WxLoginRequest / RefreshRequest"]
+        M_message["message.py<br/>MessageSend / FeedbackRequest"]
+        M_session["session.py<br/>SessionCreate / SessionRename"]
+        M_emotion["emotion.py<br/>EmotionAnalysis"]
+    end
+
+    subgraph Infra["☁️ 基础设施"]
+        direction TB
+        I_mongoDB[("MongoDB<br/>messages / sessions / emotion_records<br/>risk_events / checkins / users")]
+        I_zhipu[("智谱 AI<br/>glm-4.5 / glm-4-flash")]
+        I_wechat[("微信开放平台<br/>code2session")]
+    end
+
+    %% ========== Routes → Services ==========
+    R_auth --> S_users
+    R_auth --> S_wechat
+    R_messages --> S_chat
+    R_messages --> S_sessions
+    R_messages --> S_messages
+    R_sessions --> S_sessions
+    R_emotion --> S_checkins
+    R_emotion --> S_emotion_logs
+    R_users --> S_checkins
+    R_users --> S_privacy
+    R_users --> S_users
+    R_crisis --> S_crisis
+
+    %% ========== Services 内部依赖 ==========
+    S_chat --> S_emotion
+    S_chat --> S_memory
+    S_chat --> S_crisis
+    S_chat --> S_crisis_data
+    S_chat --> S_prompts
+    S_emotion --> S_crisis  %% ⬅️ 修复点：直接调 handle_model_risk，不再直写 DB
+    S_crisis --> S_crisis_data
+    S_crisis -. 无内部 .-> S_chat
+    S_sessions -.-> S_chat
+
+    %% ========== Services → Core ==========
+    S_chat --> C_config
+    S_chat --> C_crypto
+    S_chat --> C_exceptions
+    S_chat --> C_ratelimit
+    S_chat --> C_timeutil
+    S_emotion --> C_config
+    S_emotion --> C_crypto
+    S_emotion --> C_timeutil
+    S_sessions --> C_config
+    S_sessions --> C_crypto
+    S_sessions --> C_exceptions
+    S_sessions --> C_timeutil
+    S_messages --> C_exceptions
+    S_privacy --> C_crypto
+    S_privacy --> C_timeutil
+    S_memory --> C_config
+    S_memory --> C_crypto
+    S_checkins --> C_timeutil
+    S_emotion_logs --> C_timeutil
+    S_users --> C_timeutil
+    S_wechat --> C_config
+    S_wechat --> C_exceptions
+
+    %% ========== Services → Db ==========
+    S_chat --> D_mongo
+    S_chat --> D_indexes
+    S_chat --> D_oid
+    S_emotion --> D_mongo
+    S_emotion --> D_indexes
+    S_crisis --> D_mongo
+    S_crisis --> D_indexes
+    S_sessions --> D_mongo
+    S_sessions --> D_indexes
+    S_sessions --> D_oid
+    S_messages --> D_mongo   %% ⭐ 新增：路由层不再直写
+    S_messages --> D_indexes
+    S_privacy --> D_mongo
+    S_privacy --> D_indexes
+    S_privacy --> D_oid
+    S_memory --> D_mongo
+    S_memory --> D_indexes
+    S_checkins --> D_mongo
+    S_checkins --> D_indexes
+    S_emotion_logs --> D_mongo
+    S_emotion_logs --> D_indexes
+    S_users --> D_mongo
+    S_users --> D_indexes
+    S_users --> D_oid
+
+    %% ========== Services → LLM / Models ==========
+    S_chat --> L_zhipu
+    S_emotion --> L_zhipu
+    S_emotion --> M_emotion
+
+    %% ========== Core 内部依赖 ==========
+    C_crypto --> C_config
+    C_security --> C_config
+    C_security --> C_exceptions
+    C_ratelimit --> C_config
+    C_ratelimit --> C_exceptions
+    C_exceptions --> C_responses
+    C_deps --> C_exceptions
+    C_deps --> C_security
+
+    %% ========== Core → Services (deps 特例) ==========
+    C_deps --> S_users
+
+    %% ========== Routes → Core ==========
+    R_auth --> C_exceptions
+    R_auth --> C_security
+    R_messages --> C_config
+    R_messages --> C_deps
+    R_messages --> C_exceptions
+    R_sessions --> C_deps
+    R_sessions --> C_timeutil
+    R_emotion --> C_deps
+    R_users --> C_deps
+    R_crisis --> C_responses
+    R_health --> C_config
+    R_health --> C_responses
+
+    %% ========== Routes → Db ==========
+    R_messages --> D_oid
+    R_sessions --> D_indexes
+    R_health --> D_mongo
+
+    %% ========== Routes → Models ==========
+    R_auth --> M_auth
+    R_messages --> M_message
+    R_sessions --> M_session
+    R_emotion --> M_emotion
+    R_users --> M_auth
+
+    %% ========== Db → 基础设施 ==========
+    D_mongo --> I_mongoDB
+    L_zhipu --> I_zhipu
+    S_wechat --> I_wechat
+
+    %% ========== 样式 ==========
+    classDef routes fill:#3b82f6,stroke:#1e40af,color:#fff,rx:8,ry:8
+    classDef services fill:#22c55e,stroke:#15803d,color:#000,rx:8,ry:8
+    classDef core fill:#eab308,stroke:#a16207,color:#000,rx:8,ry:8
+    classDef db fill:#94a3b8,stroke:#475569,color:#000,rx:8,ry:8
+    classDef llm fill:#a855f7,stroke:#7e22ce,color:#fff,rx:8,ry:8
+    classDef models fill:#1e293b,stroke:#0f172a,color:#fff,rx:8,ry:8
+    classDef infra fill:#64748b,stroke:#334155,color:#fff,rx:16,ry:16
+
+    class R_auth,R_messages,R_sessions,R_emotion,R_users,R_crisis,R_health routes
+    class S_chat,S_emotion,S_crisis,S_sessions,S_messages,S_privacy,S_memory,S_checkins,S_emotion_logs,S_users,S_wechat,S_crisis_data,S_prompts services
+    class C_config,C_crypto,C_security,C_ratelimit,C_exceptions,C_deps,C_timeutil,C_responses core
+    class D_mongo,D_indexes,D_oid db
+    class L_zhipu llm
+    class M_auth,M_message,M_session,M_emotion models
+    class I_mongoDB,I_zhipu,I_wechat infra
+
+    %% ========== 关键修复标记 ==========
+    linkStyle 20 stroke:#ef4444,stroke-width:3px,stroke-dasharray: 5 3
+    linkStyle 21 stroke:#ef4444,stroke-width:3px,stroke-dasharray: 5 3
