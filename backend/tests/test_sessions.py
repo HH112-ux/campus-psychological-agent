@@ -25,9 +25,13 @@ def test_session_crud_flow(client, db):
     assert client.get("/api/v1/sessions", headers=auth(token)).json()["data"]["total"] == 0
 
 
-def test_concurrency_limit_three(client, db):
+def test_concurrency_limit(client, db):
+    """并发会话上限：达到 session_concurrency_limit 后创建被拒 2003。"""
+    from app.config import get_settings
+
+    limit = get_settings().session_concurrency_limit
     token = login(client)
-    for _ in range(3):
+    for _ in range(limit):
         create_session(client, token)
     r = client.post("/api/v1/sessions", json={}, headers=auth(token))
     assert r.status_code == 429

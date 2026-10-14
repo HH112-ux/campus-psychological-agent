@@ -47,10 +47,10 @@ Page({
   },
 
   newChat() {
-    if (this.data.items.length >= 3) {
+    if (this.data.items.length >= 15) {
       wx.showModal({
         title: '会话数量已达上限',
-        content: '最多保留 3 个进行中的对话，请先删除一个旧会话。',
+        content: '最多保留 15 个进行中的对话，请先删除一个旧会话。',
         showCancel: false,
       })
       return

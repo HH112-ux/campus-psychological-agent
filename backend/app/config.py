@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     # 业务规则（P1）
     message_max_length: int = 2000
     session_round_limit: int = 50
-    session_concurrency_limit: int = 3
+    session_concurrency_limit: int = 15
     memory_window_rounds: int = 20  # 窗口记忆：近 20 轮（约 40 条消息）
     session_messages_max_return: int = 200  # 会话详情最多返回最近 200 条
 
