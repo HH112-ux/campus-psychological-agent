@@ -56,6 +56,10 @@ class Settings(BaseSettings):
 
     # 情绪分析（P3）：单轮分析硬超时，超过即跳过本轮记录（保证 done 不被长期阻塞）
     emotion_analysis_timeout_seconds: float = 5.0
+    # P5 降级开关：情绪分析整体可关（关后不调用轻量模型、不写情绪记录、不发 emotion 事件）
+    emotion_analysis_enabled: bool = True
+    # P5 降级开关：流式可关（关后对话统一走非流式 JSON 路径，弱网/平台异常时兜底）
+    stream_enabled: bool = True
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

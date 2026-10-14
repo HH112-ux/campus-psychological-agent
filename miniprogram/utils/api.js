@@ -151,6 +151,9 @@ module.exports = {
   ensureLogin,
   request,
   rawRequest,
+  getLocalUser() {
+    return wx.getStorageSync(USER_KEY) || {}
+  },
   get(url, extra = {}) {
     return request({ url, method: 'GET', ...extra })
   },

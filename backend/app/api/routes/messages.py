@@ -6,6 +6,7 @@ import json
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
+from app.config import get_settings
 from app.core.deps import get_current_user
 from app.core.exceptions import (
     CODE_BUSINESS_VALIDATION,
@@ -37,7 +38,8 @@ async def send_message(
     session = await sessions_svc.get_owned_session(session_id, current_user["_id"])
     turn = await chat.prepare_turn(current_user, session, body.content)
 
-    if not body.stream:
+    # P5 降级开关：stream_enabled=false 时统一走非流式 JSON 路径
+    if not body.stream or not get_settings().stream_enabled:
         return ok_response(await chat.reply_nonstream(turn))
 
     async def event_generator():

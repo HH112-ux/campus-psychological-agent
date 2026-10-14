@@ -26,6 +26,11 @@ LEVEL1_PHRASES: list[str] = [
     "zisha", "wosi", "woxiangsi", "buxianghuo", "buxianghuole",
     "huobuxiaqu", "huobuxiaqule", "zican", "gewan", "geshou", "gemai",
     "tiaolou", "tiaohe", "shangdiao",
+    # —— 暴力他人（P5 扩充：自伤/轻生/暴力均属红线，命中即 high 转介）——
+    "想杀人", "想砍人", "想捅人", "想打人", "想报复", "报复社会", "报复别人",
+    "想弄死", "弄死他", "弄死她", "想掐死", "掐死他", "掐死她", "想同归于尽",
+    "同归于尽", "杀了他", "杀了她", "砍死他", "砍死她", "要杀人", "要砍人",
+    "想砸东西打人",
 ]
 
 # 二级 · 语境信号（归一化形态，尽量带第一人称/生命语境以降低日常误报）

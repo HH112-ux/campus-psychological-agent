@@ -23,6 +23,12 @@
     <view class="hotline-phone">{{item.phone}}</view>
   </view>
 
+  <view class="cell" bindtap="showConsent">
+    <view class="cell-icon">🔐</view>
+    <view class="cell-title">隐私政策与同意</view>
+    <view class="cell-arrow">{{consented ? '已同意' : '未同意'}}</view>
+  </view>
+
   <view class="cell" bindtap="showDisclaimer">
     <view class="cell-icon">⚠</view>
     <view class="cell-title">关于与免责声明</view>

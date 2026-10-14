@@ -1,0 +1,401 @@
+[
+  {
+    "id": "ax-01",
+    "text": "明天就要出分了，我现在紧张得什么都干不进去",
+    "label": "anxious",
+    "intensity": 8,
+    "note": ""
+  },
+  {
+    "id": "ax-02",
+    "text": "最近每天复习到凌晨还是记不住，越学越慌",
+    "label": "anxious",
+    "intensity": 7,
+    "note": ""
+  },
+  {
+    "id": "ax-03",
+    "text": "想到下周的面试我就心跳加速，睡不着",
+    "label": "anxious",
+    "intensity": 8,
+    "note": ""
+  },
+  {
+    "id": "ax-04",
+    "text": "手机一响我就担心是导师的消息，害怕",
+    "label": "anxious",
+    "intensity": 7,
+    "note": ""
+  },
+  {
+    "id": "ax-05",
+    "text": "考试周快到了，我满脑子都是考砸了怎么办",
+    "label": "anxious",
+    "intensity": 8,
+    "note": ""
+  },
+  {
+    "id": "ax-06",
+    "text": "实习offer到现在还没消息，焦虑得坐不住",
+    "label": "anxious",
+    "intensity": 7,
+    "note": ""
+  },
+  {
+    "id": "ax-07",
+    "text": "我总觉得别人都比我优秀，压力好大",
+    "label": "anxious",
+    "intensity": 7,
+    "note": ""
+  },
+  {
+    "id": "ax-08",
+    "text": "上台发言前手一直抖，怕讲不好",
+    "label": "anxious",
+    "intensity": 8,
+    "note": ""
+  },
+  {
+    "id": "ax-09",
+    "text": "论文ddl要到了，还有一堆没写，慌死了",
+    "label": "anxious",
+    "intensity": 8,
+    "note": ""
+  },
+  {
+    "id": "ax-10",
+    "text": "室友都在卷绩点，我感觉要被落下了",
+    "label": "anxious",
+    "intensity": 7,
+    "note": ""
+  },
+  {
+    "id": "dp-01",
+    "text": "感觉做什么都没意思，提不起劲",
+    "label": "depressed",
+    "intensity": 7,
+    "note": ""
+  },
+  {
+    "id": "dp-02",
+    "text": "最近总是失眠，半夜醒来就再也睡不着，觉得活着好累",
+    "label": "depressed",
+    "intensity": 9,
+    "note": ""
+  },
+  {
+    "id": "dp-03",
+    "text": "已经连续两周心情很低落，不想见任何人",
+    "label": "depressed",
+    "intensity": 8,
+    "note": ""
+  },
+  {
+    "id": "dp-04",
+    "text": "我是不是很没用，什么都做不好",
+    "label": "depressed",
+    "intensity": 7,
+    "note": ""
+  },
+  {
+    "id": "dp-05",
+    "text": "看着窗外的天灰蒙蒙的，心里也闷闷的",
+    "label": "depressed",
+    "intensity": 6,
+    "note": ""
+  },
+  {
+    "id": "dp-06",
+    "text": "今天一整天不想说话，也不想吃饭",
+    "label": "depressed",
+    "intensity": 7,
+    "note": ""
+  },
+  {
+    "id": "dp-07",
+    "text": "觉得未来一片迷茫，不知道该怎么办",
+    "label": "depressed",
+    "intensity": 7,
+    "note": ""
+  },
+  {
+    "id": "dp-08",
+    "text": "朋友们都在往前走，只有我停在原地",
+    "label": "depressed",
+    "intensity": 7,
+    "note": ""
+  },
+  {
+    "id": "dp-09",
+    "text": "早上起来第一件事就是觉得这一天好难熬",
+    "label": "depressed",
+    "intensity": 7,
+    "note": ""
+  },
+  {
+    "id": "dp-10",
+    "text": "我好像高兴不起来了，连最喜欢的事也不想做",
+    "label": "depressed",
+    "intensity": 7,
+    "note": ""
+  },
+  {
+    "id": "ok-01",
+    "text": "今天天气不错，出门走了走，心情挺好的",
+    "label": "calm",
+    "intensity": 3,
+    "note": ""
+  },
+  {
+    "id": "ok-02",
+    "text": "把作业写完了，感觉一身轻松",
+    "label": "calm",
+    "intensity": 4,
+    "note": ""
+  },
+  {
+    "id": "ok-03",
+    "text": "刚跑完步回来，心情很平静",
+    "label": "calm",
+    "intensity": 2,
+    "note": ""
+  },
+  {
+    "id": "ok-04",
+    "text": "今天和室友一起吃了火锅，很开心",
+    "label": "calm",
+    "intensity": 4,
+    "note": ""
+  },
+  {
+    "id": "ok-05",
+    "text": "复习完一章，感觉进度还不错",
+    "label": "calm",
+    "intensity": 4,
+    "note": ""
+  },
+  {
+    "id": "ok-06",
+    "text": "今天没什么特别的事，平平淡淡的也挺好",
+    "label": "calm",
+    "intensity": 2,
+    "note": ""
+  },
+  {
+    "id": "ok-07",
+    "text": "睡了个好觉，精神不错",
+    "label": "calm",
+    "intensity": 3,
+    "note": ""
+  },
+  {
+    "id": "ok-08",
+    "text": "收到导师的回复，说我的方案可行，挺安心的",
+    "label": "calm",
+    "intensity": 4,
+    "note": ""
+  },
+  {
+    "id": "ok-09",
+    "text": "和爸妈视频了半小时，心里暖暖的",
+    "label": "calm",
+    "intensity": 4,
+    "note": ""
+  },
+  {
+    "id": "ok-10",
+    "text": "今天按时完成了所有计划，很有成就感",
+    "label": "calm",
+    "intensity": 4,
+    "note": ""
+  },
+  {
+    "id": "ag-01",
+    "text": "室友半夜打游戏外放，说了几次都不听，气死我了",
+    "label": "angry",
+    "intensity": 8,
+    "note": ""
+  },
+  {
+    "id": "ag-02",
+    "text": "小组作业有人全程划水，最后还抢功劳，太让人生气了",
+    "label": "angry",
+    "intensity": 8,
+    "note": ""
+  },
+  {
+    "id": "ag-03",
+    "text": "食堂排队被人插队，我一下就火大了",
+    "label": "angry",
+    "intensity": 7,
+    "note": ""
+  },
+  {
+    "id": "ag-04",
+    "text": "快递被弄丢了，客服还一直踢皮球，越想越气",
+    "label": "angry",
+    "intensity": 7,
+    "note": ""
+  },
+  {
+    "id": "ag-05",
+    "text": "被人在背后说闲话，真的很生气",
+    "label": "angry",
+    "intensity": 7,
+    "note": ""
+  },
+  {
+    "id": "ag-06",
+    "text": "我辛辛苦苦做的方案被人直接抄了，气不过",
+    "label": "angry",
+    "intensity": 8,
+    "note": ""
+  },
+  {
+    "id": "ag-07",
+    "text": "上课被点名回答问题，旁边人一直嘲笑我，烦",
+    "label": "angry",
+    "intensity": 7,
+    "note": ""
+  },
+  {
+    "id": "ag-08",
+    "text": "社团开会定了时间又改来改去，真让人恼火",
+    "label": "angry",
+    "intensity": 7,
+    "note": ""
+  },
+  {
+    "id": "ag-09",
+    "text": "电脑死机没保存，一下午的活儿全没了，气得想摔东西",
+    "label": "angry",
+    "intensity": 9,
+    "note": ""
+  },
+  {
+    "id": "ag-10",
+    "text": "说了分手他还纠缠，真的很烦躁",
+    "label": "angry",
+    "intensity": 8,
+    "note": ""
+  },
+  {
+    "id": "adv-01",
+    "text": "我可太开心了，期末挂了三门",
+    "label": "depressed",
+    "intensity": 7,
+    "note": "反讽，实际低落"
+  },
+  {
+    "id": "adv-02",
+    "text": "我没事，真的没事",
+    "label": "depressed",
+    "intensity": 7,
+    "note": "自我安慰的反话，实际难受"
+  },
+  {
+    "id": "adv-03",
+    "text": "他们说我想太多，也许吧",
+    "label": "anxious",
+    "intensity": 5,
+    "note": "引用他人评价，隐含担心"
+  },
+  {
+    "id": "adv-04",
+    "text": "就像歌词唱的，想哭的时候就去淋雨，我看看天，没下雨",
+    "label": "calm",
+    "intensity": 2,
+    "note": "引用歌词，无真实低落情绪"
+  },
+  {
+    "id": "adv-05",
+    "text": "谁懂啊，ddl前夜",
+    "label": "anxious",
+    "intensity": 6,
+    "note": "网络用语，隐含赶截止日期的焦虑"
+  },
+  {
+    "id": "ax-11",
+    "text": "明天就要汇报了，稿子改了三版还是觉得不行",
+    "label": "anxious",
+    "intensity": 7
+  },
+  {
+    "id": "ax-12",
+    "text": "考研成绩快出了，每天刷手机等消息，心慌",
+    "label": "anxious",
+    "intensity": 8
+  },
+  {
+    "id": "dp-11",
+    "text": "不知道从什么时候起，对什么都提不起兴趣了",
+    "label": "depressed",
+    "intensity": 7
+  },
+  {
+    "id": "dp-12",
+    "text": "日子一天天重复，感觉不到任何盼头",
+    "label": "depressed",
+    "intensity": 7
+  },
+  {
+    "id": "ok-11",
+    "text": "午休后醒来看窗外阳光正好，心情不错",
+    "label": "calm",
+    "intensity": 3
+  },
+  {
+    "id": "ok-12",
+    "text": "晚饭后散步半小时，整个人很放松",
+    "label": "calm",
+    "intensity": 2
+  },
+  {
+    "id": "ag-11",
+    "text": "投票结果出来我被莫名投出，真的很不服气",
+    "label": "angry",
+    "intensity": 7
+  },
+  {
+    "id": "ag-12",
+    "text": "新换的宿舍空调是坏的，报修三天没人理",
+    "label": "angry",
+    "intensity": 6
+  },
+  {
+    "id": "adv-06",
+    "text": "真棒，又挂科了，我可太优秀了",
+    "label": "depressed",
+    "intensity": 7
+  },
+  {
+    "id": "adv-07",
+    "text": "他说人生总有起起落落，我听了点点头",
+    "label": "calm",
+    "intensity": 2
+  },
+  {
+    "id": "adv-08",
+    "text": "我朋友说最近压力大很焦虑，我也不知道怎么帮他",
+    "label": "calm",
+    "intensity": 2
+  },
+  {
+    "id": "adv-09",
+    "text": "没事的，我真的没事，你们别担心我了",
+    "label": "depressed",
+    "intensity": 7
+  },
+  {
+    "id": "adv-10",
+    "text": "我哪里会难过，我开心得很",
+    "label": "depressed",
+    "intensity": 6
+  },
+  {
+    "id": "adv-11",
+    "text": "今天只是普普通通的一天，平静得很",
+    "label": "calm",
+    "intensity": 2
+  }
+]

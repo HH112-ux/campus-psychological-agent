@@ -41,10 +41,47 @@ Page({
   onShow() {
     api
       .ensureLogin()
-      .then(() => this.loadHome())
+      .then(() => {
+        this.maybeShowConsent()
+        return this.loadHome()
+      })
       .catch((err) => {
         wx.showToast({ title: (err && err.message) || '登录失败', icon: 'none' })
       })
+  },
+
+  // P4/P5 隐私单独同意：首次进入且未同意时弹窗；本地标记防反复打扰，
+  // 「我的」页保留重新同意入口
+  maybeShowConsent() {
+    const u = api.getLocalUser()
+    if (u.consented || wx.getStorageSync('xinyu_consent_prompted')) return
+    wx.setStorageSync('xinyu_consent_prompted', true)
+    wx.showModal({
+      title: '隐私政策与使用同意',
+      content:
+        '「心屿」会记录你的对话内容、情绪与打卡数据，仅用于陪伴与自我觉察；' +
+        '对话内容采用加密存储，你可随时导出或删除全部数据。' +
+        '本产品为校园心理陪伴工具，不提供医疗诊断。' +
+        '是否同意《隐私政策》并开始使用？',
+      confirmText: '同意并继续',
+      cancelText: '暂不同意',
+      success: (res) => {
+        if (!res.confirm) {
+          wx.showToast({ title: '同意后可开始使用，稍后可在「我的」页开启', icon: 'none' })
+          return
+        }
+        api
+          .post('/api/v1/users/me/consent', { agree: true, policy_version: '1.0' })
+          .then(() => {
+            const nu = api.getLocalUser()
+            nu.consented = true
+            wx.setStorageSync('xinyu_user', nu)
+          })
+          .catch(() => {
+            wx.showToast({ title: '同意保存失败，请稍后重试', icon: 'none' })
+          })
+      },
+    })
   },
 
   loadHome() {

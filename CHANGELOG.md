@@ -10,6 +10,15 @@
 - P4 模型危机双保险：情绪分析 `risk_level=high` 时，即使本地词库未命中也写 `risk_events`（trigger=model）并升级会话 `crisis_high_shown`；SSE 流在 emotion 事件后追加 crisis 事件（携带求助资源，触发时机在 delta 之后、done 之前）。
 - P4 隐私与数据权利：`POST /users/me/consent`（记录隐私同意+政策版本）、`GET /users/me/data/export`（PIPL 行权，导出用户/会话/消息/情绪/打卡/风险事件，对话内容解密后导出）、`DELETE /users/me/data`（软删 + 30 天可登录撤销，期满物理删除，须输入「删除」确认）。
 - P4 测试：`test_crypto.py`（加解密往返/明文兼容/密钥校验）、`test_privacy.py`（consent/export/erase 接口与 400 拒绝路径）。
+- P5 评估与提审准备：
+  - 评估集扩充至 **59 条**（`emotion_eval_v2.json`：四类 14/17/16/12 + 对抗 11，含黄金强度标注）；
+  - 情绪分析提示词迭代 **V2**（低落/焦虑边界、平静/还行区分、反讽/引用识别），版本对比见 `docs/prompt-eval-v1-v2.md`；
+  - P5 正式评估（`docs/emotion-eval-p5.md`）：**严格一致率 86.4%（≥80% 达标）、强度 MAE 1.37（≤2 达标）、对抗样本 11 条**；
+  - 危机词库扩充暴力他人类（一级强信号 55→79 条），危机召回测试 34 项全绿，留档 `docs/crisis-recall-p5.md`（≥95% 一票否决通过）；
+  - 降级开关：`EMOTION_ANALYSIS_ENABLED`、`STREAM_ENABLED`（config + 链路接入 + 测试）；
+  - 压测与成本：/health 200req@50并发 3816 req/s P95 30ms；对话整轮 ~5.2s；单用户日成本 ≈0.02 元（`docs/eval-cost-p5.md`）；
+  - 隐私政策终稿（`docs/privacy-policy.md`）、提审材料包（`docs/review-package-p5.md`）、内测方案（`docs/beta-plan-p5.md`）；
+  - 小程序隐私单独同意弹窗（首次启动 + 「我的」页重新同意入口）。
 
 - 仓库基线：开发文档、API 文档、贡献规范（CONTRIBUTING）入库，建立 main 分支与 m0 里程碑。
 - 任务拆分规范：按 F1–F6 功能编号拆分任务，关联阶段与 API 接口（docs/task-management.md）。

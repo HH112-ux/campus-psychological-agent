@@ -468,7 +468,7 @@ body.text-mode .top-bar { background:#fff; }
           <thead><tr><th>指标</th><th>定义</th><th>目标值</th><th>说明</th></tr></thead>
           <tbody>
             <tr><td>流式首字延迟</td><td>发送消息到收到第一个回复字符的 P95 时间</td><td class="mono">≤ 3s</td><td>超过则必须给出"小屿正在听"的等待反馈</td></tr>
-            <tr><td>情绪识别一致率</td><td>离线评估集上，模型情绪分类与人工标注一致的比例</td><td class="mono">≥ 80%</td><td>M3 首测已留档（`docs/emotion-eval-m3.md`：45 条 86.7%）；P5 扩充至四类各 ≥ 10 条 + ≥ 10 条对抗样本后作为 go/no-go 依据</td></tr>
+            <tr><td>情绪识别一致率</td><td>离线评估集上，模型情绪分类与人工标注一致的比例</td><td class="mono">≥ 80%</td><td>M3 首测已留档（`docs/emotion-eval-m3.md`：45 条 86.7%）；P5 正式评估已留档（`docs/emotion-eval-p5.md`：59 条 86.4%、强度 MAE 1.37、对抗 11 条，go/no-go 达标）</td></tr>
             <tr><td>危机信号召回</td><td>测试用例中自伤/自杀类信号的触发比例</td><td class="mono">≥ 95%，一票否决</td><td>宁可误报，不可漏报；上线前必须全量通过</td></tr>
             <tr><td>疏导有效反馈率</td><td>回复获得点赞 /（点赞+点踩），按会话末统计</td><td class="mono">≥ 70% <span class="ev ev-hyp">[假设——待内测校准]</span></td><td>点踩必须带原因标签，进入 bad-case 归档</td></tr>
             <tr><td>情绪日志留存</td><td>新用户次周仍产生至少 1 条情绪记录的比例</td><td class="mono">≥ 25% <span class="ev ev-hyp">[假设——待内测校准]</span></td><td>长期跟踪价值成立的前提</td></tr>

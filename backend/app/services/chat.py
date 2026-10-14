@@ -233,7 +233,7 @@ async def reply_nonstream(turn: Turn) -> dict:
 
     message_id = await _finalize(turn, assistant_text, degraded)
     emotion = None
-    if turn.crisis.level != "high":
+    if turn.crisis.level != "high" and get_settings().emotion_analysis_enabled:
         # 回复落库后做情绪分析：成功回填 assistant 消息并写 emotion_records
         emotion = await emotion_svc.analyze_turn(
             turn.user["_id"],
@@ -276,14 +276,17 @@ async def stream_events(turn: Turn) -> AsyncIterator[tuple[str, dict]]:
     if turn.crisis.level == "mid" and turn.crisis_payload:
         yield "crisis", turn.crisis_payload
 
-    # 情绪分析（P3）：done 之前下发 emotion 事件；失败/超时则协议允许缺失
-    emotion = await emotion_svc.analyze_turn(
-        turn.user["_id"],
-        turn.session["_id"],
-        parse_oid(turn.user_message_id),
-        parse_oid(message_id),
-        turn.content,
-    )
+    # 情绪分析（P3）：done 之前下发 emotion 事件；失败/超时则协议允许缺失；
+    # P5 降级开关关闭时整段跳过（不调模型、不写记录、不发事件）
+    emotion = None
+    if get_settings().emotion_analysis_enabled:
+        emotion = await emotion_svc.analyze_turn(
+            turn.user["_id"],
+            turn.session["_id"],
+            parse_oid(turn.user_message_id),
+            parse_oid(message_id),
+            turn.content,
+        )
     if emotion:
         yield "emotion", emotion
         # P4 危机双保险：模型 risk_level=high 时追加 crisis 事件（异步兜底）

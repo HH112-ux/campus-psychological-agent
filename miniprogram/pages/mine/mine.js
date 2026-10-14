@@ -59,4 +59,36 @@ Page({
       confirmText: '我知道了',
     })
   },
+
+  // P4/P5：隐私同意入口（未同意时可在此重新同意）
+  showConsent() {
+    if (this.data.consented) {
+      wx.showToast({ title: '你已同意隐私政策', icon: 'none' })
+      return
+    }
+    wx.showModal({
+      title: '隐私政策与使用同意',
+      content:
+        '「心屿」会记录你的对话内容、情绪与打卡数据，仅用于陪伴与自我觉察；' +
+        '对话内容采用加密存储，你可随时导出或删除全部数据。' +
+        '本产品为校园心理陪伴工具，不提供医疗诊断。',
+      confirmText: '同意',
+      cancelText: '再想想',
+      success: (res) => {
+        if (!res.confirm) return
+        api
+          .post('/api/v1/users/me/consent', { agree: true, policy_version: '1.0' })
+          .then(() => {
+            const u = api.getLocalUser()
+            u.consented = true
+            wx.setStorageSync('xinyu_user', u)
+            this.setData({ consented: true })
+            wx.showToast({ title: '已记录同意', icon: 'none' })
+          })
+          .catch(() => {
+            wx.showToast({ title: '保存失败，请稍后重试', icon: 'none' })
+          })
+      },
+    })
+  },
 })
