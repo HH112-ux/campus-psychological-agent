@@ -49,9 +49,22 @@ def client():
 
 @pytest.fixture()
 def db(client):
-    """每个测试前清理业务集合（保留危机词库/资源集合，检测器自带兜底）。"""
+    """每个测试前清理业务集合（保留危机词库/资源集合，检测器自带兜底）。
+
+    清理必须用 pymongo 同步客户端：motor 的 delete_many 返回绑定 TestClient
+    事件循环的 Future，同步 fixture 中无法 await（裸调用等于不清理，跨进程
+    残留的软删用户会污染后续测试并造成偶发 401）。
+    """
+    import pymongo
+
+    sync_client = pymongo.MongoClient(
+        os.environ.get("MONGODB_URI", "mongodb://localhost:27017")
+    )
+    sync_db = sync_client[os.environ.get("MONGODB_DB", "xinyu_test")]
     for name in _CLEAN_COLLS:
-        mongo.db[name].delete_many({})
+        sync_db[name].delete_many({})
+    sync_client.close()
+
     from app.core import ratelimit
     from app.services import crisis as crisis_svc
     ratelimit.reset_all()

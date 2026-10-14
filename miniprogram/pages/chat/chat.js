@@ -105,6 +105,20 @@ Page({
     return api.post('/api/v1/sessions', {}).then((d) => {
       this.setData({ sessionId: d.session_id })
       wx.setNavigationBarTitle({ title: d.title })
+    }).catch((err) => {
+      // 已达会话上限（2003）：不卡死页面，自动回退到最近一个会话继续使用
+      if (err && err.code === 2003) {
+        return api.get('/api/v1/sessions?page=1&page_size=5').then((list) => {
+          const items = (list && list.items) || []
+          if (!items.length) throw err
+          const latest = items[0]
+          this.setData({ sessionId: latest.session_id })
+          wx.setNavigationBarTitle({ title: latest.title || '和小屿聊聊' })
+          wx.showToast({ title: '已达会话上限，已回到最近对话', icon: 'none' })
+          return this.loadDetail()
+        })
+      }
+      throw err
     })
   },
 
