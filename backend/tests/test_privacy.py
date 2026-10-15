@@ -108,3 +108,81 @@ def test_erase_isolates_other_users(client, db):
     # B 仍正常
     resp = client.get("/api/v1/users/me", headers=auth(token_b))
     assert resp.status_code == 200
+
+
+def test_purge_expired_data(client, db):
+    """M3：恢复期未满不清理，到期后 purge_expired_data 物理删除该用户全部数据。
+
+    purge 的调用点在 main.lifespan 的定时任务里（G7），此处直接调用其任务体，
+    经 client.portal 在应用事件循环内执行，验证「承诺可兑现」而非仅「函数存在」。
+    """
+    from datetime import timedelta
+
+    from app.core.timeutil import now_cst
+    from app.db.indexes import (
+        COLL_CHECKINS,
+        COLL_EMOTION_RECORDS,
+        COLL_MESSAGES,
+        COLL_RISK_EVENTS,
+        COLL_SESSIONS,
+        COLL_USERS,
+    )
+    from app.db.mongo import mongo
+    from app.services.privacy import purge_expired_data
+
+    openid = "mock_purge_user"
+    token = login(client, openid)
+    create_session(client, token)
+
+    # 走行权接口软删（erase_at 默认落在恢复期之后）
+    resp = client.request(
+        "DELETE",
+        "/api/v1/users/me/data",
+        json={"confirm_text": "删除"},
+        headers=auth(token),
+    )
+    assert resp.status_code == 200
+
+    async def _expire_and_purge():
+        user = await mongo.db[COLL_USERS].find_one({"openid": openid})
+        assert user is not None and user.get("deleted_at") is not None
+        uid = user["_id"]
+        session_ids = [
+            s["_id"]
+            async for s in mongo.db[COLL_SESSIONS].find({"user_id": uid}, {"_id": 1})
+        ]
+        assert session_ids, "前置：软删用户应仍持有会话，消息删除路径才被覆盖"
+        # 造一条消息，验证消息集合随会话一并物理删除
+        await mongo.db[COLL_MESSAGES].insert_one({
+            "session_id": session_ids[0],
+            "role": "user",
+            "content": "purge-test",
+            "created_at": now_cst(),
+        })
+
+        # 1) 恢复期未满：不应被物理删除
+        purged_before = await purge_expired_data()
+
+        # 2) 把 erase_at 调到过去，模拟已过恢复期
+        await mongo.db[COLL_USERS].update_one(
+            {"_id": uid},
+            {"$set": {"erase_at": now_cst() - timedelta(seconds=1)}},
+        )
+        purged_after = await purge_expired_data()
+
+        remaining = {
+            "users": await mongo.db[COLL_USERS].count_documents({"_id": uid}),
+            "sessions": await mongo.db[COLL_SESSIONS].count_documents({"user_id": uid}),
+            "messages": await mongo.db[COLL_MESSAGES].count_documents(
+                {"session_id": {"$in": session_ids}}
+            ),
+            "emotions": await mongo.db[COLL_EMOTION_RECORDS].count_documents({"user_id": uid}),
+            "checkins": await mongo.db[COLL_CHECKINS].count_documents({"user_id": uid}),
+            "risk_events": await mongo.db[COLL_RISK_EVENTS].count_documents({"user_id": uid}),
+        }
+        return purged_before, purged_after, remaining
+
+    purged_before, purged_after, remaining = client.portal.call(_expire_and_purge)
+    assert purged_before == 0, "恢复期未满不应被物理删除"
+    assert purged_after == 1, "到期用户应被物理删除且计数为 1"
+    assert all(v == 0 for v in remaining.values()), remaining

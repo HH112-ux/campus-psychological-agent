@@ -2,15 +2,19 @@
 
 - 隐私同意：记录 consent_at + 政策版本号，未同意时小程序必须先弹窗；
 - 数据导出：同步导出用户全部数据为 JSON（会话/消息/情绪记录/打卡/风险事件）；
-- 数据删除：软删（标记 deleted_at + erase_at），30 天可登录撤销，期满物理删除。
+- 数据删除：软删（标记 deleted_at + erase_at），恢复期内可登录撤销，期满物理删除。
   软删后各查询接口不再返回任何数据（已由 users.get_by_id 的 deleted_at 过滤保障）。
+- 物理删除兑现：由 run_purge_scheduler 后台定时任务执行（M3），间隔见配置
+  data_purge_interval_seconds，恢复期天数见配置 erase_recover_days。
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from bson import ObjectId
 
+from app.config import get_settings
 from app.core.crypto import decrypt
 from app.core.timeutil import now_cst, to_iso
 from app.db.indexes import (
@@ -25,9 +29,6 @@ from app.db.mongo import mongo
 from app.db.oid import parse_oid
 
 logger = logging.getLogger(__name__)
-
-# 软删恢复期（天）
-ERASE_RECOVER_DAYS = 30
 
 # 当前隐私政策版本
 PRIVACY_POLICY_VERSION = "1.0"
@@ -148,7 +149,7 @@ async def erase_user_data(user_id: ObjectId) -> dict:
     """
     now = now_cst()
     from datetime import timedelta
-    recover_deadline = now + timedelta(days=ERASE_RECOVER_DAYS)
+    recover_deadline = now + timedelta(days=get_settings().erase_recover_days)
 
     uid = parse_oid(str(user_id))
 
@@ -219,3 +220,23 @@ async def purge_expired_data() -> int:
         count += 1
         logger.info("物理删除用户 %s 全部数据", uid)
     return count
+
+
+async def run_purge_scheduler() -> None:
+    """到期数据物理删除的后台定时任务（M3）。
+
+    由 main.lifespan 以 asyncio 任务启动，进程退出时被取消。
+    先休眠再执行：避免启动瞬间与初始化竞争，也让首次扫描落在配置间隔之后。
+    单次失败只记录日志、不终止循环（下个周期自动重试）。
+    """
+    settings = get_settings()
+    if not settings.data_purge_enabled:
+        return
+    while True:
+        await asyncio.sleep(settings.data_purge_interval_seconds)
+        try:
+            purged = await purge_expired_data()
+            if purged:
+                logger.info("到期数据清理完成，物理删除 %d 个用户", purged)
+        except Exception:
+            logger.exception("到期数据清理失败，将于下个周期重试")

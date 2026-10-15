@@ -40,9 +40,17 @@ class Settings(BaseSettings):
     # 业务规则（P1）
     message_max_length: int = 2000
     session_round_limit: int = 50
-    session_concurrency_limit: int = 15
+    # 并发活跃会话上限：对外契约（README / API 文档 / .env.example）一致为 3（M6 口径对齐）
+    session_concurrency_limit: int = 3
     memory_window_rounds: int = 20  # 窗口记忆：近 20 轮（约 40 条消息）
     session_messages_max_return: int = 200  # 会话详情最多返回最近 200 条
+
+    # 数据留存与清除（M3，见 docs/improvement-roadmap.md）
+    # 软删后用户可撤销的天数；期满由后台定时任务物理删除
+    erase_recover_days: int = 30  # 期限口径待 M2（校方）确认后调整
+    # 必须为 true，否则「软删 N 天后物理删除」的合规承诺不兑现（G7）
+    data_purge_enabled: bool = True
+    data_purge_interval_seconds: int = 3600  # 到期数据扫描间隔（秒），默认每小时一次
 
     # 智谱开放平台（P0 需跑通一次调用）
     zhipu_api_key: str = ""

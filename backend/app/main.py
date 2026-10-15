@@ -4,7 +4,8 @@ P0 验收：GET /health 返回 200；服务可启动（DB 未连接时降级报�
 """
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 
@@ -12,13 +13,27 @@ from app.api.routes import auth, crisis, emotion, health, messages, sessions, us
 from app.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.db.mongo import mongo
+from app.services import privacy as privacy_svc
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await mongo.connect()
-    yield
-    await mongo.disconnect()
+    settings = get_settings()
+    # M3：到期数据物理删除必须真实生效（G7），否则「软删 N 天后物理删除」的合规承诺不兑现
+    purge_task = (
+        asyncio.create_task(privacy_svc.run_purge_scheduler())
+        if settings.data_purge_enabled and mongo.is_connected
+        else None
+    )
+    try:
+        yield
+    finally:
+        if purge_task is not None:
+            purge_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await purge_task
+        await mongo.disconnect()
 
 
 def create_app() -> FastAPI:
