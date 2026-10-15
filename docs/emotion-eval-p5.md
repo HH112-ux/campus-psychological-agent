@@ -1,7 +1,7 @@
 # 情绪分类一致率正式评估（P5，go/no-go 依据）
 
 - 测量时间：dev 环境 · 轻量模型 `glm-4-flash` · temperature 0.2 · 提示词 V2
-- 评估集：`backend/scripts/eval_data/emotion_eval_v2.json`，共 59 条（四类 14/17/16/12 + 对抗 11，含黄金强度标注）
+- 评估集：`backend/scripts/eval-data/emotion_eval_v2.json`，共 59 条（四类 14/17/16/12 + 对抗 11，含黄金强度标注）
 - 严格总一致率：**51/59 = 86.4%**（go/no-go 阈值 ≥ 80%）
 - 近义归并辅助（ok≈calm，不计入主指标）：另计 3 条
 - 强度平均绝对误差（分类一致样本，目标 ≤2）：**1.37**

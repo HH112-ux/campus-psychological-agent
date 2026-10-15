@@ -1,7 +1,7 @@
 # 情绪分类一致率测量（M3 首次留档）
 
 - 测量时间：dev 环境 · 轻量模型 `glm-4-flash` · temperature 0.2
-- 评估集：`backend/scripts/eval_data/emotion_eval_v1.json`，共 45 条（四类各 10 条 + 5 条反讽/引用对抗样本）
+- 评估集：`backend/scripts/eval-data/emotion_eval_v1.json`，共 45 条（四类各 10 条 + 5 条反讽/引用对抗样本）
 - 总一致率：**39/45 = 86.7%**（目标 ≥ 80%，P5 达标线）
 
 ## 按类一致率
