@@ -3,8 +3,8 @@ import json
 from collections import Counter
 from pathlib import Path
 
-SRC = Path(__file__).resolve().parent / "eval_data" / "emotion_eval_v1.json"
-DST = Path(__file__).resolve().parent / "eval_data" / "emotion_eval_v2.json"
+SRC = Path(__file__).resolve().parent / "eval-data" / "emotion_eval_v1.json"
+DST = Path(__file__).resolve().parent / "eval-data" / "emotion_eval_v2.json"
 
 # 现有 45 条的金标准强度（1-10，专家标注）
 INTENSITY = {

@@ -39,11 +39,17 @@ secrets/
 *.swp
 *.swo
 .trae-html-share-packages/
-.DS_Store
 
 # ===== 工具生成目录（不入库）=====
 {{pkgetc}}/
 *.tmp
+
+# ===== HTML 文档产物（不入库；文档以 .md 为唯一来源）=====
+campus-agent-api-doc/campus-agent-api-doc.html
+campus-agent-dev-doc/campus-agent-dev-doc.html
+campus-agent-api-doc/_shared/
+campus-agent-dev-doc/_shared/
+campus-agent-dev-doc/assets/
 
 # ===== 本地文档与 Office 临时文件（不入库）=====
 *.docx

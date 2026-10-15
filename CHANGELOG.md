@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+### 二期门控项（M3 · M4 · M6）
+
+- **M6 口径与文档对齐**：会话并发上限由代码默认 `15` 对齐为 **`3`**（与 README / API 文档 / `.env.example` 一致，G8）；修正 README 与 API 文档中「数据导出（二期实现 / 异步任务）」的过期描述为「同步返回 JSON，限流为二期规划」（G10）。
+- **M3 合规承诺兑现**：`privacy.purge_expired_data()` 接入调度——新增 `run_purge_scheduler()`，由 `main.lifespan` 以 asyncio 任务启动、进程退出时取消（G7）；留存期限与开关可配置（`ERASE_RECOVER_DAYS` / `DATA_PURGE_ENABLED` / `DATA_PURGE_INTERVAL_SECONDS`）；新增 `test_purge_expired_data` 证明「恢复期未满不删、到期全量物理删除（含消息）」。
+- **M4 人工响应 SOP（草案）**：新增 `docs/crisis-response-sop.md`，定义高危事件的触发条件、值班角色、SLA、升级路径与留痕隐私红线（校方联系人、SLA 数值等待 M2 / 运营补齐，G11）。
+- **二期路线规划**：新增 `docs/improvement-roadmap.md`（v1.1），确立三轨道（门控 M / 使能 E / 增值 V）与「门控项置于关键路径」的排期原则。
+
+### 仓库治理与 CI
+
+- **规范对齐与升级**：`docs/repo-governance.md` 补齐「CI 与质量门」章、命名豁免清单、根目录清洁规则与 Push Checklist（新增敏感/产物复查）；HTML 文档包（`campus-agent-*-doc/*.html` + `_shared/` + `assets/`）移出仓库，**`.md` 为唯一入库来源**。
+- **命名整改**：`backend/scripts/eval_data/` → `eval-data`（同步脚本与文档引用，含 `eval_emotion*.py` / `build_eval_v2.py` 与两处评估留档）。
+- **CI 落地**：新增 `.github/workflows/ci.yml`（后端 `ruff check` + `pytest`，含 MongoDB 服务容器；小程序全量 JS `node --check`），补上写了但未落地的质量门。
+- **清理与配置**：删除根目录游离的 `project.config.json`（真身在 `miniprogram/`）；`.gitignore` 去重并新增 HTML 文档产物忽略规则；README 补仓库结构说明与「保留所有权利」许可声明（暂不提供 `LICENSE`）。
+
 ### 新增
 
 - P4 对话内容应用层加密：AES-256-GCM（`app/core/crypto.py`），密钥 `DATA_ENCRYPTION_KEY`（base64url 32 字节）；dev 未配置时透明存储、prod 强制要求；消息落库加密、读取解密，明文老数据兼容平滑迁移；日志脱敏 `redact`。

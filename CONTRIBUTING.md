@@ -126,4 +126,4 @@ git commit            # 未带 -m 时会自动加载 .gitmessage 模板
 
 - 文档一律 Markdown（.md），不生成 HTML 文档；命名、格式与项目结构见 `docs/repo-governance.md`。
 - 上传范围（什么入库/不入库）与 Push 检查清单见 `docs/repo-governance.md` 第三节；`.gitignore` 已双保险覆盖。
-- PR / Issue 模板在 `.github/`，合并前按模板自查。
+- PR / Issue 模板在 `.github/`，合并前按模板自查；CI 工作流在 `.github/workflows/ci.yml`，**合入 `main` 前 CI 必须全绿**（规范见 `docs/repo-governance.md` 第六节）。

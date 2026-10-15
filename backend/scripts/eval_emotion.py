@@ -3,7 +3,7 @@
 用法（在 backend/ 目录下运行，需 .env 中的 ZHIPU_API_KEY）：
     DYLD_FRAMEWORK_PATH=... DYLD_LIBRARY_PATH=... .venv/bin/python scripts/eval_emotion.py
 
-- 评估集：scripts/eval_data/emotion_eval_v1.json（四类各 10 条 + 5 条对抗样本）
+- 评估集：scripts/eval-data/emotion_eval_v1.json（四类各 10 条 + 5 条对抗样本）
 - 调用链路与线上一致：轻量模型 glm-4-flash、temperature 0.2、同一系统指令与解析器
 - 指标：总一致率、按类一致率、对抗样本一致率；结果写入 docs/emotion-eval-m3.md
 """
@@ -21,7 +21,7 @@ from app.config import get_settings  # noqa: E402
 from app.llm.zhipu import ZhipuProvider  # noqa: E402
 from app.services.emotion import _EMOTION_SYSTEM_INSTRUCTION, parse_emotion_json  # noqa: E402
 
-EVAL_FILE = Path(__file__).resolve().parent / "eval_data" / "emotion_eval_v1.json"
+EVAL_FILE = Path(__file__).resolve().parent / "eval-data" / "emotion_eval_v1.json"
 REPORT_FILE = (
     Path(__file__).resolve().parents[2] / "docs" / "emotion-eval-m3.md"
 )
@@ -77,7 +77,7 @@ async def main() -> int:
         "# 情绪分类一致率测量（M3 首次留档）",
         "",
         f"- 测量时间：{settings.env} 环境 · 轻量模型 `{settings.model_light}` · temperature 0.2",
-        f"- 评估集：`backend/scripts/eval_data/emotion_eval_v1.json`，共 {total} 条"
+        f"- 评估集：`backend/scripts/eval-data/emotion_eval_v1.json`，共 {total} 条"
         "（四类各 10 条 + 5 条反讽/引用对抗样本）",
         f"- 总一致率：**{correct}/{total} = {correct / total:.1%}**（目标 ≥ 80%，P5 达标线）",
         "",

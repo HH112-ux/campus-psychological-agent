@@ -284,7 +284,7 @@ sequenceDiagram
   } }</pre>
 
       <h3 class="ep-anchor" id="ep-erase"><span class="badge del">DELETE</span> /api/v1/users/me/data</h3>
-      <p>行权接口：删除该用户的全部数据（会话、消息、情绪记录、打卡、风险事件），先软删 30 天（用户可登录撤销），期满物理删除。<span class="ev ev-jdg">[专家判断]</span> 响应立即生效，各查询接口从此刻起不再返回任何数据。</p>
+      <p>行权接口：删除该用户的全部数据（会话、消息、情绪记录、打卡、风险事件），先软删 30 天（用户可登录撤销），期满由后端定时任务自动物理删除（默认每小时扫描一次，配置 <code class="inline">ERASE_RECOVER_DAYS</code> / <code class="inline">DATA_PURGE_ENABLED</code> / <code class="inline">DATA_PURGE_INTERVAL_SECONDS</code>）。<span class="ev ev-jdg">[专家判断]</span> 响应立即生效，各查询接口从此刻起不再返回任何数据。</p>
       <div class="code-label">请求参数（Body）</div>
       <pre class="code">{ "confirm_text": "删除" }   <span class="cm">// 必须等于"删除"，防止误触；不符合返回 400</span></pre>
       <div class="code-label">成功响应 <span class="note-line">200 · code=0</span></div>
@@ -579,7 +579,7 @@ data: {"message_id":"671b22d29a3b4c5d6e7f8a9b","degraded":false}</pre>
           <tr><td>登录/刷新</td><td class="mono">10 次/分钟/IP</td><td>防 code 重放与爆破</td></tr>
           <tr><td>发送消息</td><td class="mono">30 条/小时/用户</td><td>防成本失控 <span class="ev ev-hyp">[假设——内测校准]</span></td></tr>
           <tr><td>其余读接口</td><td class="mono">60 次/分钟/用户</td><td>Nginx 应用层双层执行</td></tr>
-          <tr><td>数据导出</td><td class="mono">1 次/天/用户</td><td>导出为异步任务 + 48h 有效下载链接（二期实现）</td></tr>
+          <tr><td>数据导出</td><td class="mono">1 次/天/用户（二期规划，当前未实现限流）</td><td><code class="inline">GET /api/v1/users/me/data/export</code> 同步返回 JSON（非异步任务）</td></tr>
         </tbody>
       </table></div>
       <h4>安全要点</h4>

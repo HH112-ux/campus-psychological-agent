@@ -1,0 +1,57 @@
+name: CI
+
+# 质量门：合入 main 前必须全绿（见 CONTRIBUTING.md §5、docs/repo-governance.md §六）
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: 后端 · ruff + pytest
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: 安装依赖
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: ruff 静态检查
+        working-directory: backend
+        run: ruff check .
+
+      - name: pytest
+        working-directory: backend
+        run: pytest -q
+        env:
+          MONGODB_URI: mongodb://localhost:27017
+          MONGODB_DB: xinyu_ci
+          WX_MOCK_LOGIN: "true"
+          WX_MOCK_OPENID: mock_ci_user
+          JWT_SECRET: ci-secret-please-change-0123456789abcdef
+
+  miniprogram:
+    name: 小程序 · JS 语法门
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: node --check 全量 JS
+        run: find miniprogram -name '*.js' -print0 | xargs -0 -n1 node --check

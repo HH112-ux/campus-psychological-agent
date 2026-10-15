@@ -3,7 +3,7 @@
 用法（backend/ 目录，需 .env 中的 ZHIPU_API_KEY）：
     .venv/bin/python scripts/eval_emotion_p5.py
 
-- 评估集：scripts/eval_data/emotion_eval_v2.json（59 条：四类 14/17/16/12 + 对抗 11）
+- 评估集：scripts/eval-data/emotion_eval_v2.json（59 条：四类 14/17/16/12 + 对抗 11）
 - 链路与线上一致：glm-4-flash、temperature 0.2、同一系统指令（V2）与解析器
 - 指标：严格一致率（≥80% 达标）、按类一致率、对抗一致率、强度 MAE（≤2 目标，
   仅对分类一致的样本计）、ok≈calm 近义归并（辅助口径，不计入主指标）
@@ -23,7 +23,7 @@ from app.config import get_settings  # noqa: E402
 from app.llm.zhipu import ZhipuProvider  # noqa: E402
 from app.services.emotion import _EMOTION_SYSTEM_INSTRUCTION, parse_emotion_json  # noqa: E402
 
-EVAL_FILE = Path(__file__).resolve().parent / "eval_data" / "emotion_eval_v2.json"
+EVAL_FILE = Path(__file__).resolve().parent / "eval-data" / "emotion_eval_v2.json"
 REPORT_FILE = Path(__file__).resolve().parents[2] / "docs" / "emotion-eval-p5.md"
 
 LABEL_ZH = {
@@ -97,7 +97,7 @@ async def main() -> int:
         "# 情绪分类一致率正式评估（P5，go/no-go 依据）",
         "",
         f"- 测量时间：{settings.env} 环境 · 轻量模型 `{settings.model_light}` · temperature 0.2 · 提示词 V2",
-        f"- 评估集：`backend/scripts/eval_data/emotion_eval_v2.json`，共 {total} 条"
+        f"- 评估集：`backend/scripts/eval-data/emotion_eval_v2.json`，共 {total} 条"
         "（四类 14/17/16/12 + 对抗 11，含黄金强度标注）",
         f"- 严格总一致率：**{correct}/{total} = {correct / total:.1%}**（go/no-go 阈值 ≥ 80%）",
         f"- 近义归并辅助（ok≈calm，不计入主指标）：另计 {near_hits} 条",

@@ -4,6 +4,8 @@
 
 > 定位：倾诉出口 + 自我觉察 + 专业资源的桥。**不输出诊断结论、不推荐药物、不宣称治疗作用。**
 
+> 许可：本项目为校内项目，**保留所有权利**（未声明开源许可，暂不提供 `LICENSE`）；如需引用或复用，请先联系维护者。
+
 ## 仓库结构
 
 ```
@@ -15,9 +17,9 @@ campus-psychological-agent/
 │   ├── task-management.md
 │   ├── versioning.md
 │   └── crisis-lexicon-workflow.md
-├── campus-agent-dev-doc/  # 开发文档（Markdown 版；交互原型见同名 HTML）
-├── campus-agent-api-doc/  # API 文档（Markdown 版已并入本 README「API 文档」章节）
-├── .github/               # GitHub 模板（PR / Issue）
+├── campus-agent-dev-doc/  # 开发文档（Markdown 为准；HTML 原型包不入库）
+├── campus-agent-api-doc/  # API 文档（Markdown 为准；内容已并入本 README「API 文档」章节）
+├── .github/               # GitHub 协作：PR / Issue 模板 + CI 工作流（.github/workflows/）
 ├── CONTRIBUTING.md        # 开发流程与提交规范（必读）
 ├── SECURITY.md            # 安全策略（漏洞报告 / 密钥 / 数据保护）
 ├── CHANGELOG.md           # 变更日志
@@ -212,7 +214,7 @@ access_token 过期后的静默续期。refresh_token 单次使用（旋转机�
 ```
 
 #### DELETE /api/v1/users/me/data
-行权接口：删除该用户的全部数据（会话、消息、情绪记录、打卡、风险事件），先软删 30 天（用户可登录撤销），期满物理删除。[专家判断] 响应立即生效，各查询接口从此刻起不再返回任何数据。
+行权接口：删除该用户的全部数据（会话、消息、情绪记录、打卡、风险事件），先软删 30 天（用户可登录撤销），期满由后端定时任务自动物理删除（默认每小时扫描一次，配置 `ERASE_RECOVER_DAYS` / `DATA_PURGE_ENABLED` / `DATA_PURGE_INTERVAL_SECONDS`）。[专家判断] 响应立即生效，各查询接口从此刻起不再返回任何数据。
 请求参数（Body）
 
 ```
@@ -503,7 +505,7 @@ data: {"message_id":"671b22d29a3b4c5d6e7f8a9b","degraded":false}
 | 登录/刷新 | 10 次/分钟/IP | 防 code 重放与爆破 |
 | 发送消息 | 30 条/小时/用户 | 防成本失控 [假设——内测校准] |
 | 其余读接口 | 60 次/分钟/用户 | Nginx 应用层双层执行 |
-| 数据导出 | 1 次/天/用户 | 导出为异步任务 + 48h 有效下载链接（二期实现） |
+| 数据导出 | 1 次/天/用户（二期规划，当前未实现限流） | `GET /api/v1/users/me/data/export` 同步返回 JSON（非异步任务） |
 
 ##### 安全要点
 - JWT HS256 签名，密钥仅存服务端环境变量；openid 不下发，任何接口不回传。
