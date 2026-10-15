@@ -8,16 +8,16 @@
   ],
   "window": {
     "navigationBarTitleText": "心屿",
-    "navigationBarBackgroundColor": "#4C8BF5",
-    "navigationBarTextStyle": "white",
-    "backgroundColor": "#F5F7FA",
+    "navigationBarBackgroundColor": "#F7F4EF",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#F7F4EF",
     "backgroundTextStyle": "dark"
   },
   "tabBar": {
-    "color": "#8F959E",
-    "selectedColor": "#4C8BF5",
+    "color": "#7A736B",
+    "selectedColor": "#3E7A69",
     "backgroundColor": "#FFFFFF",
-    "borderStyle": "black",
+    "borderStyle": "white",
     "list": [
       { "pagePath": "pages/index/index", "text": "首页" },
       { "pagePath": "pages/chat/chat", "text": "对话" },

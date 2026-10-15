@@ -1,8 +1,59 @@
-/* app.wxss —— 全局样式（P3） */
+/* app.wxss —— 全局样式与设计变量
+   主题：心屿 · 暖暮治愈
+   设计观点：心理陪伴场景需要「安全、温暖、不被评判」的视觉氛围，
+   因此放弃通用 SaaS 蓝（#4C8BF5）与冷灰底（#F5F7FA），
+   改用暖青绿「屿青」作主色（呼应岛屿/水的自然疗愈意象），
+   暖米白作页面底，暖沙橘作鼓励高光。所有语义色（危机/警示/成功）
+   保持独立饱和度，不被主色同化。 */
+
 page {
-  background: #f5f7fa;
+  /* —— 主色 · 屿青（疗愈、沉静、自然） —— */
+  --brand: #3e7a69;
+  --brand-ink: #2f6355;   /* 深屿青：文字/深底 */
+  --brand-soft: #5e9c8a;  /* 浅屿青：装饰渐变 */
+  --brand-tint: #eaf3ef;  /* 屿青浅底 */
+  --brand-tint2: #f1f8f5;
+
+  /* —— 强调色 · 暖沙橘（连续记录、鼓励、高光） —— */
+  --accent: #c97b3d;
+  --accent-ink: #9c5722;
+  --accent-tint: #fbf0e4;
+
+  /* —— 中性 · 暖白体系 —— */
+  --bg: #f7f4ef;          /* 暖米白页面底 */
+  --surface: #ffffff;
+  --surface-warm: #fdfcfa;
+  --input-bg: #f3f0eb;
+  --line: #ede9e3;
+  --text: #2b2825;
+  --text-2: #6b655e;
+  --text-3: #7a736b;
+  --disabled: #bfd1c9;    /* 禁用态填充 */
+
+  /* —— 语义色（安全功能，语义不得被主色同化） —— */
+  --danger: #c1342a;
+  --danger-tint: #fcebe8;
+  --warn: #9c6218;
+  --warn-tint: #fdf3e2;
+  --success: #2e7d4f;
+  --success-tint: #e9f5ee;
+  --info: #3d6ad6;
+  --info-tint: #e9eefb;
+
+  /* —— 记忆卡 · 暖木色 —— */
+  --memory-bg: #fbf4e6;
+  --memory-text: #7a6437;
+
+  /* —— 形状与层次 —— */
+  --radius-lg: 28rpx;
+  --radius-md: 22rpx;
+  --radius-sm: 16rpx;
+  --shadow-card: 0 6rpx 20rpx rgba(63, 58, 50, 0.05);
+  --shadow-soft: 0 2rpx 10rpx rgba(63, 58, 50, 0.04);
+
+  background: var(--bg);
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
-  color: #1f2329;
+  color: var(--text);
   font-size: 30rpx;
 }
 
@@ -13,7 +64,7 @@ page {
 
 /* 通用卡片（首页/日志/我的共用外观基线） */
 .card {
-  background: #ffffff;
-  border-radius: 20rpx;
-  box-shadow: 0 4rpx 16rpx rgba(31, 35, 41, 0.04);
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
 }

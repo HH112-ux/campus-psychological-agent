@@ -1,4 +1,4 @@
-/* pages/index/index.wxss —— 首页样式 */
+/* pages/index/index.wxss —— 首页样式（暖暮治愈主题） */
 .page {
   padding: 32rpx 32rpx 48rpx;
   box-sizing: border-box;
@@ -11,40 +11,42 @@
 .hero-title {
   font-size: 44rpx;
   font-weight: 600;
-  color: #1f2329;
+  color: var(--text);
 }
 
 .hero-sub {
   margin-top: 12rpx;
   font-size: 28rpx;
-  color: #646a73;
+  color: var(--text-2);
 }
 
+/* 每日一句：屿青浅底，像一小片安静的水面 */
 .quote-card {
-  background: linear-gradient(135deg, #e8f0fe, #f0f6ff);
-  border-radius: 20rpx;
+  background: linear-gradient(135deg, var(--brand-tint), var(--brand-tint2));
+  border-radius: var(--radius-md);
   padding: 28rpx 32rpx;
   margin-bottom: 24rpx;
 }
 
 .quote-text {
   font-size: 30rpx;
-  color: #2d4f8f;
+  color: var(--brand-ink);
   line-height: 1.6;
 }
 
 .quote-foot {
   margin-top: 10rpx;
   font-size: 24rpx;
-  color: #7d8fb3;
+  color: var(--brand-soft);
   text-align: right;
 }
 
+/* 记忆型问候：暖木色，制造「被记得」的温度 */
 .memory-card {
   display: flex;
   align-items: flex-start;
-  background: #fffbe9;
-  border-radius: 20rpx;
+  background: var(--memory-bg);
+  border-radius: var(--radius-md);
   padding: 24rpx 28rpx;
   margin-bottom: 24rpx;
 }
@@ -56,17 +58,17 @@
 
 .memory-text {
   font-size: 28rpx;
-  color: #6b5b2e;
+  color: var(--memory-text);
   line-height: 1.6;
   flex: 1;
 }
 
 .card {
-  background: #ffffff;
-  border-radius: 20rpx;
+  background: var(--surface);
+  border-radius: var(--radius-md);
   padding: 32rpx;
   margin-bottom: 24rpx;
-  box-shadow: 0 4rpx 16rpx rgba(31, 35, 41, 0.04);
+  box-shadow: var(--shadow-card);
 }
 
 .card-title {
@@ -81,7 +83,7 @@
 .card-date {
   font-size: 24rpx;
   font-weight: 400;
-  color: #8f959e;
+  color: var(--text-3);
 }
 
 .mood-row {
@@ -93,15 +95,15 @@
   width: 120rpx;
   padding: 20rpx 0 16rpx;
   text-align: center;
-  background: #f5f7fa;
-  border-radius: 16rpx;
+  background: var(--input-bg);
+  border-radius: var(--radius-sm);
   border: 2rpx solid transparent;
   transition: transform 0.1s ease;
 }
 
 .mood-item--on {
-  background: #e8f0fe;
-  border-color: #4c8bf5;
+  background: var(--brand-tint);
+  border-color: var(--brand);
   transform: translateY(-6rpx);
 }
 
@@ -112,7 +114,7 @@
 .mood-label {
   margin-top: 8rpx;
   font-size: 26rpx;
-  color: #1f2329;
+  color: var(--text);
 }
 
 .note-box {
@@ -123,15 +125,15 @@
 .note-input {
   width: 100%;
   min-height: 96rpx;
-  background: #f5f7fa;
-  border-radius: 16rpx;
+  background: var(--input-bg);
+  border-radius: var(--radius-sm);
   padding: 20rpx 24rpx 44rpx;
   box-sizing: border-box;
   font-size: 28rpx;
 }
 
 .note-ph {
-  color: #a6adb8;
+  color: var(--text-3);
 }
 
 .note-count {
@@ -139,7 +141,7 @@
   right: 20rpx;
   bottom: 14rpx;
   font-size: 22rpx;
-  color: #8f959e;
+  color: var(--text-3);
 }
 
 .submit-btn {
@@ -147,21 +149,21 @@
   height: 88rpx;
   line-height: 88rpx;
   text-align: center;
-  background: #4c8bf5;
+  background: var(--brand);
   color: #fff;
   font-size: 32rpx;
-  border-radius: 16rpx;
+  border-radius: var(--radius-sm);
 }
 
 .submit-btn--disabled {
-  background: #c6d6f2;
+  background: var(--disabled);
 }
 
 .done-card {
   display: flex;
   align-items: center;
-  background: #eef4ff;
-  border-radius: 16rpx;
+  background: var(--brand-tint2);
+  border-radius: var(--radius-sm);
   padding: 24rpx;
 }
 
@@ -176,17 +178,18 @@
 
 .done-line {
   font-size: 30rpx;
-  color: #1f2329;
+  color: var(--text);
   display: flex;
   align-items: center;
   flex-wrap: wrap;
 }
 
+/* 连续打卡：暖沙橘，鼓励性高光 */
 .streak-badge {
   margin-left: 12rpx;
   font-size: 24rpx;
-  color: #d97706;
-  background: #fff7e6;
+  color: var(--accent-ink);
+  background: var(--accent-tint);
   border-radius: 12rpx;
   padding: 4rpx 14rpx;
 }
@@ -194,16 +197,16 @@
 .done-note {
   margin-top: 8rpx;
   font-size: 26rpx;
-  color: #646a73;
+  color: var(--text-2);
 }
 
 .chat-entry {
   display: flex;
   align-items: center;
-  background: #ffffff;
-  border-radius: 20rpx;
+  background: var(--surface);
+  border-radius: var(--radius-md);
   padding: 32rpx;
-  box-shadow: 0 4rpx 16rpx rgba(31, 35, 41, 0.04);
+  box-shadow: var(--shadow-card);
 }
 
 .chat-entry-main {
@@ -213,16 +216,16 @@
 .chat-entry-title {
   font-size: 32rpx;
   font-weight: 600;
-  color: #1f2329;
+  color: var(--text);
 }
 
 .chat-entry-sub {
   margin-top: 8rpx;
   font-size: 24rpx;
-  color: #8f959e;
+  color: var(--text-3);
 }
 
 .chat-entry-arrow {
   font-size: 40rpx;
-  color: #c2c9d4;
+  color: var(--text-3);
 }

@@ -1,17 +1,22 @@
-/* components/crisis-card/crisis-card.wxss */
+/* components/crisis-card/crisis-card.wxss
+   危机卡片 —— 安全功能，语义强度不可被主题弱化。
+   仅做「色相微暖 + 圆角统一」的协调，保留红/琥珀的醒目度与相互区分度。
+   组件内使用字面色值，避免依赖全局变量继承（样式隔离下更稳妥）。 */
 .crisis-card {
-  border-radius: 24rpx;
+  border-radius: 28rpx;
   padding: 28rpx 28rpx 24rpx;
   margin: 16rpx 0;
   box-sizing: border-box;
 }
+/* 高危：警示红系，保持最高醒目度 */
 .crisis-card--high {
-  background: linear-gradient(135deg, #fff1ef 0%, #ffe3dd 100%);
-  border: 2rpx solid #ffb8a8;
+  background: linear-gradient(135deg, #fdf0ec 0%, #fbe0d8 100%);
+  border: 2rpx solid #f0af9e;
 }
+/* 中危：琥珀系，与红色明确区分 */
 .crisis-card--mid {
-  background: linear-gradient(135deg, #fff8ec 0%, #fff1d6 100%);
-  border: 2rpx solid #f5d599;
+  background: linear-gradient(135deg, #fdf8ee 0%, #fbeed3 100%);
+  border: 2rpx solid #edd0a0;
 }
 .cc-head {
   display: flex;
@@ -25,11 +30,11 @@
   border-radius: 999rpx;
 }
 .crisis-card--high .cc-badge {
-  background: #f4503e;
+  background: #c1342a;
   color: #fff;
 }
 .crisis-card--mid .cc-badge {
-  background: #e8a33d;
+  background: #9c6218;
   color: #fff;
 }
 .cc-close {
@@ -38,24 +43,24 @@
   line-height: 44rpx;
   text-align: center;
   font-size: 40rpx;
-  color: #999;
+  color: #8a7f78;
 }
 .cc-title {
   margin-top: 16rpx;
   font-size: 34rpx;
   font-weight: 700;
-  color: #1f2329;
+  color: #2b2825;
 }
 .cc-subtitle {
   margin-top: 10rpx;
   font-size: 27rpx;
   line-height: 1.6;
-  color: #5a5f69;
+  color: #5e5852;
 }
 .cc-list {
   margin-top: 20rpx;
-  background: rgba(255, 255, 255, 0.72);
-  border-radius: 18rpx;
+  background: rgba(255, 255, 255, 0.78);
+  border-radius: 20rpx;
   overflow: hidden;
 }
 .cc-item {
@@ -74,42 +79,43 @@
 .cc-item-name {
   font-size: 29rpx;
   font-weight: 600;
-  color: #1f2329;
+  color: #2b2825;
 }
 .cc-item-meta {
   margin-top: 6rpx;
   font-size: 23rpx;
-  color: #8a9099;
+  color: #8a7f78;
 }
 .cc-item-right {
   text-align: right;
   margin-left: 20rpx;
 }
+/* 求助电话：高危红，保证一眼可拨 */
 .cc-phone {
   font-size: 28rpx;
   font-weight: 700;
-  color: #e8602b;
+  color: #c1342a;
   letter-spacing: 0.5rpx;
 }
 .cc-call {
   margin-top: 6rpx;
   font-size: 22rpx;
-  color: #e8602b;
+  color: #c1342a;
 }
 .cc-item--disabled {
   opacity: 0.55;
 }
 .cc-item--disabled .cc-phone,
 .cc-item--disabled .cc-call {
-  color: #a0a4ab;
+  color: #a0958d;
 }
 .cc-foot {
   margin-top: 18rpx;
   font-size: 24rpx;
   line-height: 1.6;
-  color: #8a5a4f;
+  color: #8a5548;
 }
 .cc-emergency {
   font-weight: 700;
-  color: #e23b2a;
+  color: #c1342a;
 }

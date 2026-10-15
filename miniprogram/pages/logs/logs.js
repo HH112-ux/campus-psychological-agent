@@ -7,7 +7,7 @@ const EMOTION_META = {
   calm: { emoji: '🙂', text: '平静', color: '#6fae7f' },
   ok: { emoji: '🙂', text: '还行', color: '#6fae7f' },
   angry: { emoji: '😠', text: '烦躁', color: '#e0913e' },
-  other: { emoji: '🌿', text: '其他', color: '#8f959e' },
+  other: { emoji: '🌿', text: '其他', color: '#7a736b' },
 }
 
 const FILTERS = [
@@ -104,7 +104,7 @@ Page({
     return api.get(query).then((d) => {
       const todayStr = new Date().toISOString().slice(0, 10)
       const decorated = (d.items || []).map((it) => {
-        const meta = EMOTION_META[it.emotion] || { emoji: '🌿', text: it.emotion, color: '#8f959e' }
+        const meta = EMOTION_META[it.emotion] || { emoji: '🌿', text: it.emotion, color: '#7a736b' }
         const canEditNote = it.source === 'checkin' && (it.created_at || '').slice(0, 10) === todayStr
         return { ...it, emoji: meta.emoji, label: meta.text, color: meta.color, timeText: this.fmtTime(it.created_at), canEditNote }
       })

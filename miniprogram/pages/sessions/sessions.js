@@ -90,7 +90,7 @@ Page({
       title: '删除这段对话？',
       content: '删除后对话内容将无法恢复。',
       confirmText: '删除',
-      confirmColor: '#e23b2a',
+      confirmColor: '#c1342a',
       success: (res) => {
         if (!res.confirm) return
         api.del(`/api/v1/sessions/${id}`).then(() => {
