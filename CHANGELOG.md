@@ -6,6 +6,8 @@
 
 ### 二期门控项（M3 · M4 · M6）
 
+- **E1 评估与回归门**：`eval_emotion_p5.py` 新增 `--gate` 阈值门（严格一致率 < 80% 退出 1；未配置 `ZHIPU_API_KEY` 时打印 SKIP 退出 0）；CI 新增 `eval` job（secret 注入后转为真门，未配置不阻塞）；新增 `docs/eval-gate.md`（用法 + 「新增 LLM 能力 → 新增评估样本」扩充约定）；本地真跑 GATE PASS 88.1%（滚动基线已刷新）。
+
 - **M1 技术侧：微信内容安全接入（G9）**：用户消息入库前过微信 `msgSecCheck` v2——新增 `app/services/content_security.py`（suggest=risky 或 errcode=87014 拦截返回 `code=2006`，不落库不计限流；review 放行；接口异常 fail-open；token 失效强制刷新重试一次）；`wechat.py` 新增 `get_access_token()`（stable_token 内存缓存 + 提前 300s 过期 + 锁防并发刷新）；开关 `WX_CONTENT_CHECK_ENABLED`（mock 登录或未配置 AppID/Secret 自动跳过，生产必须为 true）；新增 8 项测试（`test_content_security.py`）。
 - **会话上限调整（M6+）**：并发活跃会话上限由 3 调整为 **5**（UX 评估：3 对多话题并行偏紧；5 兼顾体验与成本/内存控制），`config.py` / `.env.example` / README / API 文档 / 小程序 README / roadmap 口径同步。
 - **M6 口径与文档对齐**：会话并发上限由代码默认 `15` 对齐为 **`3`**（与 README / API 文档 / `.env.example` 一致，G8）；修正 README 与 API 文档中「数据导出（二期实现 / 异步任务）」的过期描述为「同步返回 JSON，限流为二期规划」（G10）。

@@ -226,7 +226,7 @@ flowchart LR
 ### 5.2 轨道二 · 使能项（持续迭代的底座）
 
 #### E1 · 评估与回归流水线（新增，原草案仅在「注意」中一笔带过）
-- **做什么**：把评估集从 59 条扩到覆盖**记忆注入、语音转写噪声、备用模型输出格式**；固化为 CI 回归门（与 pytest、危机召回测试并列）。
+- **做什么**：把评估集从 59 条扩到覆盖**记忆注入、语音转写噪声、备用模型输出格式**；固化为 CI 回归门（与 pytest、危机召回测试并列）。**（✅ 回归门已落地：`eval_emotion_p5.py --gate` 阈值门 + CI `eval` job + `docs/eval-gate.md` 扩充约定；评估集随新能力上线按约定扩充）**
 - **为什么**：V5 / V6 / E2 每一项都在改 LLM 行为，唯一的客观兜底就是评估集。它是「持续迭代」理念的**技术前提**——没有回归门，迭代就是盲改。
 - **注意**：评估集扩充应与 E1 同步建立「新增能力 → 新增评估样本」的惯例，而不是事后补。
 
@@ -394,6 +394,7 @@ flowchart LR
 | **M6** | 会话上限对齐为 3（代码 + 文档）、修正 README 数据导出描述、复核 Base URL 占位 | ✅ **已完成** | README「数据导出」改为「同步 JSON（限流为二期规划）」；Base URL 占位标注准确（属 M5） |
 | **M6+** | 会话上限 3 → **5**（UX 评估：3 对多话题并行偏紧，5 兼顾体验与成本/内存控制） | ✅ **已完成** | `config.py` `session_concurrency_limit=5`；`.env.example` / README / API 文档 / 小程序 README 同步 |
 | **M1（技术侧）** | 微信内容安全（msgSecCheck）接入（G9） | ✅ **已完成**（主体/类目、隐私页、客服渠道等运营侧待办仍在） | `content_security.check_text()` 挂入 `_pre_turn`（命中 2006 不落库；异常 fail-open；token 自动刷新重试）；`wechat.get_access_token()` 缓存管理；8 项测试全绿 |
+| **E1** | 评估与回归门：P5 脚本阈值门 + CI `eval` job | ✅ **已完成**（评估集随 V5/V6/E2 新能力按 docs/eval-gate.md §4 约定扩充） | `--gate` < 80% 退出 1、无 key SKIP 退出 0；CI secret 注入后转真门；本地真跑 GATE PASS 88.1% |
 | **M3** | 为 `purge_expired_data()` 接入 lifespan 调度 + 留存期限可配置 + 到期物理删除测试 | ✅ **代码完成**（留存期限待 M2 确认） | `privacy.run_purge_scheduler()`（`main.lifespan` 启动/取消）；新增 `test_purge_expired_data`（未到期不删 / 到期全删）；配置 `ERASE_RECOVER_DAYS` / `DATA_PURGE_ENABLED` / `DATA_PURGE_INTERVAL_SECONDS` |
 | **M4** | 高危事件人工响应 SOP | ⏳ **草案已出，待落地** | `docs/crisis-response-sop.md`（值班/SLA/升级/留痕；校方联系人与 SLA 数值待 M2/运营补齐） |
 

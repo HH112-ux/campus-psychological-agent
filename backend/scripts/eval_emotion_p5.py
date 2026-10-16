@@ -1,7 +1,9 @@
-"""P5 情绪分类一致率正式评估（go/no-go 依据，V2 提示词）。
+"""P5 情绪分类一致率正式评估（go/no-go 依据，V2 提示词；E1 回归门）。
 
 用法（backend/ 目录，需 .env 中的 ZHIPU_API_KEY）：
-    .venv/bin/python scripts/eval_emotion_p5.py
+    .venv/bin/python scripts/eval_emotion_p5.py          # 出报告，永远退出 0
+    .venv/bin/python scripts/eval_emotion_p5.py --gate   # E1 回归门：严格一致率 < 80% 退出 1
+    未配置 ZHIPU_API_KEY 时打印 SKIP 并退出 0（CI 无 secret 环境不阻塞）
 
 - 评估集：scripts/eval-data/emotion_eval_v2.json（59 条：四类 14/17/16/12 + 对抗 11）
 - 链路与线上一致：glm-4-flash、temperature 0.2、同一系统指令（V2）与解析器
@@ -35,10 +37,15 @@ LABEL_ZH = {
     "other": "其他",
 }
 NEAR_SYN = {("calm", "ok"), ("ok", "calm")}  # 近义归并：平静≈还行
+STRICT_THRESHOLD = 0.8  # go/no-go 阈值（E1 回归门：--gate 时低于此值退出 1）
 
 
 async def main() -> int:
+    gate = "--gate" in sys.argv
     settings = get_settings()
+    if not settings.zhipu_api_key:
+        print("SKIP: 未配置 ZHIPU_API_KEY，跳过情绪评估回归门")
+        return 0
     items = json.loads(EVAL_FILE.read_text(encoding="utf-8"))
     provider = ZhipuProvider(model=settings.model_light)
 
@@ -166,6 +173,12 @@ async def main() -> int:
     print(f"近义归并后：{(correct + near_hits)}/{total} = {(correct + near_hits) / total:.1%}")
     print(f"强度 MAE：{int_mae:.2f}" if int_mae is not None else "强度 MAE：N/A")
     print(f"报告已写入：{REPORT_FILE}")
+    if gate:
+        strict = correct / total
+        if strict < STRICT_THRESHOLD:
+            print(f"GATE FAIL: 严格一致率 {strict:.1%} < 阈值 {STRICT_THRESHOLD:.0%}")
+            return 1
+        print(f"GATE PASS: 严格一致率 {strict:.1%} >= 阈值 {STRICT_THRESHOLD:.0%}")
     return 0
 
 
