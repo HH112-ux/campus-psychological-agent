@@ -6,6 +6,8 @@
 
 ### 二期门控项（M3 · M4 · M6）
 
+- **M5 限流生产化（G4）**：限流重构为内存 / Redis 双后端——`RATELIMIT_BACKEND=memory|redis` 配置切换，业务代码零改动；Redis 后端为 ZSET 滑动窗口 + Lua 原子判定（被拒请求不占窗口、key 自动 TTL），跨实例共享计数；Redis 不可达 fail-open；lifespan 关闭连接。新增 `redis==5.2.1` 依赖与 8 项测试（含真 Redis 集成，CI 挂 redis:7 service，本地经真 Redis 验证全绿；全量 **97 passed**）。
+
 - **E1 评估与回归门**：`eval_emotion_p5.py` 新增 `--gate` 阈值门（严格一致率 < 80% 退出 1；未配置 `ZHIPU_API_KEY` 时打印 SKIP 退出 0）；CI 新增 `eval` job（secret 注入后转为真门，未配置不阻塞）；新增 `docs/eval-gate.md`（用法 + 「新增 LLM 能力 → 新增评估样本」扩充约定）；本地真跑 GATE PASS 88.1%（滚动基线已刷新）。
 
 - **M1 技术侧：微信内容安全接入（G9）**：用户消息入库前过微信 `msgSecCheck` v2——新增 `app/services/content_security.py`（suggest=risky 或 errcode=87014 拦截返回 `code=2006`，不落库不计限流；review 放行；接口异常 fail-open；token 失效强制刷新重试一次）；`wechat.py` 新增 `get_access_token()`（stable_token 内存缓存 + 提前 300s 过期 + 锁防并发刷新）；开关 `WX_CONTENT_CHECK_ENABLED`（mock 登录或未配置 AppID/Secret 自动跳过，生产必须为 true）；新增 8 项测试（`test_content_security.py`）。

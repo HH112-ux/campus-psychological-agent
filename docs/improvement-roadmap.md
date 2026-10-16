@@ -38,7 +38,7 @@
 | G1 | 域名与 HTTPS 证书未定 | README API 文档 Base URL 仍为 `api.xinyu.example.cn [待定]` | 上不了线 |
 | G2 | 微信提审未真正走 | 主体 / 类目未拍板，医疗健康类目存在资质风险 | 上不了线 |
 | G3 | 校心理中心电话与转介未落实 | 求助资源第 4 条仍为 `0XX-XXXXXXXX [待填]` | 专业度 / 责任边界 |
-| G4 | 限流为内存固定窗口单机实现 | [ratelimit.py](file:///Users/caspian/campus-psychological-agent/backend/app/core/ratelimit.py) 明确注释「多进程/多实例需替换为 Redis」 | 上线后限流失效 |
+| G4 | ~~限流为内存固定窗口单机实现~~ | [ratelimit.py](file:///Users/caspian/campus-psychological-agent/backend/app/core/ratelimit.py) 已重构为 memory/redis 双后端（Redis 为 ZSET 滑动窗口 + Lua 原子判定） | ✅ 已修（M5 ①）：生产置 `RATELIMIT_BACKEND=redis` 即可，部署时需提供 Redis 实例 |
 | G5 | 数据保存期限与校方约定未谈 | 未谈 | 合规承诺 |
 | G6 | 最终产品名未定 | 「心屿」为工作代号 | 提审材料 / 域名 |
 | 🔴 G7 | **「软删 30 天后物理删除」承诺当前不会兑现** | [privacy.py](file:///Users/caspian/campus-psychological-agent/backend/app/services/privacy.py#L196-L220) 的 `purge_expired_data()` 已实现，但**全仓无任何调用点**：无调度器、未挂 lifespan、无 cron | 合规承诺与实现不符，属 PIPL 风险（✅ M3 已接入调度） |
@@ -395,6 +395,7 @@ flowchart LR
 | **M6+** | 会话上限 3 → **5**（UX 评估：3 对多话题并行偏紧，5 兼顾体验与成本/内存控制） | ✅ **已完成** | `config.py` `session_concurrency_limit=5`；`.env.example` / README / API 文档 / 小程序 README 同步 |
 | **M1（技术侧）** | 微信内容安全（msgSecCheck）接入（G9） | ✅ **已完成**（主体/类目、隐私页、客服渠道等运营侧待办仍在） | `content_security.check_text()` 挂入 `_pre_turn`（命中 2006 不落库；异常 fail-open；token 自动刷新重试）；`wechat.get_access_token()` 缓存管理；8 项测试全绿 |
 | **E1** | 评估与回归门：P5 脚本阈值门 + CI `eval` job | ✅ **已完成**（评估集随 V5/V6/E2 新能力按 docs/eval-gate.md §4 约定扩充） | `--gate` < 80% 退出 1、无 key SKIP 退出 0；CI secret 注入后转真门；本地真跑 GATE PASS 88.1% |
+| **M5 ①** | 内存限流 → Redis（G4） | ✅ **代码完成**（生产部署需提供 Redis 实例并置 `RATELIMIT_BACKEND=redis`） | `ratelimit.py` 双后端 + Lua 原子滑动窗口 + fail-open；8 项测试（含真 Redis 集成），CI 挂 redis:7；97 passed |
 | **M3** | 为 `purge_expired_data()` 接入 lifespan 调度 + 留存期限可配置 + 到期物理删除测试 | ✅ **代码完成**（留存期限待 M2 确认） | `privacy.run_purge_scheduler()`（`main.lifespan` 启动/取消）；新增 `test_purge_expired_data`（未到期不删 / 到期全删）；配置 `ERASE_RECOVER_DAYS` / `DATA_PURGE_ENABLED` / `DATA_PURGE_INTERVAL_SECONDS` |
 | **M4** | 高危事件人工响应 SOP | ⏳ **草案已出，待落地** | `docs/crisis-response-sop.md`（值班/SLA/升级/留痕；校方联系人与 SLA 数值待 M2/运营补齐） |
 

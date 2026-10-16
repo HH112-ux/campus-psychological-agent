@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     memory_window_rounds: int = 20  # 窗口记忆：近 20 轮（约 40 条消息）
     session_messages_max_return: int = 200  # 会话详情最多返回最近 200 条
 
+    # 应用层限流后端（M5/G4）：memory=单机内存（dev/默认）；redis=多实例共享计数（生产）
+    ratelimit_backend: str = "memory"
+    redis_url: str = "redis://localhost:6379/0"
+
     # 数据留存与清除（M3，见 docs/improvement-roadmap.md）
     # 软删后用户可撤销的天数；期满由后台定时任务物理删除
     erase_recover_days: int = 30  # 期限口径待 M2（校方）确认后调整

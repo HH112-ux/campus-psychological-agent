@@ -16,6 +16,15 @@ jobs:
         image: mongo:7
         ports:
           - 27017:27017
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -42,6 +51,8 @@ jobs:
           WX_MOCK_LOGIN: "true"
           WX_MOCK_OPENID: mock_ci_user
           JWT_SECRET: ci-secret-please-change-0123456789abcdef
+          # 跑限流 Redis 后端的真集成测试（Lua 滑动窗口 + TTL）
+          REDIS_TEST_URL: redis://localhost:6379/1
 
   miniprogram:
     name: 小程序 · JS 语法门

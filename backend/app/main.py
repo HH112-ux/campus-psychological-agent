@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from app.api.routes import auth, crisis, emotion, health, messages, sessions, users
 from app.config import get_settings
 from app.core.exceptions import register_exception_handlers
+from app.core.ratelimit import close_redis_client
 from app.db.mongo import mongo
 from app.services import privacy as privacy_svc
 
@@ -33,6 +34,7 @@ async def lifespan(app: FastAPI):
             purge_task.cancel()
             with suppress(asyncio.CancelledError):
                 await purge_task
+        await close_redis_client()
         await mongo.disconnect()
 
 
