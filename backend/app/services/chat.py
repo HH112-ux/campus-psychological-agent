@@ -31,7 +31,7 @@ from app.db.indexes import COLL_MESSAGES, COLL_SESSIONS
 from app.db.mongo import mongo
 from app.db.oid import parse_oid
 from app.llm.zhipu import ZhipuProvider
-from app.services import content_security, memory
+from app.services import alerting, content_security, memory
 from app.services import emotion as emotion_svc
 from app.services.crisis import (
     CrisisResult,
@@ -183,6 +183,7 @@ async def _generate_nonstream(turn: Turn) -> tuple[str, bool]:
                 return text.strip(), False
         except Exception:  # noqa: BLE001
             continue
+    await alerting.notify_llm_degraded("nonstream")
     return DEGRADED_REPLY, True
 
 
@@ -207,9 +208,11 @@ async def _collect_stream(turn: Turn) -> tuple[list[str], bool]:
             ):
                 chunks.append(delta)
         except Exception:
+            await alerting.notify_llm_degraded("stream")
             return [DEGRADED_REPLY], True
     full = "".join(chunks)
     if not full.strip():
+        await alerting.notify_llm_degraded("stream_empty")
         return [DEGRADED_REPLY], True
     return chunks, False
 

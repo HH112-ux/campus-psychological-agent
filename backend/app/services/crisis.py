@@ -21,6 +21,7 @@ from app.db.indexes import (
     COLL_SESSIONS,
 )
 from app.db.mongo import mongo
+from app.services import alerting
 from app.services.crisis_data import (
     FALLBACK_RESOURCES,
     LEVEL1_PHRASES,
@@ -132,6 +133,9 @@ async def record_risk_event(
             "created_at": now_cst(),
         }
     )
+    # M4/M5 ③：高危事件通知值班人（旁路告警，永不抛出；只含 ID 不含命中词）
+    if level == "high":
+        await alerting.notify_high_risk_event(str(user_id), str(session_id), trigger)
 
 
 async def handle_model_risk(
@@ -156,6 +160,8 @@ async def handle_model_risk(
         {"_id": session_id},
         {"$set": {"crisis_high_shown": True}},
     )
+    # M5 ③：模型兜底命中而词库未命中 → 词库漏报信号（供运营复盘补词）
+    await alerting.notify_lexicon_miss(str(user_id), str(session_id))
 
 
 async def handle_detection(

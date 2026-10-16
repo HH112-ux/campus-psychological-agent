@@ -396,8 +396,10 @@ flowchart LR
 | **M1（技术侧）** | 微信内容安全（msgSecCheck）接入（G9） | ✅ **已完成**（主体/类目、隐私页、客服渠道等运营侧待办仍在） | `content_security.check_text()` 挂入 `_pre_turn`（命中 2006 不落库；异常 fail-open；token 自动刷新重试）；`wechat.get_access_token()` 缓存管理；8 项测试全绿 |
 | **E1** | 评估与回归门：P5 脚本阈值门 + CI `eval` job | ✅ **已完成**（评估集随 V5/V6/E2 新能力按 docs/eval-gate.md §4 约定扩充） | `--gate` < 80% 退出 1、无 key SKIP 退出 0；CI secret 注入后转真门；本地真跑 GATE PASS 88.1% |
 | **M5 ①** | 内存限流 → Redis（G4） | ✅ **代码完成**（生产部署需提供 Redis 实例并置 `RATELIMIT_BACKEND=redis`） | `ratelimit.py` 双后端 + Lua 原子滑动窗口 + fail-open；8 项测试（含真 Redis 集成），CI 挂 redis:7；97 passed |
+| **M5 ⑤** | dev/prod 密钥分离：生产配置启动校验 | ✅ **已完成** | `Settings._validate_prod_config`（ENV=prod fail-fast：mock 登录/弱 JWT/缺密钥等六项）；lifespan 对 prod+内存限流告警；8 项测试 |
+| **M5 ③** | 监控告警 MVP（敏感点全覆盖） | ✅ **代码完成**（生产需配置 `ALERT_WEBHOOK_URL` 企业微信群机器人） | `services/alerting.py`：webhook + 同 key 冷却去抖 + 异常不抛出；三处挂点——高危事件通知值班人、模型兜底命中追加词库漏报信号、LLM 降级告警；告警不含命中词与原文；9 项测试，全量 115 passed |
 | **M3** | 为 `purge_expired_data()` 接入 lifespan 调度 + 留存期限可配置 + 到期物理删除测试 | ✅ **代码完成**（留存期限待 M2 确认） | `privacy.run_purge_scheduler()`（`main.lifespan` 启动/取消）；新增 `test_purge_expired_data`（未到期不删 / 到期全删）；配置 `ERASE_RECOVER_DAYS` / `DATA_PURGE_ENABLED` / `DATA_PURGE_INTERVAL_SECONDS` |
-| **M4** | 高危事件人工响应 SOP | ⏳ **草案已出，待落地** | `docs/crisis-response-sop.md`（值班/SLA/升级/留痕；校方联系人与 SLA 数值待 M2/运营补齐） |
+| **M4** | 高危事件人工响应 SOP | ⏳ **草案已出，值班人触达通道已落地**（排班名单/SLA 数值待 M2/运营补齐） | `docs/crisis-response-sop.md`（值班/SLA/升级/留痕）；high 事件即时推送值班群（M5 ③ 企业微信群机器人 webhook，见 §2.2 B 方案） |
 
 > 剩余门控（M1 提审、M2 校方合作、M5 生产化基建）仍为待启动/外部驱动项，见第三章关键路径。
 

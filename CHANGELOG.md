@@ -6,6 +6,10 @@
 
 ### 二期门控项（M3 · M4 · M6）
 
+- **M5 ③ 监控告警 MVP + M4 值班人通知链路**：新增 `services/alerting.py`——企业微信群机器人 webhook（未配 URL 仅记 warning 日志），同一 key 冷却去抖（`ALERT_COOLDOWN_SECONDS`，默认 600s），异常永不抛出；三处敏感点接入：高危风险事件通知值班人（`record_risk_event` level=high）、模型兜底命中追加词库漏报信号（`handle_model_risk`）、LLM 重试失败降级告警（`chat.py` 非流式/流式三处返回点）。隐私红线：告警只含用户/会话 ID、级别与触发源，不含命中词与对话原文。新增 9 项测试（`test_alerting.py`）。
+
+- **M5 ⑤ dev/prod 密钥分离落实**：`Settings` 新增生产配置启动校验（`ENV=prod` 时 fail-fast）——mock 登录、缺 AppID/Secret、内容安全关闭、弱 JWT（默认或 <32 位）、缺加密密钥、缺模型密钥 六类危险配置直接拒绝启动并列出全部问题；`main.lifespan` 对「prod + 内存限流」追加启动告警日志；新增 8 项测试（`test_prod_config.py`），dev/测试默认配置不受影响。
+
 - **M5 限流生产化（G4）**：限流重构为内存 / Redis 双后端——`RATELIMIT_BACKEND=memory|redis` 配置切换，业务代码零改动；Redis 后端为 ZSET 滑动窗口 + Lua 原子判定（被拒请求不占窗口、key 自动 TTL），跨实例共享计数；Redis 不可达 fail-open；lifespan 关闭连接。新增 `redis==5.2.1` 依赖与 8 项测试（含真 Redis 集成，CI 挂 redis:7 service，本地经真 Redis 验证全绿；全量 **97 passed**）。
 
 - **E1 评估与回归门**：`eval_emotion_p5.py` 新增 `--gate` 阈值门（严格一致率 < 80% 退出 1；未配置 `ZHIPU_API_KEY` 时打印 SKIP 退出 0）；CI 新增 `eval` job（secret 注入后转为真门，未配置不阻塞）；新增 `docs/eval-gate.md`（用法 + 「新增 LLM 能力 → 新增评估样本」扩充约定）；本地真跑 GATE PASS 88.1%（滚动基线已刷新）。
