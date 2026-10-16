@@ -37,11 +37,18 @@ class Settings(BaseSettings):
     wx_mock_openid: str = "mock_dev_openid"
     wx_code2session_url: str = "https://api.weixin.qq.com/sns/jscode2session"
 
+    # 内容安全（M1 / G9，提审要求）：用户消息入库前过微信 msgSecCheck
+    # mock 登录或未配置 AppID/Secret 时自动跳过（dev 不阻塞）；生产必须为 true
+    wx_content_check_enabled: bool = True
+    wx_stable_token_url: str = "https://api.weixin.qq.com/cgi-bin/stable_token"
+    wx_msg_sec_check_url: str = "https://api.weixin.qq.com/wxa/msg_sec_check"
+
     # 业务规则（P1）
     message_max_length: int = 2000
     session_round_limit: int = 50
-    # 并发活跃会话上限：对外契约（README / API 文档 / .env.example）一致为 3（M6 口径对齐）
-    session_concurrency_limit: int = 3
+    # 并发活跃会话上限：对外契约（README / API 文档 / .env.example）一致为 5
+    # （M6 先对齐为 3，UX 评估后调整为 5：兼顾多话题并行体验与成本/内存控制）
+    session_concurrency_limit: int = 5
     memory_window_rounds: int = 20  # 窗口记忆：近 20 轮（约 40 条消息）
     session_messages_max_return: int = 200  # 会话详情最多返回最近 200 条
 

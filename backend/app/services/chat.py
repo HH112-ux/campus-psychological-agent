@@ -1,6 +1,6 @@
 """消息对话主链路（开发文档 F2 时序）。
 
-身份校验 → 轮次/长度校验 → 限流 → 本地危机词库检测
+身份校验 → 轮次/长度校验 → 内容安全（msgSecCheck）→ 限流 → 本地危机词库检测
   · high：不调大模型，固定危机话术 + crisis 事件（先于 delta）
   · mid：正常流式生成，结束后下发 crisis 卡片
   · none：正常流式生成
@@ -31,8 +31,8 @@ from app.db.indexes import COLL_MESSAGES, COLL_SESSIONS
 from app.db.mongo import mongo
 from app.db.oid import parse_oid
 from app.llm.zhipu import ZhipuProvider
+from app.services import content_security, memory
 from app.services import emotion as emotion_svc
-from app.services import memory
 from app.services.crisis import (
     CrisisResult,
     get_resources,
@@ -90,6 +90,9 @@ async def _pre_turn(
         raise BizError(
             CODE_CONTENT_INVALID, "消息内容不能为空，且不能超过 2000 字", http_status=422
         )
+
+    # 内容安全（M1 / G9，提审要求）：微信 msgSecCheck；命中违规抛 2006，不落库、不计限流
+    await content_security.check_text(text, user.get("openid", ""))
 
     # 应用层限流：30 条/小时/用户
     await hit_message_rate(str(user["_id"]))

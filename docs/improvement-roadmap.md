@@ -43,7 +43,7 @@
 | G6 | 最终产品名未定 | 「心屿」为工作代号 | 提审材料 / 域名 |
 | 🔴 G7 | **「软删 30 天后物理删除」承诺当前不会兑现** | [privacy.py](file:///Users/caspian/campus-psychological-agent/backend/app/services/privacy.py#L196-L220) 的 `purge_expired_data()` 已实现，但**全仓无任何调用点**：无调度器、未挂 lifespan、无 cron | 合规承诺与实现不符，属 PIPL 风险（✅ M3 已接入调度） |
 | 🔴 G8 | **会话并发上限口径不一致** | [config.py](file:///Users/caspian/campus-psychological-agent/backend/app/config.py#L43) 为 `15`，而 README / API 文档对外承诺「活跃会话上限 3 个（code=2003）」 | 对外契约与实现不符，提审与客服口径混乱（✅ M6 已对齐为 3） |
-| 🔴 G9 | **微信内容安全接口未接入** | 全仓无 `msgSecCheck` 相关调用（仅文档提及） | 提审常见驳回项 |
+| 🔴 G9 | **微信内容安全接口未接入** | 全仓无 `msgSecCheck` 相关调用（仅文档提及） | 提审常见驳回项（✅ M1 技术侧已接入：用户消息入库前过检，命中违规 2006 不落库） |
 | 🔴 G10 | **README「数据导出（二期实现）」描述已过期** | [users.py](file:///Users/caspian/campus-psychological-agent/backend/app/api/routes/users.py#L37-L40) 与 [privacy.py](file:///Users/caspian/campus-psychological-agent/backend/app/services/privacy.py#L50) 已实现导出 | 文档与实现不符，易误导评审（✅ M6 已修正） |
 | 🔴 G11 | **危机告警无人工响应闭环** | 风险事件仅落库审计，无值班 / 升级路径定义 | 上线后高危事件无人响应＝责任风险（⏳ M4 草案已出，待落地） |
 
@@ -364,7 +364,7 @@ flowchart LR
 | 3 | 校心理中心电话与转介方式 | M2 前置 | 占位待填 | 今起并行启动 |
 | 4 | 对话数据保存期限与校方约定 | 合规与产品承诺（M3） | 未谈 | 与 M2 一并谈 |
 | 5 | 最终产品名 | 品牌与提审材料 | 未定 | 越早越好，卡提审与域名 |
-| 6 | 会话并发上限：3 还是 15？ | 对外口径（M6） | ✅ **已定：3**（README/API 文档/.env.example 三处均为 3，config 默认值已由 15 对齐为 3） | 已同步代码与文档 |
+| 6 | 会话并发上限：3 还是 15？ | 对外口径（M6） | ✅ **已定：5**（M6 先对齐为 3，UX 评估后调整为 5：兼顾多话题并行与成本控制；代码与文档已同步） | 已同步代码与文档 |
 | 7 | 教师端看板隐私口径（聚合 vs 个体） | 决定 C2 是否立项 | 未定 | 须先定死并写入用户协议 |
 | 8 | 长期记忆若做，用户查看/删除的交互 | 隐私行权一致性 | 设计待定 | 与 M3 删除机制共用 |
 | 9 | 高危事件值班与响应 SLA 🔴 | 上线前置（M4） | 无 | 需明确 owner 与时限 |
@@ -391,7 +391,9 @@ flowchart LR
 
 | 编号 | 动作 | 状态 | 证据 |
 |---|---|---|---|
-| **M6** | 会话上限对齐为 3（代码 + 文档）、修正 README 数据导出描述、复核 Base URL 占位 | ✅ **已完成** | `config.py` `session_concurrency_limit=3`；`.env.example` 一致；README「数据导出」改为「同步 JSON（限流为二期规划）」；Base URL 占位标注准确（属 M5） |
+| **M6** | 会话上限对齐为 3（代码 + 文档）、修正 README 数据导出描述、复核 Base URL 占位 | ✅ **已完成** | README「数据导出」改为「同步 JSON（限流为二期规划）」；Base URL 占位标注准确（属 M5） |
+| **M6+** | 会话上限 3 → **5**（UX 评估：3 对多话题并行偏紧，5 兼顾体验与成本/内存控制） | ✅ **已完成** | `config.py` `session_concurrency_limit=5`；`.env.example` / README / API 文档 / 小程序 README 同步 |
+| **M1（技术侧）** | 微信内容安全（msgSecCheck）接入（G9） | ✅ **已完成**（主体/类目、隐私页、客服渠道等运营侧待办仍在） | `content_security.check_text()` 挂入 `_pre_turn`（命中 2006 不落库；异常 fail-open；token 自动刷新重试）；`wechat.get_access_token()` 缓存管理；8 项测试全绿 |
 | **M3** | 为 `purge_expired_data()` 接入 lifespan 调度 + 留存期限可配置 + 到期物理删除测试 | ✅ **代码完成**（留存期限待 M2 确认） | `privacy.run_purge_scheduler()`（`main.lifespan` 启动/取消）；新增 `test_purge_expired_data`（未到期不删 / 到期全删）；配置 `ERASE_RECOVER_DAYS` / `DATA_PURGE_ENABLED` / `DATA_PURGE_INTERVAL_SECONDS` |
 | **M4** | 高危事件人工响应 SOP | ⏳ **草案已出，待落地** | `docs/crisis-response-sop.md`（值班/SLA/升级/留痕；校方联系人与 SLA 数值待 M2/运营补齐） |
 
@@ -406,3 +408,4 @@ flowchart LR
 | v0.1 | 2026-10-15 | 讨论产出草案（未定稿） |
 | v1.0 | 2026-10-15 | 本版：确立关键路径与三轨道、补充 M3/M4/M6、E1，新增迭代机制章 |
 | v1.1 | 2026-10-15 | 按「真实上线」目标启动：完成 M3（代码）/ M6，M4 草案落地；见 §10.3 执行进展 |
+| v1.2 | 2026-10-16 | 会话并发上限 3 → 5（UX 评估后调整，§9 #6 与 §10.3 同步）；代码与对外文档全量对齐 |
