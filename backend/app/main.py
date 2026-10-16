@@ -5,6 +5,7 @@ P0 验收：GET /health 返回 200；服务可启动（DB 未连接时降级报�
 from __future__ import annotations
 
 import asyncio
+import logging
 from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
@@ -16,11 +17,16 @@ from app.core.ratelimit import close_redis_client
 from app.db.mongo import mongo
 from app.services import privacy as privacy_svc
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await mongo.connect()
     settings = get_settings()
+    if settings.env == "prod" and settings.ratelimit_backend != "redis":
+        # 生产多实例下内存限流各实例独立计数、形同虚设（G4）；不阻断启动，但必须可见
+        logger.warning("生产环境 RATELIMIT_BACKEND 非 redis，限流计数不跨实例共享")
     # M3：到期数据物理删除必须真实生效（G7），否则「软删 N 天后物理删除」的合规承诺不兑现
     purge_task = (
         asyncio.create_task(privacy_svc.run_purge_scheduler())

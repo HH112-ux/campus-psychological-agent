@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -80,7 +81,39 @@ class Settings(BaseSettings):
     # P5 降级开关：流式可关（关后对话统一走非流式 JSON 路径，弱网/平台异常时兜底）
     stream_enabled: bool = True
 
+    # 监控告警（M5 ③ / M4 值班人通知）：企业微信群机器人 webhook
+    # 未配置 alert_webhook_url 时仅记 warning 日志（dev 默认）；异常永不阻断主链路
+    alert_enabled: bool = True
+    alert_webhook_url: str = ""
+    # 同一告警 key 的 webhook 冷却时间（秒），防止重复轰炸；日志不受冷却影响
+    alert_cooldown_seconds: int = 600
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    @model_validator(mode="after")
+    def _validate_prod_config(self) -> Settings:
+        """生产环境启动校验（M5 ⑤，G11 类风险）：危险/缺失配置直接拒绝启动。
+
+        仅 env=prod 生效；dev/测试（默认 env=dev）不受影响。
+        """
+        if self.env != "prod":
+            return self
+        problems: list[str] = []
+        if self.wx_mock_login:
+            problems.append("WX_MOCK_LOGIN 必须为 false（生产禁止 mock 登录，否则任何人可伪造身份）")
+        if not self.wx_appid or not self.wx_secret:
+            problems.append("WX_APPID / WX_SECRET 必须配置（真实登录与内容安全链路依赖）")
+        if not self.wx_content_check_enabled:
+            problems.append("WX_CONTENT_CHECK_ENABLED 必须为 true（G9，提审与合规要求）")
+        if self.jwt_secret in ("", "change-me-in-env") or len(self.jwt_secret) < 32:
+            problems.append("JWT_SECRET 必须更换为 ≥32 位随机串（不得使用默认值）")
+        if not self.data_encryption_key:
+            problems.append("DATA_ENCRYPTION_KEY 必须配置（对话内容 AES-256-GCM 应用层加密）")
+        if not self.zhipu_api_key:
+            problems.append("ZHIPU_API_KEY 必须配置（对话主链路依赖）")
+        if problems:
+            raise ValueError("生产配置校验未通过：\n- " + "\n- ".join(problems))
+        return self
 
 
 @lru_cache
