@@ -29,6 +29,15 @@
     <view class="cell-arrow">{{consented ? '已同意' : '未同意'}}</view>
   </view>
 
+  <view class="cell" bindtap="toggleCaring">
+    <view class="cell-icon">🌿</view>
+    <view class="cell-main">
+      <view class="cell-title">主动关怀</view>
+      <view class="cell-sub">低落或忘记打卡时，送来一句温和问候（可随时关闭）</view>
+    </view>
+    <view class="cell-arrow">{{caringEnabled ? '已开启' : '已关闭'}}</view>
+  </view>
+
   <view class="cell" bindtap="showDisclaimer">
     <view class="cell-icon">⚠</view>
     <view class="cell-title">关于与免责声明</view>

@@ -19,6 +19,7 @@ import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.db.indexes import (  # noqa: E402
+    COLL_CARE_MESSAGES,
     COLL_CHECKINS,
     COLL_EMOTION_RECORDS,
     COLL_MESSAGES,
@@ -36,6 +37,7 @@ _CLEAN_COLLS = [
     COLL_RISK_EVENTS,
     COLL_EMOTION_RECORDS,
     COLL_CHECKINS,
+    COLL_CARE_MESSAGES,
 ]
 
 

@@ -29,6 +29,10 @@
 
 - **V2 本周情绪小结**：基于与 `trends` 同源的聚合数据，服务端生成「本周情绪小结」（新增 `GET /api/v1/emotion/weekly-insight`，复用 `emotion_logs` 聚合逻辑，不新增数据采集）——覆盖记录覆盖天数/条数、主导情绪、主导情绪的**时段分布**（早上/下午/晚上/深夜）、与上周强度对比、打卡天数，并拼装为中文短句列表 `highlights`，小程序情绪日志页以小结卡渲染。红线：只输出**描述性**结论（如「焦虑多出现在晚上」），**严禁归因断言**（不出现「因为 / 导致 / 由于」类因果句式，测试断言强制校验）。附带修复：`emotion_logs` 时区归一（`_to_cst`）——motor 读回的 `created_at` 为 naive UTC，此前 `trends` 按 UTC 分桶存在 8 小时偏移（深夜记录被错分前一日/下午），现统一转为业务时区后再分桶/判时段。新增 4 项测试（`test_emotion.py` 周报洞察段）。
 
+### 增值项（V3 主动关怀）
+
+- **V3 主动关怀**：基于情绪日志的主动问候——新增 `app/services/caring.py`，每日在 `CARING_HOUR`（默认 9 时，`main.lifespan` 启动调度、进程退出取消）扫描候选用户（未软删 / 未关闭关怀 / 仍有订阅配额），命中触发条件即经微信订阅消息发送温和问候：① 连续 `CARING_LOW_STREAK_DAYS` 天负面档位（low/anxious/irritable，`low_streak`）；② 打卡中断 `CARING_CHECKIN_GAP_DAYS` 天（`checkin_gap`）。**授权门槛**：仅对 `care_subscribe_count > 0`（一次性订阅每次授权 +1，发送扣减一次）发送；**频控**：同一用户每周最多 `CARING_MAX_PER_WEEK`（默认 2 条），依据 `care_messages` 留档计数；文案为温和邀请、避免说教/命令句式（复用 bad-case `preachy` 负面样本，测试断言红线）。新增 `wechat.send_subscribe_message()`（stable_token 复用 + token 失效强刷重试 + mock 占位）；用户侧接口 `GET/PUT /api/v1/users/me/caring` + `POST /api/v1/users/me/caring/subscribe`（随时开关 + 回填授权结果）。**隐私基线**：`care_messages` 留档仅记触发类型/状态，不含问候原文与情绪证据；数据导出与到期物理删除均纳入该集合。**fail-safe**：未配置订阅模板 ID（`WX_SUBSCRIBE_TEMPLATE_ID`，微信侧外部依赖）时安全跳过，不影响主链路与调度。新增 13 项测试（`test_caring.py`），全量 **135 passed**。
+
 ### 仓库治理与 CI
 
 - **规范对齐与升级**：`docs/repo-governance.md` 补齐「CI 与质量门」章、命名豁免清单、根目录清洁规则与 Push Checklist（新增敏感/产物复查）；HTML 文档包（`campus-agent-*-doc/*.html` + `_shared/` + `assets/`）移出仓库，**`.md` 为唯一入库来源**。

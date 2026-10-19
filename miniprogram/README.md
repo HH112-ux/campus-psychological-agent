@@ -47,7 +47,8 @@ miniprogram/
 - 首页按时段问候（早/午/晚/深夜）+ 每日一句 + 记忆型问候；五档情绪一键打卡（选档位 + 可选 200 字备注），打卡后展示当日结果卡片与 🔥 连续天数，同日重复打卡为「更新」。
 - 对话页：每轮回复气泡下方展示「本轮识别：情绪 · 强度/10」角标（由 SSE `emotion` 事件或非流式 `emotion` 字段驱动，出现在 done 前）；历史会话重进时角标随消息恢复。
 - 情绪日志页：7 天强度柱状（无记录日不补 0）、平均强度与上周对比、主导情绪、本周情绪小结（V2 周报洞察：仅描述性结论，如「焦虑多出现在晚上」，不做归因；`GET /emotion/weekly-insight` 生成、小程序只渲染）；时间线合并「来自对话（含会话标题 + 原文证据）」与「每日打卡（含备注）」两类条目，支持七类筛选与上拉分页。
-- 「我的」页：历史会话入口（reLaunch 到对话页携带 session_id）、24 小时求助热线一键拨打、关于与免责声明（心屿不能替代专业心理咨询或医疗诊断）。
+- 「我的」页：历史会话入口（reLaunch 到对话页携带 session_id）、**主动关怀开关（V3）**、24 小时求助热线一键拨打、关于与免责声明（心屿不能替代专业心理咨询或医疗诊断）。
+- 主动关怀（V3）：后端在用户连续 N 天低落或打卡中断时，经微信订阅消息送来温和问候（`services/caring.py` 每日扫描）。「我的」页「主动关怀」cell 可随时开启/关闭（`GET/PUT /users/me/caring`）；开启时调用 `wx.requestSubscribeMessage` 获取一次性订阅授权并回填（`POST /users/me/caring/subscribe`）。模板 ID 属微信侧外部依赖，未配置时前后端均安全跳过（前端 `globalData.subscribeTemplateId` / 后端 `WX_SUBSCRIBE_TEMPLATE_ID` 需一致）。
 - 对话/打卡数据与后端日志页抽查一致（同一情绪来源同一枚举口径：打卡 low→低落、irritable→烦躁）。
 
 ## 注意事项
@@ -56,4 +57,5 @@ miniprogram/
 - 流式依赖基础库 `RequestTask.onChunkReceived`（基础库 2.20.1+，`libVersion: latest` 已满足）；进入对话页会用 `/health` 静默探测一次，不支持时自动改走非流式。
 - 真机预览需让手机与电脑在同一网络，并把 `app.js` 的 `apiBase` 改为电脑局域网 IP（如 `http://192.168.x.x:8000`）。
 - 正式提审前必须：配置 HTTPS 合法域名（后端需备案域名 + TLS）、重新开启域名校验、填入真实 `WX_SECRET` 并关闭 mock。
+- 主动关怀（V3）需在微信公众平台申请订阅消息模板，并把模板 ID 填入 `app.js` 的 `globalData.subscribeTemplateId`（与后端 `WX_SUBSCRIBE_TEMPLATE_ID` 一致）；未配置时该功能静默跳过，不影响其他链路。
 - 小程序内不展示、不落盘任何超出必要范围的心理敏感信息（对齐 SECURITY.md）。

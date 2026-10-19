@@ -121,3 +121,43 @@ def _reset_token_cache() -> None:
     """清空 token 缓存（测试用）。"""
     _token_cache["token"] = None
     _token_cache["expires_at"] = 0.0
+
+
+# ---------- 订阅消息（V3 主动关怀） ----------
+
+# token 类错误码：access_token 无效/过期，需强制刷新后重试
+_TOKEN_ERRCODES = {40001, 40014, 42001}
+
+
+async def _request_subscribe_send(token: str, payload: dict) -> dict:
+    """调用订阅消息发送接口（独立成函数便于测试打桩）。"""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(
+            get_settings().wx_subscribe_send_url,
+            params={"access_token": token},
+            json=payload,
+        )
+    return resp.json()
+
+
+async def send_subscribe_message(
+    openid: str, template_id: str, data: dict, page: str | None = None
+) -> dict:
+    """发送一次性订阅消息（V3），返回微信原始响应 dict 供调用方判 errcode。
+
+    mock 登录模式返回占位成功响应（不真实发送，仅保证链路完整）；
+    token 失效（40001/40014/42001）时强制刷新后重试一次。
+    """
+    if get_settings().wx_mock_login:
+        return {"errcode": 0, "errmsg": "ok(mock)"}
+
+    payload: dict = {"touser": openid, "template_id": template_id, "data": data}
+    if page:
+        payload["page"] = page
+
+    token = await get_access_token()
+    resp = await _request_subscribe_send(token, payload)
+    if resp.get("errcode") in _TOKEN_ERRCODES:
+        token = await get_access_token(force_refresh=True)
+        resp = await _request_subscribe_send(token, payload)
+    return resp

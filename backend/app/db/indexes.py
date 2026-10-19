@@ -12,6 +12,7 @@ COLL_CHECKINS = "checkins"
 COLL_RISK_EVENTS = "risk_events"
 COLL_CRISIS_LEXICON = "crisis_lexicon"  # 危机词库（P1 起使用，配置热更新）
 COLL_CRISIS_RESOURCES = "crisis_resources"  # 求助资源（运营配置，P1 起使用）
+COLL_CARE_MESSAGES = "care_messages"  # 主动关怀发送留档（V3，周频控依据；仅记类型/状态，不含内容）
 
 _INDEX_SPECS: dict[str, list[tuple[list[tuple[str, int]], dict]]] = {
     COLL_USERS: [([("openid", 1)], {"unique": True})],
@@ -20,6 +21,7 @@ _INDEX_SPECS: dict[str, list[tuple[list[tuple[str, int]], dict]]] = {
     COLL_EMOTION_RECORDS: [([("user_id", 1), ("created_at", -1)], {})],
     COLL_CHECKINS: [([("user_id", 1), ("date", 1)], {"unique": True})],
     COLL_RISK_EVENTS: [([("user_id", 1), ("created_at", -1)], {})],
+    COLL_CARE_MESSAGES: [([("user_id", 1), ("created_at", -1)], {})],
 }
 
 

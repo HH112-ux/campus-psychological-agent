@@ -15,6 +15,7 @@ from app.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.ratelimit import close_redis_client
 from app.db.mongo import mongo
+from app.services import caring as caring_svc
 from app.services import privacy as privacy_svc
 
 logger = logging.getLogger(__name__)
@@ -33,13 +34,20 @@ async def lifespan(app: FastAPI):
         if settings.data_purge_enabled and mongo.is_connected
         else None
     )
+    # V3：主动关怀每日扫描（未配置订阅模板 ID 时安全跳过，不阻塞主链路）
+    caring_task = (
+        asyncio.create_task(caring_svc.run_caring_scheduler())
+        if settings.caring_enabled and mongo.is_connected
+        else None
+    )
     try:
         yield
     finally:
-        if purge_task is not None:
-            purge_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await purge_task
+        for task in (purge_task, caring_task):
+            if task is not None:
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
         await close_redis_client()
         await mongo.disconnect()
 

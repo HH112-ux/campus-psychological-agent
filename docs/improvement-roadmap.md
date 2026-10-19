@@ -249,11 +249,12 @@ flowchart LR
 #### V2 · 周报洞察（原 B5）
 - **做什么**：基于现有趋势聚合生成「本周情绪小结」，展示在情绪日志页或作为订阅消息发送。
 - **注意**：模式发现只做描述性结论，不做归因断言（「本周焦虑多出现在……」而非「考试导致焦虑」）。
-- **落地（已完成）**：新增 `GET /api/v1/emotion/weekly-insight`（`emotion_logs.get_weekly_insight`，复用既有聚合，不新增数据采集）——覆盖记录天数/条数、主导情绪、主导情绪时段分布（早上/下午/晚上/深夜）、与上周强度对比、打卡天数，输出中文短句 `highlights`；小程序情绪日志页以小结卡渲染。红线由测试强制校验（不得出现「因为/导致/由于」）；附带修复 `emotion_logs` naive-UTC 时区偏移。后续「订阅消息」形态待 V3 主动关怀一并接入。
+- **落地（已完成）**：新增 `GET /api/v1/emotion/weekly-insight`（`emotion_logs.get_weekly_insight`，复用既有聚合，不新增数据采集）——覆盖记录天数/条数、主导情绪、主导情绪时段分布（早上/下午/晚上/深夜）、与上周强度对比、打卡天数，输出中文短句 `highlights`；小程序情绪日志页以小结卡渲染。红线由测试强制校验（不得出现「因为/导致/由于」）；附带修复 `emotion_logs` naive-UTC 时区偏移。订阅消息推送能力由 V3 主动关怀承接，小结本体的订阅形态未纳入本轮。
 
 #### V3 · 主动关怀（原 B2）
 - **做什么**：基于情绪日志（连续 N 天 low/negative 或打卡中断），通过微信订阅消息在次日温和问候 / 引导打卡；用户可随时关闭。
 - **注意**：必须用户订阅授权 + 频控（一周最多 1–2 条）；文案避免说教感（可复用 `preachy` 反馈类目作为负面样本）。
+- **落地（已完成）**：新增 `app/services/caring.py`——每日定时扫描（`main.lifespan` 启动，`CARING_HOUR` 时刻触发）候选用户（未软删 / 未关闭关怀 / 仍有订阅配额），命中触发条件（连续 `CARING_LOW_STREAK_DAYS` 天负面档位 `low_streak` / 打卡中断 `CARING_CHECKIN_GAP_DAYS` 天）即发送；频控 `CARING_MAX_PER_WEEK`（默认 2 条）依据 `care_messages` 留档计数。授权门槛：仅对 `care_subscribe_count > 0`（一次性订阅每次授权 +1，发送扣减一次）发送；用户侧 `GET/PUT /users/me/caring` + `POST /users/me/caring/subscribe` 支持随时开关与回填授权。隐私：留档仅记触发类型/状态，不含问候原文与情绪证据；导出与物理删除均纳入 `care_messages`。模板 ID（`WX_SUBSCRIBE_TEMPLATE_ID`）属微信侧外部依赖，未配置时安全跳过（fail-safe）。7 项测试覆盖触发/频控/授权/开关/文案红线。
 
 #### V4 · 练习卡片（原 B4）
 - **做什么**：把提示词里已有的「身体优先 / 呼吸练习」话术产品化——呼吸引导动画、正念音频、行为激活小任务，做成对话中可交互的组件卡片。
@@ -403,7 +404,8 @@ flowchart LR
 | **M3** | 为 `purge_expired_data()` 接入 lifespan 调度 + 留存期限可配置 + 到期物理删除测试 | ✅ **代码完成**（留存期限待 M2 确认） | `privacy.run_purge_scheduler()`（`main.lifespan` 启动/取消）；新增 `test_purge_expired_data`（未到期不删 / 到期全删）；配置 `ERASE_RECOVER_DAYS` / `DATA_PURGE_ENABLED` / `DATA_PURGE_INTERVAL_SECONDS` |
 | **M4** | 高危事件人工响应 SOP | ⏳ **草案已出，值班人触达通道已落地**（排班名单/SLA 数值待 M2/运营补齐） | `docs/crisis-response-sop.md`（值班/SLA/升级/留痕）；high 事件即时推送值班群（M5 ③ 企业微信群机器人 webhook，见 §2.2 B 方案） |
 | **V1** | 反馈闭环引擎：bad-case 导出 + 复盘模板 | ✅ **机制已落地**（此后按双周节奏执行复盘，产出归因与迭代项） | `services/bad_cases.py` + `scripts/export_bad_cases.py`（近 14 天/全量导出，含触发消息配对与原因聚合）+ `docs/bad-case-review-template.md`；3 项测试 |
-| **V2** | 周报洞察：描述性「本周情绪小结」 | ✅ **已完成**（订阅消息形态待 V3 一并接入） | `GET /api/v1/emotion/weekly-insight`（`emotion_logs.get_weekly_insight`，复用趋势聚合）+ 小程序日志页小结卡；4 项测试（含归因红线断言与 naive-UTC 时段回归） |
+| **V2** | 周报洞察：描述性「本周情绪小结」 | ✅ **已完成**（小结本体未做订阅推送，订阅消息能力由 V3 承接） | `GET /api/v1/emotion/weekly-insight`（`emotion_logs.get_weekly_insight`，复用趋势聚合）+ 小程序日志页小结卡；4 项测试（含归因红线断言与 naive-UTC 时段回归） |
+| **V3** | 主动关怀：连续低落 / 打卡中断 → 订阅消息温和问候 | ✅ **代码完成**（订阅模板 ID 属微信侧外部依赖，未配置安全跳过） | `services/caring.py`（daily 扫描 + 触发检测 + 周频控 + 授权门槛 + fail-safe）；`wechat.send_subscribe_message`；用户开关/订阅接口；`care_messages` 留档；7 项测试 |
 
 > 剩余门控（M1 提审、M2 校方合作、M5 生产化基建）仍为待启动/外部驱动项，见第三章关键路径。
 
@@ -418,3 +420,4 @@ flowchart LR
 | v1.1 | 2026-10-15 | 按「真实上线」目标启动：完成 M3（代码）/ M6，M4 草案落地；见 §10.3 执行进展 |
 | v1.2 | 2026-10-16 | 会话并发上限 3 → 5（UX 评估后调整，§9 #6 与 §10.3 同步）；代码与对外文档全量对齐 |
 | v1.3 | 2026-10-19 | 增值项推进：V1 反馈闭环（bad-case 导出 + 复盘模板）、V2 周报洞察（`GET /emotion/weekly-insight` 描述性小结 + 小程序小结卡，含 naive-UTC 时段回归修复）；见 §10.3 |
+| v1.4 | 2026-10-19 | V3 主动关怀（连续低落 / 打卡中断 → 订阅消息温和问候；授权门槛 + 周频控 + 隐私留档 + fail-safe）；见 §10.3 |

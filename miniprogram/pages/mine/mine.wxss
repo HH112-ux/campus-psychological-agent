@@ -59,6 +59,17 @@
   margin-right: 20rpx;
 }
 
+.cell-main {
+  flex: 1;
+}
+
+.cell-sub {
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+
 .cell-title {
   flex: 1;
   font-size: 30rpx;

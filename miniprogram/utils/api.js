@@ -163,6 +163,9 @@ module.exports = {
   patch(url, data, extra = {}) {
     return request({ url, method: 'PATCH', data, ...extra })
   },
+  put(url, data, extra = {}) {
+    return request({ url, method: 'PUT', data, ...extra })
+  },
   del(url, extra = {}) {
     return request({ url, method: 'DELETE', ...extra })
   },

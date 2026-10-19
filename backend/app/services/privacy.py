@@ -18,6 +18,7 @@ from app.config import get_settings
 from app.core.crypto import decrypt
 from app.core.timeutil import now_cst, to_iso
 from app.db.indexes import (
+    COLL_CARE_MESSAGES,
     COLL_CHECKINS,
     COLL_EMOTION_RECORDS,
     COLL_MESSAGES,
@@ -130,6 +131,15 @@ async def export_user_data(user_id: ObjectId) -> dict:
             "created_at": to_iso(r.get("created_at")) if r.get("created_at") else None,
         })
 
+    # 主动关怀发送留档（V3；仅记触发类型与状态，不含问候原文/情绪证据）
+    care_messages = []
+    async for c in mongo.db[COLL_CARE_MESSAGES].find({"user_id": uid}).sort("created_at", 1):
+        care_messages.append({
+            "kind": c.get("kind"),
+            "status": c.get("status"),
+            "created_at": to_iso(c.get("created_at")) if c.get("created_at") else None,
+        })
+
     return {
         "user": user_info,
         "sessions": sessions,
@@ -137,6 +147,7 @@ async def export_user_data(user_id: ObjectId) -> dict:
         "emotion_records": emotions,
         "checkins": checkins,
         "risk_events": risk_events,
+        "care_messages": care_messages,
         "exported_at": to_iso(now_cst()),
     }
 
@@ -216,6 +227,7 @@ async def purge_expired_data() -> int:
         await mongo.db[COLL_EMOTION_RECORDS].delete_many({"user_id": uid})
         await mongo.db[COLL_CHECKINS].delete_many({"user_id": uid})
         await mongo.db[COLL_RISK_EVENTS].delete_many({"user_id": uid})
+        await mongo.db[COLL_CARE_MESSAGES].delete_many({"user_id": uid})
         await mongo.db[COLL_USERS].delete_one({"_id": uid})
         count += 1
         logger.info("物理删除用户 %s 全部数据", uid)

@@ -7,7 +7,8 @@ from app.core.deps import get_current_user
 from app.core.exceptions import CODE_BUSINESS_VALIDATION, BizError
 from app.core.responses import ok_response
 from app.models.auth import ConsentRequest, EraseRequest
-from app.services import checkins
+from app.models.caring import CaringSettingUpdate, CaringSubscribeRequest
+from app.services import caring, checkins
 from app.services import privacy as privacy_svc
 from app.services import users as users_svc
 
@@ -32,6 +33,28 @@ async def consent(body: ConsentRequest, current_user: dict = Depends(get_current
         current_user["_id"], body.policy_version
     )
     return ok_response(result, message="已记录同意")
+
+
+@router.get("/me/caring")
+async def get_caring(current_user: dict = Depends(get_current_user)):
+    """V3 主动关怀状态：是否开启 + 是否仍有订阅授权配额。"""
+    return ok_response(await caring.get_caring_state(current_user["_id"]))
+
+
+@router.put("/me/caring")
+async def update_caring(
+    body: CaringSettingUpdate, current_user: dict = Depends(get_current_user)
+):
+    """V3 主动关怀开关：用户可随时开启/关闭主动问候。"""
+    return ok_response(await caring.set_caring_enabled(current_user["_id"], body.enabled))
+
+
+@router.post("/me/caring/subscribe")
+async def subscribe_caring(
+    body: CaringSubscribeRequest, current_user: dict = Depends(get_current_user)
+):
+    """V3 订阅授权回填：小程序 wx.requestSubscribeMessage 结果（同意则 +1 发送配额）。"""
+    return ok_response(await caring.record_subscription(current_user["_id"], body.granted))
 
 
 @router.get("/me/data/export")

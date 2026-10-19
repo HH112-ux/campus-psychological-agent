@@ -88,6 +88,18 @@ class Settings(BaseSettings):
     # 同一告警 key 的 webhook 冷却时间（秒），防止重复轰炸；日志不受冷却影响
     alert_cooldown_seconds: int = 600
 
+    # 主动关怀（V3）：连续低落 / 打卡中断 → 次日经微信订阅消息温和问候（用户可随时关闭）
+    caring_enabled: bool = True
+    caring_low_streak_days: int = 3  # 连续 N 天低落（low/anxious/irritable）触发关怀
+    caring_checkin_gap_days: int = 2  # 打卡中断 N 天（有历史记录但近期未打卡）触发关怀
+    caring_max_per_week: int = 2  # 频控：同一用户每周最多发送条数
+    caring_hour: int = 9  # 每日扫描/发送时刻（Asia/Shanghai，0–23）
+    # 订阅消息模板 ID（微信侧外部依赖）：未配置时扫描安全跳过，不影响主链路与调度
+    wx_subscribe_template_id: str = ""
+    # 模板中承载问候语的字段名（微信模板 data 字段，如 thing1）；thing 类型限 20 字符
+    wx_subscribe_field_key: str = "thing1"
+    wx_subscribe_send_url: str = "https://api.weixin.qq.com/cgi-bin/message/subscribe/send"
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @model_validator(mode="after")

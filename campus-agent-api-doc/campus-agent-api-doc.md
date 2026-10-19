@@ -62,19 +62,22 @@ sequenceDiagram
 | 2 | POST | /api/v1/auth/refresh | 刷新 access_token | 否（需 refresh_token） |
 | 3 | GET | /api/v1/users/me | 当前用户信息 | 是 |
 | 4 | DELETE | /api/v1/users/me/data | 删除全部数据（软删 30 天） | 是 |
-| 5 | GET | /api/v1/sessions | 会话列表（分页） | 是 |
-| 6 | POST | /api/v1/sessions | 创建会话 | 是 |
-| 7 | GET | /api/v1/sessions/{session_id} | 会话详情（含消息） | 是 |
-| 8 | PATCH | /api/v1/sessions/{session_id} | 重命名会话 | 是 |
-| 9 | DELETE | /api/v1/sessions/{session_id} | 删除会话 | 是 |
-| 10 | POST | /api/v1/sessions/{session_id}/messages | 发送消息（流式/非流式） | 是 |
-| 11 | POST | /api/v1/messages/{message_id}/feedback | 对回复点赞/点踩 | 是 |
-| 12 | GET | /api/v1/emotion/checkins/today | 查询今日打卡 | 是 |
-| 13 | POST | /api/v1/emotion/checkins | 每日打卡（覆盖当日） | 是 |
-| 14 | GET | /api/v1/emotion/records | 情绪记录列表（分页/筛选） | 是 |
-| 15 | GET | /api/v1/emotion/trends | 情绪趋势聚合 | 是 |
-| 16 | GET | /api/v1/emotion/weekly-insight | 本周情绪小结（周报洞察） | 是 |
-| 17 | GET | /api/v1/crisis/resources | 心理求助资源（公开） | 否 |
+| 5 | GET | /api/v1/users/me/caring | 主动关怀状态（开启 / 订阅授权） | 是 |
+| 6 | PUT | /api/v1/users/me/caring | 开启/关闭主动关怀 | 是 |
+| 7 | POST | /api/v1/users/me/caring/subscribe | 回填订阅授权结果 | 是 |
+| 8 | GET | /api/v1/sessions | 会话列表（分页） | 是 |
+| 9 | POST | /api/v1/sessions | 创建会话 | 是 |
+| 10 | GET | /api/v1/sessions/{session_id} | 会话详情（含消息） | 是 |
+| 11 | PATCH | /api/v1/sessions/{session_id} | 重命名会话 | 是 |
+| 12 | DELETE | /api/v1/sessions/{session_id} | 删除会话 | 是 |
+| 13 | POST | /api/v1/sessions/{session_id}/messages | 发送消息（流式/非流式） | 是 |
+| 14 | POST | /api/v1/messages/{message_id}/feedback | 对回复点赞/点踩 | 是 |
+| 15 | GET | /api/v1/emotion/checkins/today | 查询今日打卡 | 是 |
+| 16 | POST | /api/v1/emotion/checkins | 每日打卡（覆盖当日） | 是 |
+| 17 | GET | /api/v1/emotion/records | 情绪记录列表（分页/筛选） | 是 |
+| 18 | GET | /api/v1/emotion/trends | 情绪趋势聚合 | 是 |
+| 19 | GET | /api/v1/emotion/weekly-insight | 本周情绪小结（周报洞察） | 是 |
+| 20 | GET | /api/v1/crisis/resources | 心理求助资源（公开） | 否 |
 
 ## 4 · 认证与用户接口
 
@@ -151,7 +154,7 @@ access_token 过期后的静默续期。refresh_token 单次使用（旋转机�
 ```
 
 ### DELETE /api/v1/users/me/data
-行权接口：删除该用户的全部数据（会话、消息、情绪记录、打卡、风险事件），先软删 30 天（用户可登录撤销），期满由后端定时任务自动物理删除（默认每小时扫描一次，配置 `ERASE_RECOVER_DAYS` / `DATA_PURGE_ENABLED` / `DATA_PURGE_INTERVAL_SECONDS`）。[专家判断] 响应立即生效，各查询接口从此刻起不再返回任何数据。
+行权接口：删除该用户的全部数据（会话、消息、情绪记录、打卡、风险事件、主动关怀留档），先软删 30 天（用户可登录撤销），期满由后端定时任务自动物理删除（默认每小时扫描一次，配置 `ERASE_RECOVER_DAYS` / `DATA_PURGE_ENABLED` / `DATA_PURGE_INTERVAL_SECONDS`）。[专家判断] 响应立即生效，各查询接口从此刻起不再返回任何数据。
 请求参数（Body）
 
 ```
@@ -164,6 +167,33 @@ access_token 过期后的静默续期。refresh_token 单次使用（旋转机�
 { "code": 0, "message": "已删除，30 天内登录可撤销",
   "data": { "erase_at": "2026-10-12T23:50:00+08:00", "recover_deadline": "2026-11-11T23:50:00+08:00" } }
 ```
+
+### GET /api/v1/users/me/caring
+V3 主动关怀状态：`enabled` 表示用户是否开启关怀（未关闭），`subscribed` 表示是否仍有订阅授权配额（微信一次性订阅，每次授权可发一条）。
+
+```
+{ "code": 0, "message": "ok",
+  "data": { "enabled": true, "subscribed": false } }
+```
+
+### PUT /api/v1/users/me/caring
+开关主动关怀——关闭后后端不再对该用户发起任何订阅消息（可随时重新开启）。
+
+```
+{ "enabled": false }        // true=开启，false=关闭
+```
+
+成功响应 200 · code=0（data 同 GET）
+
+### POST /api/v1/users/me/caring/subscribe
+回填小程序 `wx.requestSubscribeMessage` 的订阅授权结果：`granted=true` 时发送配额 +1（一次性订阅，每次授权可发一条），`false` 不增加。
+
+```
+{ "granted": true }
+```
+
+成功响应 200 · code=0（data 同 GET）
+[专家判断] 主动关怀由后端定时任务触发（默认每日 `CARING_HOUR` 时刻扫描），仅对「未关闭关怀 + 仍有订阅配额 + 命中触发条件（连续 N 天低落 / 打卡中断）」的用户发送，且每周频控（`CARING_MAX_PER_WEEK`，默认 2 条）；未配置订阅模板 ID（`WX_SUBSCRIBE_TEMPLATE_ID`）时安全跳过，不影响主链路。
 
 ## 5 · 会话接口
 

@@ -12,6 +12,8 @@ Page({
     consented: false,
     version: '',
     resources: [], // 求助热线（公开接口，无需登录）
+    caringEnabled: true, // V3 主动关怀：是否开启
+    caringSubscribed: false, // V3：是否仍有订阅授权配额
   },
 
   onShow() {
@@ -39,6 +41,15 @@ Page({
           consented: !!me.consented,
         })
       })
+      .catch(() => {})
+
+    // V3 主动关怀状态（开启 / 订阅授权）
+    api
+      .ensureLogin()
+      .then(() => api.get('/api/v1/users/me/caring'))
+      .then((c) =>
+        this.setData({ caringEnabled: c.enabled, caringSubscribed: c.subscribed })
+      )
       .catch(() => {})
   },
 
@@ -89,6 +100,37 @@ Page({
             wx.showToast({ title: '保存失败，请稍后重试', icon: 'none' })
           })
       },
+    })
+  },
+
+  // V3 主动关怀：开关（关闭后后端不再发起订阅消息，可随时重开）
+  toggleCaring() {
+    const next = !this.data.caringEnabled
+    api
+      .put('/api/v1/users/me/caring', { enabled: next })
+      .then((d) => {
+        this.setData({ caringEnabled: d.enabled, caringSubscribed: d.subscribed })
+        wx.showToast({ title: next ? '已开启主动关怀' : '已关闭主动关怀', icon: 'none' })
+        if (next) this.requestCareSubscription()
+      })
+      .catch(() => wx.showToast({ title: '设置失败，请稍后重试', icon: 'none' }))
+  },
+
+  // V3 订阅授权：一次性订阅（同意一次可发一条）；模板 ID 未配置时静默跳过
+  requestCareSubscription() {
+    if (this.data.caringSubscribed) return
+    const tpl = getApp().globalData.subscribeTemplateId
+    if (!tpl) return
+    wx.requestSubscribeMessage({
+      tmplIds: [tpl],
+      success: (res) => {
+        const granted = res[tpl] === 'accept'
+        api
+          .post('/api/v1/users/me/caring/subscribe', { granted })
+          .then((d) => this.setData({ caringSubscribed: d.subscribed }))
+          .catch(() => {})
+      },
+      fail: () => {},
     })
   },
 })

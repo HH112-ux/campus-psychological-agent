@@ -7,6 +7,9 @@ App({
     apiBase: 'http://127.0.0.1:8000',
     version: '0.3.0',
     crisisResources: [], // 公开求助热线缓存（高危卡片重进会话时使用）
+    // 主动关怀（V3）订阅消息模板 ID：在微信公众平台申请后填入；
+    // 留空时前端不发起 requestSubscribeMessage（与后端 WX_SUBSCRIBE_TEMPLATE_ID 保持一致）
+    subscribeTemplateId: '',
   },
 
   onLaunch() {
