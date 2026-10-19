@@ -100,6 +100,17 @@ class Settings(BaseSettings):
     wx_subscribe_field_key: str = "thing1"
     wx_subscribe_send_url: str = "https://api.weixin.qq.com/cgi-bin/message/subscribe/send"
 
+    # 语音入口（V5）：小程序录音 → 转写 → 用户确认后进入对话
+    # 合规基线（M3 预案）：转写后即弃、不落原始音频；提供方未配置时 fail-safe 降级为键盘输入
+    asr_enabled: bool = True
+    asr_provider: str = "mock"  # mock=本地联调占位（生产禁用）；http=调用通用 ASR 网关
+    # 通用 ASR 网关：POST 原始音频字节，期望返回 {"text": "..."}
+    asr_endpoint_url: str = ""
+    asr_api_key: str = ""
+    asr_timeout_seconds: float = 15.0
+    asr_max_audio_bytes: int = 2 * 1024 * 1024  # 单段录音体积上限（约 2MB；前端同步限时长 60s）
+    asr_mock_text: str = "这是一段语音输入的内容"  # mock 提供方固定返回（仅本地联调）
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @model_validator(mode="after")
@@ -123,6 +134,13 @@ class Settings(BaseSettings):
             problems.append("DATA_ENCRYPTION_KEY 必须配置（对话内容 AES-256-GCM 应用层加密）")
         if not self.zhipu_api_key:
             problems.append("ZHIPU_API_KEY 必须配置（对话主链路依赖）")
+        if self.asr_enabled:
+            if self.asr_provider == "mock":
+                problems.append("ASR_PROVIDER 不能为 mock（生产禁止假转写），请配置 http 网关")
+            elif self.asr_provider != "http":
+                problems.append(f"ASR_PROVIDER 非法值：{self.asr_provider}（仅支持 http）")
+            elif not self.asr_endpoint_url or not self.asr_api_key:
+                problems.append("ASR_ENDPOINT_URL / ASR_API_KEY 必须配置（ASR_PROVIDER=http 依赖）")
         if problems:
             raise ValueError("生产配置校验未通过：\n- " + "\n- ".join(problems))
         return self

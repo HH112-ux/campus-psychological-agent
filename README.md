@@ -46,11 +46,13 @@ FastAPI + LangChain + 智谱 GLM（主模型 + 轻量档）+ 微信小程序原�
 
 完整需求、验收标准与里程碑见 `campus-agent-dev-doc/campus-agent-dev-doc.md`，接口契约见本 README「API 文档」章节（独立版在 `campus-agent-api-doc/campus-agent-api-doc.md`）。
 
+> 当前进度：P1–P5 已完成，进入二期（治理 M / 评估 E / 增值 V）；逐项落地状态与证据见 `docs/improvement-roadmap.md §10.3 执行进展`。
+
 ## 快速开始
 
 1. 阅读 `CONTRIBUTING.md`，按提交规范开发。
-2. 后端：见 `backend/README.md`（venv → init_db → seed_crisis 播种危机词库 → uvicorn，验收 `GET /health` 返回 200 且 `db: connected`，pytest 81 项全绿）。
-3. 小程序：见 `miniprogram/README.md`（微信开发者工具导入 `miniprogram/`，P3 已具备四 TabBar 首页打卡、情绪日志与对话情绪角标；本地无 `WX_SECRET` 时后端走 mock 登录）。
+2. 后端：见 `backend/README.md`（venv → init_db → seed_crisis 播种危机词库 → uvicorn，验收 `GET /health` 返回 200 且 `db: connected`，pytest 153 项全绿）。
+3. 小程序：见 `miniprogram/README.md`（微信开发者工具导入 `miniprogram/`；已具备四 TabBar、情绪打卡与日志、对话情绪角标、主动关怀、练习卡片与语音输入；本地无 `WX_SECRET` 时后端走 mock 登录）。
 4. 按阶段文档推进，每个阶段验收通过后打里程碑 tag（见 CONTRIBUTING）。
 5. 密钥一律放 `.env`（不入库），参考 `backend/.env.example`。
 
@@ -63,10 +65,6 @@ FastAPI + LangChain + 智谱 GLM（主模型 + 轻量档）+ 微信小程序原�
 ---
 
 ## API 文档
-
-后端基于 Python FastAPI，本文档是小程序端与服务端的接口契约：统一响应结构、16 个接口、流式协议与错误码。服务端实现后，FastAPI 会自动生成交互式调试文档（/docs），两者以本文档为准保持一致。读者：小程序前端、后端、测试。
-
----
 
 ### 1 · 概述与通用约定
 ````````
@@ -94,6 +92,7 @@ HTTP 状态码只表达传输与鉴权层结果（200 / 401 / 429 / 500）；业
 列表接口统一使用 `page`（从 1 开始）与 `page_size`（默认 20，最大 100），响应在 `data` 中返回 `items`、`total`、`page`、`page_size`。
 
 > **流式接口例外：**[发送消息](#ep-messages-send)接口返回 SSE 事件流，不套用统一响应结构；事件格式见[流式响应协议](#sec-stream)。
+> **上传接口例外：**语音转写接口（见本章节 10）使用 `multipart/form-data` 上传音频（响应仍为统一 JSON 结构）。
 
 ### 2 · 认证机制
 小程序端通过微信官方登录换取用户身份，服务端以 JWT 维持会话。`openid` 只存在于服务端，任何接口不向客户端下发。access_token 过期后用 refresh_token 静默续期，连续失败才要求用户重新进入。
@@ -126,18 +125,25 @@ sequenceDiagram
 | 2 | POST | /api/v1/auth/refresh | 刷新 access_token | 否（需 refresh_token） |
 | 3 | GET | /api/v1/users/me | 当前用户信息 | 是 |
 | 4 | DELETE | /api/v1/users/me/data | 删除全部数据（软删 30 天） | 是 |
-| 5 | GET | /api/v1/sessions | 会话列表（分页） | 是 |
-| 6 | POST | /api/v1/sessions | 创建会话 | 是 |
-| 7 | GET | /api/v1/sessions/{session_id} | 会话详情（含消息） | 是 |
-| 8 | PATCH | /api/v1/sessions/{session_id} | 重命名会话 | 是 |
-| 9 | DELETE | /api/v1/sessions/{session_id} | 删除会话 | 是 |
-| 10 | POST | /api/v1/sessions/{session_id}/messages | 发送消息（流式/非流式） | 是 |
-| 11 | POST | /api/v1/messages/{message_id}/feedback | 对回复点赞/点踩 | 是 |
-| 12 | GET | /api/v1/emotion/checkins/today | 查询今日打卡 | 是 |
-| 13 | POST | /api/v1/emotion/checkins | 每日打卡（覆盖当日） | 是 |
-| 14 | GET | /api/v1/emotion/records | 情绪记录列表（分页/筛选） | 是 |
-| 15 | GET | /api/v1/emotion/trends | 情绪趋势聚合 | 是 |
-| 16 | GET | /api/v1/crisis/resources | 心理求助资源（公开） | 否 |
+| 5 | GET | /api/v1/users/me/caring | 主动关怀状态（开启 / 订阅授权） | 是 |
+| 6 | PUT | /api/v1/users/me/caring | 开启/关闭主动关怀 | 是 |
+| 7 | POST | /api/v1/users/me/caring/subscribe | 回填订阅授权结果 | 是 |
+| 8 | GET | /api/v1/sessions | 会话列表（分页） | 是 |
+| 9 | POST | /api/v1/sessions | 创建会话 | 是 |
+| 10 | GET | /api/v1/sessions/{session_id} | 会话详情（含消息） | 是 |
+| 11 | PATCH | /api/v1/sessions/{session_id} | 重命名会话 | 是 |
+| 12 | DELETE | /api/v1/sessions/{session_id} | 删除会话 | 是 |
+| 13 | POST | /api/v1/sessions/{session_id}/messages | 发送消息（流式/非流式） | 是 |
+| 14 | POST | /api/v1/messages/{message_id}/feedback | 对回复点赞/点踩 | 是 |
+| 15 | GET | /api/v1/emotion/checkins/today | 查询今日打卡 | 是 |
+| 16 | POST | /api/v1/emotion/checkins | 每日打卡（覆盖当日） | 是 |
+| 17 | GET | /api/v1/emotion/records | 情绪记录列表（分页/筛选） | 是 |
+| 18 | GET | /api/v1/emotion/trends | 情绪趋势聚合 | 是 |
+| 19 | GET | /api/v1/emotion/weekly-insight | 本周情绪小结（周报洞察） | 是 |
+| 20 | GET | /api/v1/practices | 练习卡片目录（V4） | 是 |
+| 21 | POST | /api/v1/practices/{practice_id}/complete | 记录练习完成（V4） | 是 |
+| 22 | POST | /api/v1/speech/transcribe | 语音转写为文字（V5，不落原始音频） | 是 |
+| 23 | GET | /api/v1/crisis/resources | 心理求助资源（公开） | 否 |
 
 ### 4 · 认证与用户接口
 
@@ -214,7 +220,7 @@ access_token 过期后的静默续期。refresh_token 单次使用（旋转机�
 ```
 
 #### DELETE /api/v1/users/me/data
-行权接口：删除该用户的全部数据（会话、消息、情绪记录、打卡、风险事件），先软删 30 天（用户可登录撤销），期满由后端定时任务自动物理删除（默认每小时扫描一次，配置 `ERASE_RECOVER_DAYS` / `DATA_PURGE_ENABLED` / `DATA_PURGE_INTERVAL_SECONDS`）。[专家判断] 响应立即生效，各查询接口从此刻起不再返回任何数据。
+行权接口：删除该用户的全部数据（会话、消息、情绪记录、打卡、风险事件、主动关怀留档），先软删 30 天（用户可登录撤销），期满由后端定时任务自动物理删除（默认每小时扫描一次，配置 `ERASE_RECOVER_DAYS` / `DATA_PURGE_ENABLED` / `DATA_PURGE_INTERVAL_SECONDS`）。[专家判断] 响应立即生效，各查询接口从此刻起不再返回任何数据。
 请求参数（Body）
 
 ```
@@ -227,6 +233,33 @@ access_token 过期后的静默续期。refresh_token 单次使用（旋转机�
 { "code": 0, "message": "已删除，30 天内登录可撤销",
   "data": { "erase_at": "2026-10-12T23:50:00+08:00", "recover_deadline": "2026-11-11T23:50:00+08:00" } }
 ```
+
+#### GET /api/v1/users/me/caring
+V3 主动关怀状态：`enabled` 表示用户是否开启关怀（未关闭），`subscribed` 表示是否仍有订阅授权配额（微信一次性订阅，每次授权可发一条）。
+
+```
+{ "code": 0, "message": "ok",
+  "data": { "enabled": true, "subscribed": false } }
+```
+
+#### PUT /api/v1/users/me/caring
+开关主动关怀——关闭后后端不再对该用户发起任何订阅消息（可随时重新开启）。
+
+```
+{ "enabled": false }        // true=开启，false=关闭
+```
+
+成功响应 200 · code=0（data 同 GET）
+
+#### POST /api/v1/users/me/caring/subscribe
+回填小程序 `wx.requestSubscribeMessage` 的订阅授权结果：`granted=true` 时发送配额 +1（一次性订阅，每次授权可发一条），`false` 不增加。
+
+```
+{ "granted": true }
+```
+
+成功响应 200 · code=0（data 同 GET）
+[专家判断] 主动关怀由后端定时任务触发（默认每日 `CARING_HOUR` 时刻扫描），仅对「未关闭关怀 + 仍有订阅配额 + 命中触发条件（连续 N 天低落 / 打卡中断）」的用户发送，且每周频控（`CARING_MAX_PER_WEEK`，默认 2 条）；未配置订阅模板 ID（`WX_SUBSCRIBE_TEMPLATE_ID`）时安全跳过，不影响主链路。
 
 ### 5 · 会话接口
 
@@ -409,6 +442,35 @@ intensity 由 mood 按默认映射生成（calm=2 / ok=4 / low=6 / anxious=7 / i
   } }
 ```
 
+#### GET /api/v1/emotion/weekly-insight
+V2 周报洞察：基于与 `trends` 同源的聚合数据，服务端生成**描述性**「本周情绪小结」，供情绪日志页展示。文案只陈述现象（如「焦虑多出现在晚上」），**不做归因断言**（不出现「因为 / 导致 / 由于」类因果句式）。
+
+| Query 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| days | int | 可选 | 统计窗口，7 或 30，默认 7 |
+
+```
+{ "code": 0, "message": "ok",
+  "data": {
+    "window_days": 7, "start_date": "2026-10-13", "end_date": "2026-10-19",
+    "has_data": true, "record_count": 9, "record_days": 4, "checkin_days": 3,
+    "avg_intensity": 5.4, "prev_avg_intensity": 6.1, "intensity_trend": "down",
+    "dominant_emotion": { "type": "anxious", "ratio": 0.44 },
+    "peak_period": "evening", "peak_period_label": "晚上",
+    "period_counts": { "morning": 1, "afternoon": 2, "evening": 5, "night": 1 },
+    "highlights": [
+      "近 7 天你记录了 4 天、共 9 条情绪记录。",
+      "本周以「焦虑」为主（占 44%）。",
+      "「焦虑」多出现在晚上。",
+      "整体情绪强度比上周略有下降（6.1 → 5.4）。",
+      "本周打卡 3 天。"
+    ]
+  } }
+```
+
+- `has_data: false` 时 `dominant_emotion` / `peak_period` 为 null、`period_counts` 为空对象，`highlights` 仅含一句引导；客户端据此决定是否展示小结卡。
+- 时段按业务时区（Asia/Shanghai）划分：早上 5–11 / 下午 12–17 / 晚上 18–22 / 深夜 23–4；`intensity_trend` 为 `up | down | flat | none`（`none` 表示无上周可比数据）；`highlights` 为服务端拼好的中文短句列表，小程序只渲染。
+
 ### 8 · 危机资源接口
 
 #### GET /api/v1/crisis/resources
@@ -431,7 +493,84 @@ intensity 由 mood 按默认映射生成（calm=2 / ok=4 / low=6 / anxious=7 / i
 
 校心理中心电话 [待填]；各地 12356 开通情况以当地为准 [需核实]。小程序按 priority 升序展示。
 
-### 9 · 流式响应协议（SSE over chunked）
+### 9 · 练习卡片接口（V4）
+把提示词里已有的「身体优先 / 呼吸练习」话术产品化——呼吸引导、正念呼吸空间、行为激活小任务，做成可交互卡片。**内容仅供放松与觉察，不替代专业帮助；文案 [待专业审校]（联动 M2 心理中心老师复核）。**
+
+#### GET /api/v1/practices
+返回内置卡片目录（含今日已完成标记）。
+
+```
+{ "code": 0, "message": "ok",
+  "data": {
+    "practices": [
+      { "id": "breath_478", "category": "breathing", "title": "4-7-8 呼吸",
+        "subtitle": "睡前放松，帮身体慢慢慢下来", "duration_seconds": 120,
+        "pattern": { "inhale": 4, "hold": 7, "exhale": 8 },
+        "steps": ["找个舒服的姿势坐好或躺下", "..."], "reviewed": false, "completed_today": false },
+      { "id": "activate_micro", "category": "activation", "title": "微小行动",
+        "subtitle": "没力气的时候，从一件小事开始", "duration_seconds": 60,
+        "tasks": ["起身接一杯水", "..."], "reviewed": false, "completed_today": false }
+    ],
+    "completed_today": ["breath_478"]
+  } }
+```
+
+`category` 三档：`breathing`（配 `pattern` 供呼吸动画）/ `mindfulness`（配 `steps` 分步引导）/ `activation`（配 `tasks` 行动清单）。`reviewed=false` 表示尚未经专业审校。
+
+#### POST /api/v1/practices/{practice_id}/complete
+记录一次练习完成（同日可多次，仅记录次数与时长，不含对话/情绪原文）。
+
+```
+{ "duration_seconds": 120 }   // 可选，缺省用卡片建议时长
+```
+
+成功响应 200 · code=0
+
+```
+{ "code": 0, "message": "ok",
+  "data": { "practice_id": "breath_478", "completed": true, "times_today": 1 } }
+```
+
+未知 `practice_id` 返回 2001（HTTP 404）。
+
+### 10 · 语音转写接口（V5）
+
+把「语音倾诉」入口做成：小程序录音 → 服务端转写为文字 → 回到对话输入框，**由用户确认（可编辑）后再发送**，避免误转写直接进入对话。
+
+**合规基线（硬约束）**：音频仅用于本次转写，**转写后即弃、不落原始音频**——不写数据库、不落磁盘，服务日志只记体积与结果状态，不含音频与转写原文。转写结果作为普通消息进入对话主链路后，才由[发送消息](#ep-messages-send)统一执行内容安全与危机拦截（语音不另开旁路）。
+
+#### POST /api/v1/speech/transcribe
+
+`multipart/form-data` 上传录音文件，字段名 `file`。支持 mp3 / aac / m4a / wav / webm / ogg 等常见容器。
+
+```
+POST /api/v1/speech/transcribe
+Content-Type: multipart/form-data; boundary=...
+
+--boundary
+Content-Disposition: form-data; name="file"; filename="voice.mp3"
+Content-Type: audio/mpeg
+
+<音频二进制>
+--boundary--
+```
+
+成功响应 200 · code=0
+
+```
+{ "code": 0, "message": "ok", "data": { "text": "我这两天总是睡不好，心里挺烦的" } }
+```
+
+| 情形 | HTTP · code | 说明 |
+| --- | --- | --- |
+| 未登录 | 401 · 1002/1003 | 先走登录/刷新流程 |
+| 音频为空 / 超过体积上限（默认约 2MB，前端同步限录音 60s） | 400 · 5001 | 换段短一点重录 |
+| 音频格式不支持 / 转写服务未配置 / 转写失败 / 未识别出文字 | 400 · 5001 | 按 `message` 提示，**前端降级回键盘输入**，不阻断对话 |
+
+> fail-safe：语音转写服务未配置或异常时返回明确的 5001，**前端一律可继续用键盘输入**，不影响对话主链路（与 V3 未配置订阅模板 ID 的取舍一致）。
+> 提供方：`ASR_PROVIDER=mock` 为本地联调占位（返回固定文本，生产启动校验禁止）；生产为 `http`，指向配置的通用 ASR 网关（`ASR_ENDPOINT_URL`，POST 原始音频字节并返回 `{"text": "..."}`）。
+
+### 11 · 流式响应协议（SSE over chunked）
 发送消息接口（`stream=true`）返回 `text/event-stream`。小程序 `wx.request` 不支持标准 SSE，但开启 `enableChunked: true` 后可通过 `onChunkReceived` 逐块接收（基础库 2.20.1 起，提审前实测确认最低版本 [需核实]）。服务端按 SSE 帧格式输出，每块为一个或多个完整事件。
 
 ##### 事件序列
@@ -467,7 +606,7 @@ data: {"message_id":"671b22d29a3b4c5d6e7f8a9b","degraded":false}
 
 > **断帧处理：**块边界可能切断一个事件（SSE 事件以空行分隔）。前端必须维护接收缓冲区，按 `\n\n` 切分完整事件后再解析；10 秒无新块视为中断，保留已渲染内容并展示重试。
 
-### 10 · 错误码总表
+### 12 · 错误码总表
 
 | code | HTTP | 含义 | 用户可见处理 |
 | --- | --- | --- | --- |
@@ -488,7 +627,7 @@ data: {"message_id":"671b22d29a3b4c5d6e7f8a9b","degraded":false}
 | 9001 | 429 | 触发限流 | 指数退避，提示稍后再试 |
 | 9999 | 500 | 服务端未知错误 | 提示稍后再试，服务端告警 |
 
-### 11 · 数据模型参考
+### 13 · 数据模型参考
 与 MongoDB 集合一一对应，字段定义供前后端对齐。时间均为 ISO 8601 字符串；`emotion.type` 六类：`calm / ok / anxious / depressed / angry / other`。
 ********************
 | 模型 | 字段 |
@@ -498,8 +637,11 @@ data: {"message_id":"671b22d29a3b4c5d6e7f8a9b","degraded":false}
 | EmotionRecord | record_id · user_id · source(message|checkin) · ref_id · emotion · intensity(1–10) · risk_level · created_at |
 | Checkin | checkin_id · user_id · mood · intensity · note(≤200) · date(yyyymmdd，唯一索引 user_id+date) · created_at |
 | RiskEvent | event_id · user_id · session_id · level(low|mid|high) · trigger(lexicon|model) · created_at（仅服务端写入与审计读取，无对外查询接口） |
+| PracticeLog | practice_id · user_id · category(breathing|mindfulness|activation) · duration_seconds · date(yyyymmdd) · created_at（V4；仅服务端写入与统计） |
 
-### 12 · 限流与安全
+> 语音转写（V5）**不落库**：`POST /api/v1/speech/transcribe` 的音频与转写结果均不持久化（合规基线：转写后即弃、不落原始音频）。
+
+### 14 · 限流与安全
 
 | 范围 | 限制 | 说明 |
 | --- | --- | --- |
@@ -511,12 +653,12 @@ data: {"message_id":"671b22d29a3b4c5d6e7f8a9b","degraded":false}
 ##### 安全要点
 - JWT HS256 签名，密钥仅存服务端环境变量；openid 不下发，任何接口不回传。
 - 所有查询强制 `user_id` 过滤；跨用户访问统一表现为 404，不暴露资源存在性。
-- 限流后端可配（`RATELIMIT_BACKEND`）：`memory`（单机内存，dev 默认）与 `redis`（ZSET 滑动窗口 + Lua 原子判定，生产多实例共享计数；Redis 不可达时 fail-open 不阻断主链路，由监控告警兜底）。
 - 对话内容应用层 AES-256-GCM 加密后入库，密钥与数据库分离管理；服务日志仅含接口、耗时、错误码与脱敏 ID。
 - 危机卡片资源接口无鉴权是有意设计（公共安全信息），其余无鉴权路径一律不存在。
+- 语音转写（V5）：音频不落库、不落盘、日志不含音频与转写原文；单段录音限 60s / 约 2MB。
 - 全链路 HTTPS；小程序侧配置 request 合法域名白名单。
 
-### 13 · 小程序端接入示例
+### 15 · 小程序端接入示例
 登录与请求封装（utils/api.js）
 
 ```

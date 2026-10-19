@@ -37,6 +37,10 @@
 
 - **V4 练习卡片**：把提示词里已有的「身体优先 / 呼吸练习」话术产品化——新增 `app/services/practices.py` 内置卡片目录（4-7-8 呼吸 / 箱式呼吸 / 三分钟呼吸空间 / 微小行动），分类 `breathing`（配 `pattern` 驱动呼吸动画）/ `mindfulness`（`steps` 分步引导）/ `activation`（`tasks` 行动清单）。新增接口 `GET /api/v1/practices`（目录 + 今日已完成标记）与 `POST /api/v1/practices/{id}/complete`（完成反馈落库 `practice_logs`，同日可多次、缺省用建议时长；未知 id 返回 2001）。小程序新增 `pages/practice/practice`（呼吸引导缩放动画 + 正念分步计时 + 行动清单勾选），入口位于首页与「我的」页；练习完成记录已纳入数据导出与到期物理删除。**内容边界**：仅做放松/觉察引导，不含诊断/治疗/疗效表述，卡片均标 `reviewed=false` **[待专业审校]（联动 M2 心理中心老师）**。新增 5 项测试（`test_practices.py`，含文案红线与内容断言），全量 **140 passed**。
 
+### 增值项（V5 语音入口）
+
+- **V5 语音入口（录音 → 转写 → 用户确认后发送）**：新增 `app/services/speech.py` 与 `POST /api/v1/speech/transcribe`（`multipart/form-data` 上传录音，返回 `{"text": ...}`）。**合规基线（M3 预案）**：音频仅用于本次转写，**转写后即弃、不落原始音频**——不写库、不落盘，日志只记体积与结果状态，不含音频与转写原文；转写结果回到对话输入框，由**用户确认（可编辑）后再发送**，作为普通消息进入对话主链路后才由内容安全与危机拦截统一处理（语音不另开旁路）。**提供方抽象**：`ASR_PROVIDER=mock`（本地联调占位，返回固定文本，生产启动校验禁止）/ `http`（通用 ASR 网关 `ASR_ENDPOINT_URL`，POST 原始音频字节，期望 `{"text": "..."}`）。**fail-safe**：未配置 / 转写失败 / 未识别出文字时返回明确 `code=5001`，前端降级回键盘输入，不阻断主链路；单段录音限 60s / 约 2MB。小程序：对话页新增麦克风按钮（录音计时态 / 转写中态），`utils/api.js` 新增 `uploadFile` / `transcribeAudio`。新增依赖 `python-multipart==0.0.32`（接收音频上传）。**TTS 语音回复本轮未做**：需接第三方 TTS 服务与小程序端音频分发，成本与增量延迟单列评估后再定。E1：评估集按 `docs/eval-gate.md §4` 约定扩充——新增 6 条语音转写噪声样本（口语/无标点/转述对抗），59 → 65 条，报告计数改为动态。新增 11 项测试（`test_speech.py`，含「不落原始音频」断言）+ 3 项生产配置校验（`test_prod_config.py`），全量 **153 passed**。
+
 ### 仓库治理与 CI
 
 - **规范对齐与升级**：`docs/repo-governance.md` 补齐「CI 与质量门」章、命名豁免清单、根目录清洁规则与 Push Checklist（新增敏感/产物复查）；HTML 文档包（`campus-agent-*-doc/*.html` + `_shared/` + `assets/`）移出仓库，**`.md` 为唯一入库来源**。

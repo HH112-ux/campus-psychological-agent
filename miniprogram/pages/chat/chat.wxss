@@ -190,3 +190,33 @@
   background: var(--disabled);
   color: #f2f7f5;
 }
+
+/* V5 语音输入：麦克风按钮（录音中为红色计时，转写中为灰底） */
+.mic-btn {
+  flex-shrink: 0;
+  height: 72rpx;
+  min-width: 72rpx;
+  padding: 0 18rpx;
+  margin-right: 16rpx;
+  border-radius: 36rpx;
+  box-sizing: border-box;
+  background: var(--surface);
+  border: 2rpx solid var(--brand);
+  color: var(--brand);
+  font-size: 30rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mic-btn--rec {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+  font-size: 26rpx;
+}
+.mic-btn--busy {
+  background: var(--disabled);
+  border-color: var(--disabled);
+  color: #fff;
+  font-size: 24rpx;
+}

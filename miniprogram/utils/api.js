@@ -142,6 +142,40 @@ async function request(config, depth = 0) {
   }
 }
 
+// ---------- 文件上传（V5 语音转写等） ----------
+// wx.uploadFile 不支持 rawRequest 的通用封装，单独实现：同样解包 {code,message,data}
+async function uploadFile({ url, filePath, name = 'file', formData = {}, timeout = 30000 }) {
+  await ensureLogin()
+  return new Promise((resolve, reject) => {
+    wx.uploadFile({
+      url: base() + url,
+      filePath,
+      name,
+      formData,
+      header: { Authorization: `Bearer ${getAccessToken()}` },
+      timeout,
+      success(res) {
+        let body = {}
+        try {
+          body = JSON.parse(res.data || '{}')
+        } catch (e) {}
+        if (res.statusCode >= 200 && res.statusCode < 300 && body.code === 0) {
+          resolve(body.data)
+        } else {
+          reject({
+            code: typeof body.code === 'number' ? body.code : -1,
+            message: body.message || `上传失败（${res.statusCode}）`,
+            httpStatus: res.statusCode,
+          })
+        }
+      },
+      fail() {
+        reject({ code: -1, message: '网络异常，请稍后重试' })
+      },
+    })
+  })
+}
+
 // ---------- 对外 ----------
 module.exports = {
   base,
@@ -168,5 +202,10 @@ module.exports = {
   },
   del(url, extra = {}) {
     return request({ url, method: 'DELETE', ...extra })
+  },
+  uploadFile,
+  // V5 语音转写：上传录音文件，返回 { text }（音频转写后即弃，后端不留存）
+  transcribeAudio(filePath) {
+    return uploadFile({ url: '/api/v1/speech/transcribe', filePath })
   },
 }

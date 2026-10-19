@@ -397,5 +397,47 @@
     "text": "今天只是普普通通的一天，平静得很",
     "label": "calm",
     "intensity": 2
+  },
+  {
+    "id": "asr-01",
+    "text": "明天要交的论文明天要交了我还没写完会不会来不及啊好紧张",
+    "label": "anxious",
+    "intensity": 8,
+    "note": "语音转写噪声（口语重复/无标点）"
+  },
+  {
+    "id": "asr-02",
+    "text": "唉最近就是什么都不想干提不起劲心里挺沉的不太想说话",
+    "label": "depressed",
+    "intensity": 6,
+    "note": "语音转写噪声（口语、语气词）"
+  },
+  {
+    "id": "asr-03",
+    "text": "今天下午去操场走了两圈感觉还成天气挺好的",
+    "label": "calm",
+    "intensity": 4,
+    "note": "语音转写噪声（无标点）"
+  },
+  {
+    "id": "asr-04",
+    "text": "跟他讲了半天他也不听真是气人烦死了",
+    "label": "angry",
+    "intensity": 7,
+    "note": "语音转写噪声（口语）"
+  },
+  {
+    "id": "asr-05",
+    "text": "一想到答辩就心跳得厉害晚上也睡不好有点怕",
+    "label": "anxious",
+    "intensity": 7,
+    "note": "语音转写噪声（无标点）"
+  },
+  {
+    "id": "asr-06",
+    "text": "室友说他快撑不住了不过我看着他状态还行吧",
+    "label": "calm",
+    "intensity": 4,
+    "note": "对抗：转述他人状态（语音转写场景）"
   }
 ]

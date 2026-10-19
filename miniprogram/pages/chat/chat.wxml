@@ -73,6 +73,10 @@
       </view>
     </view>
     <view
+      class="mic-btn {{recording ? 'mic-btn--rec' : ''}} {{transcribing ? 'mic-btn--busy' : ''}}"
+      bindtap="toggleRecord"
+    >{{recording ? recordSeconds + '″' : (transcribing ? '转写中' : '🎤')}}</view>
+    <view
       class="send-btn {{!canSend ? 'send-btn--disabled' : ''}}"
       bindtap="send"
     >发送</view>

@@ -8,6 +8,7 @@ redis==5.2.1
 httpx==0.28.1
 PyJWT==2.15.1
 cryptography==44.0.3
+python-multipart==0.0.32  # V5 语音转写：接收 multipart 音频上传
 
 # 测试与质量
 pytest==9.1.1

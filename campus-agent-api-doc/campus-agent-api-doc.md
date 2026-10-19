@@ -1,6 +1,6 @@
 # 心屿 · API 文档
 
-后端基于 Python FastAPI，本文档是小程序端与服务端的接口契约：统一响应结构、16 个接口、流式协议与错误码。服务端实现后，FastAPI 会自动生成交互式调试文档（/docs），两者以本文档为准保持一致。读者：小程序前端、后端、测试。
+后端基于 Python FastAPI，本文档是小程序端与服务端的接口契约：统一响应结构、23 个接口、流式协议与错误码。服务端实现后，FastAPI 会自动生成交互式调试文档（/docs），两者以本文档为准保持一致。读者：小程序前端、后端、测试。
 
 ---
 
@@ -30,6 +30,7 @@ HTTP 状态码只表达传输与鉴权层结果（200 / 401 / 429 / 500）；业
 列表接口统一使用 `page`（从 1 开始）与 `page_size`（默认 20，最大 100），响应在 `data` 中返回 `items`、`total`、`page`、`page_size`。
 
 > **流式接口例外：**[发送消息](#ep-messages-send)接口返回 SSE 事件流，不套用统一响应结构；事件格式见[流式响应协议](#sec-stream)。
+> **上传接口例外：**语音转写接口（见本文章节 10）使用 `multipart/form-data` 上传音频（响应仍为统一 JSON 结构）。
 
 ## 2 · 认证机制
 小程序端通过微信官方登录换取用户身份，服务端以 JWT 维持会话。`openid` 只存在于服务端，任何接口不向客户端下发。access_token 过期后用 refresh_token 静默续期，连续失败才要求用户重新进入。
@@ -79,7 +80,8 @@ sequenceDiagram
 | 19 | GET | /api/v1/emotion/weekly-insight | 本周情绪小结（周报洞察） | 是 |
 | 20 | GET | /api/v1/practices | 练习卡片目录（V4） | 是 |
 | 21 | POST | /api/v1/practices/{practice_id}/complete | 记录练习完成（V4） | 是 |
-| 22 | GET | /api/v1/crisis/resources | 心理求助资源（公开） | 否 |
+| 22 | POST | /api/v1/speech/transcribe | 语音转写为文字（V5，不落原始音频） | 是 |
+| 23 | GET | /api/v1/crisis/resources | 心理求助资源（公开） | 否 |
 
 ## 4 · 认证与用户接口
 
@@ -469,7 +471,44 @@ V2 周报洞察：基于与 `trends` 同源的聚合数据，服务端生成**�
 
 未知 `practice_id` 返回 2001（HTTP 404）。
 
-## 10 · 流式响应协议（SSE over chunked）
+## 10 · 语音转写接口（V5）
+
+把「语音倾诉」入口做成：小程序录音 → 服务端转写为文字 → 回到对话输入框，**由用户确认（可编辑）后再发送**，避免误转写直接进入对话。
+
+**合规基线（硬约束）**：音频仅用于本次转写，**转写后即弃、不落原始音频**——不写数据库、不落磁盘，服务日志只记体积与结果状态，不含音频与转写原文。转写结果作为普通消息进入对话主链路后，才由[发送消息](#ep-messages-send)统一执行内容安全与危机拦截（语音不另开旁路）。
+
+### POST /api/v1/speech/transcribe
+
+`multipart/form-data` 上传录音文件，字段名 `file`。支持 mp3 / aac / m4a / wav / webm / ogg 等常见容器。
+
+```
+POST /api/v1/speech/transcribe
+Content-Type: multipart/form-data; boundary=...
+
+--boundary
+Content-Disposition: form-data; name="file"; filename="voice.mp3"
+Content-Type: audio/mpeg
+
+<音频二进制>
+--boundary--
+```
+
+成功响应 200 · code=0
+
+```
+{ "code": 0, "message": "ok", "data": { "text": "我这两天总是睡不好，心里挺烦的" } }
+```
+
+| 情形 | HTTP · code | 说明 |
+| --- | --- | --- |
+| 未登录 | 401 · 1002/1003 | 先走登录/刷新流程 |
+| 音频为空 / 超过体积上限（默认约 2MB，前端同步限录音 60s） | 400 · 5001 | 换段短一点重录 |
+| 音频格式不支持 / 转写服务未配置 / 转写失败 / 未识别出文字 | 400 · 5001 | 按 `message` 提示，**前端降级回键盘输入**，不阻断对话 |
+
+> fail-safe：语音转写服务未配置或异常时返回明确的 5001，**前端一律可继续用键盘输入**，不影响对话主链路（与 V3 未配置订阅模板 ID 的取舍一致）。
+> 提供方：`ASR_PROVIDER=mock` 为本地联调占位（返回固定文本，生产启动校验禁止）；生产为 `http`，指向配置的通用 ASR 网关（`ASR_ENDPOINT_URL`，POST 原始音频字节并返回 `{"text": "..."}`）。
+
+## 11 · 流式响应协议（SSE over chunked）
 发送消息接口（`stream=true`）返回 `text/event-stream`。小程序 `wx.request` 不支持标准 SSE，但开启 `enableChunked: true` 后可通过 `onChunkReceived` 逐块接收（基础库 2.20.1 起，提审前实测确认最低版本 [需核实]）。服务端按 SSE 帧格式输出，每块为一个或多个完整事件。
 
 #### 事件序列
@@ -505,7 +544,7 @@ data: {"message_id":"671b22d29a3b4c5d6e7f8a9b","degraded":false}
 
 > **断帧处理：**块边界可能切断一个事件（SSE 事件以空行分隔）。前端必须维护接收缓冲区，按 `\n\n` 切分完整事件后再解析；10 秒无新块视为中断，保留已渲染内容并展示重试。
 
-## 11 · 错误码总表
+## 12 · 错误码总表
 
 | code | HTTP | 含义 | 用户可见处理 |
 | --- | --- | --- | --- |
@@ -526,7 +565,7 @@ data: {"message_id":"671b22d29a3b4c5d6e7f8a9b","degraded":false}
 | 9001 | 429 | 触发限流 | 指数退避，提示稍后再试 |
 | 9999 | 500 | 服务端未知错误 | 提示稍后再试，服务端告警 |
 
-## 12 · 数据模型参考
+## 13 · 数据模型参考
 与 MongoDB 集合一一对应，字段定义供前后端对齐。时间均为 ISO 8601 字符串；`emotion.type` 六类：`calm / ok / anxious / depressed / angry / other`。
 ********************
 | 模型 | 字段 |
@@ -538,7 +577,9 @@ data: {"message_id":"671b22d29a3b4c5d6e7f8a9b","degraded":false}
 | RiskEvent | event_id · user_id · session_id · level(low|mid|high) · trigger(lexicon|model) · created_at（仅服务端写入与审计读取，无对外查询接口） |
 | PracticeLog | practice_id · user_id · category(breathing|mindfulness|activation) · duration_seconds · date(yyyymmdd) · created_at（V4；仅服务端写入与统计） |
 
-## 13 · 限流与安全
+> 语音转写（V5）**不落库**：`POST /api/v1/speech/transcribe` 的音频与转写结果均不持久化（合规基线：转写后即弃、不落原始音频）。
+
+## 14 · 限流与安全
 
 | 范围 | 限制 | 说明 |
 | --- | --- | --- |
@@ -552,9 +593,10 @@ data: {"message_id":"671b22d29a3b4c5d6e7f8a9b","degraded":false}
 - 所有查询强制 `user_id` 过滤；跨用户访问统一表现为 404，不暴露资源存在性。
 - 对话内容应用层 AES-256-GCM 加密后入库，密钥与数据库分离管理；服务日志仅含接口、耗时、错误码与脱敏 ID。
 - 危机卡片资源接口无鉴权是有意设计（公共安全信息），其余无鉴权路径一律不存在。
+- 语音转写（V5）：音频不落库、不落盘、日志不含音频与转写原文；单段录音限 60s / 约 2MB。
 - 全链路 HTTPS；小程序侧配置 request 合法域名白名单。
 
-## 14 · 小程序端接入示例
+## 15 · 小程序端接入示例
 登录与请求封装（utils/api.js）
 
 ```

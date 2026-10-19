@@ -19,7 +19,7 @@ cd backend
 ./.venv/bin/python scripts/eval_emotion_p5.py --gate   # 回归门：< 80% 退出 1
 ```
 
-- 评估集：`backend/scripts/eval-data/emotion_eval_v2.json`（59 条：四类 14/17/16/12 + 对抗 11，含黄金强度标注）。
+- 评估集：`backend/scripts/eval-data/emotion_eval_v2.json`（65 条：四类 16/18/18/13 + 对抗 11 + 语音转写噪声 6，含黄金强度标注）。
 - 链路与线上一致：`glm-4-flash`、temperature 0.2、同一系统指令与解析器（`app/services/emotion.py`）。
 - 报告每次运行都会重写 `docs/emotion-eval-p5.md`——它是**滚动基线**，重大口径变化时单独留档（如 M3 首测 `emotion-eval-m3.md`）。
 

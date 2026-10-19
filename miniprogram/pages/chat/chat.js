@@ -3,6 +3,7 @@ const api = require('../../utils/api')
 const { openSse } = require('../../utils/sse')
 
 const MAX_LEN = 2000
+const MAX_RECORD_SECONDS = 60 // 单段录音时长上限（与后端体积上限呼应）
 
 // 情绪角标展示映射（P3：对话页本轮识别）
 const EMOTION_META = {
@@ -34,12 +35,17 @@ Page({
     chunkSupported: true,
     maxLen: MAX_LEN,
     canSend: false,
+    recording: false, // V5：正在录音
+    recordSeconds: 0, // 录音已进行秒数
+    transcribing: false, // V5：正在转写
   },
 
   onLoad(options) {
     this._streamText = ''
     this._sseTask = null
+    this._recordTimer = null
     this.app = getApp()
+    this._initRecorder()
 
     api
       .ensureLogin()
@@ -80,6 +86,101 @@ Page({
         this._sseTask.abort()
       } catch (e) {}
     }
+    this._clearRecordTimer()
+    if (this._recorder && this.data.recording) {
+      try {
+        this._recorder.stop()
+      } catch (e) {}
+    }
+  },
+
+  // ---------- V5 语音输入：录音 → 转写 → 用户确认后发送 ----------
+  _initRecorder() {
+    this._recorder = wx.getRecorderManager()
+    this._recorder.onStart(() => {
+      this.setData({ recording: true, recordSeconds: 0 })
+      this._recordTimer = setInterval(() => {
+        const s = this.data.recordSeconds + 1
+        this.setData({ recordSeconds: s })
+        if (s >= MAX_RECORD_SECONDS) this.stopRecord() // 到达上限自动停止
+      }, 1000)
+    })
+    this._recorder.onStop((res) => {
+      this._clearRecordTimer()
+      this.setData({ recording: false })
+      if (!res || !res.tempFilePath) return
+      if ((res.duration || 0) < 1000) {
+        wx.showToast({ title: '说得太短啦，再说一次', icon: 'none' })
+        return
+      }
+      this.transcribe(res.tempFilePath)
+    })
+    this._recorder.onError(() => {
+      this._clearRecordTimer()
+      this.setData({ recording: false })
+      wx.showModal({
+        title: '无法使用麦克风',
+        content: '请在「设置」中允许使用麦克风，或直接用键盘输入。',
+        showCancel: false,
+        confirmText: '我知道了',
+      })
+    })
+  },
+
+  _clearRecordTimer() {
+    if (this._recordTimer) {
+      clearInterval(this._recordTimer)
+      this._recordTimer = null
+    }
+  },
+
+  toggleRecord() {
+    if (this.data.sending || this.data.transcribing) return
+    if (this.data.recording) {
+      this.stopRecord()
+      return
+    }
+    this._recorder.start({
+      format: 'mp3',
+      duration: MAX_RECORD_SECONDS * 1000,
+      sampleRate: 16000,
+      encodeBitRate: 48000,
+      numberOfChannels: 1,
+    })
+  },
+
+  stopRecord() {
+    try {
+      this._recorder.stop()
+    } catch (e) {}
+  },
+
+  // 上传录音转写；结果填入输入框，由用户确认（可编辑）后再发送，避免误转写
+  transcribe(filePath) {
+    this.setData({ transcribing: true })
+    api
+      .transcribeAudio(filePath)
+      .then((d) => {
+        this.setData({ transcribing: false })
+        const text = ((d && d.text) || '').trim()
+        if (!text) {
+          wx.showToast({ title: '没听清，请再说一次', icon: 'none' })
+          return
+        }
+        const merged = (this.data.inputValue || '').trim() + text
+        this.setData({
+          inputValue: merged,
+          canSend: merged.length <= MAX_LEN && !this.data.sending && this.data.ready,
+        })
+        wx.showToast({ title: '已转写，确认后点发送', icon: 'none' })
+      })
+      .catch((err) => {
+        this.setData({ transcribing: false })
+        wx.showToast({
+          title: (err && err.message) || '语音转写失败，请用键盘输入',
+          icon: 'none',
+        })
+      })
   },
 
   // 探测基础库是否支持分块接收（用幂等的 /health，不污染对话）

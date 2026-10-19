@@ -5,7 +5,8 @@
     .venv/bin/python scripts/eval_emotion_p5.py --gate   # E1 回归门：严格一致率 < 80% 退出 1
     未配置 ZHIPU_API_KEY 时打印 SKIP 并退出 0（CI 无 secret 环境不阻塞）
 
-- 评估集：scripts/eval-data/emotion_eval_v2.json（59 条：四类 14/17/16/12 + 对抗 11）
+- 评估集：scripts/eval-data/emotion_eval_v2.json（四类均衡 + 对抗 ≥10 + 语音转写噪声 asr-*，
+  随新能力按 docs/eval-gate.md §4 约定扩充）
 - 链路与线上一致：glm-4-flash、temperature 0.2、同一系统指令（V2）与解析器
 - 指标：严格一致率（≥80% 达标）、按类一致率、对抗一致率、强度 MAE（≤2 目标，
   仅对分类一致的样本计）、ok≈calm 近义归并（辅助口径，不计入主指标）
@@ -99,13 +100,17 @@ async def main() -> int:
     for r in rows:
         by_class.setdefault(r["gold"], []).append(r)
     adv = [r for r in rows if r["id"].startswith("adv-")]
+    asr = [r for r in rows if r["id"].startswith("asr-")]
+    cls_counts = "/".join(
+        str(len(by_class.get(c, []))) for c in ("anxious", "depressed", "calm", "angry")
+    )
 
     lines = [
         "# 情绪分类一致率正式评估（P5，go/no-go 依据）",
         "",
         f"- 测量时间：{settings.env} 环境 · 轻量模型 `{settings.model_light}` · temperature 0.2 · 提示词 V2",
         f"- 评估集：`backend/scripts/eval-data/emotion_eval_v2.json`，共 {total} 条"
-        "（四类 14/17/16/12 + 对抗 11，含黄金强度标注）",
+        f"（四类 {cls_counts} + 对抗 {len(adv)} + 语音转写噪声 {len(asr)}，含黄金强度标注）",
         f"- 严格总一致率：**{correct}/{total} = {correct / total:.1%}**（go/no-go 阈值 ≥ 80%）",
         f"- 近义归并辅助（ok≈calm，不计入主指标）：另计 {near_hits} 条",
         (

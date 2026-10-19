@@ -18,6 +18,7 @@ from app.api.routes import (
     messages,
     practices,
     sessions,
+    speech,
     users,
 )
 from app.config import get_settings
@@ -79,6 +80,7 @@ def create_app() -> FastAPI:
     app.include_router(messages.router)
     app.include_router(emotion.router)
     app.include_router(practices.router)
+    app.include_router(speech.router)
     return app
 
 
