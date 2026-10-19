@@ -103,6 +103,11 @@ Page({
     })
   },
 
+  // V4 练习卡片入口（呼吸 / 正念 / 行为激活）
+  goPractice() {
+    wx.navigateTo({ url: '/pages/practice/practice' })
+  },
+
   // V3 主动关怀：开关（关闭后后端不再发起订阅消息，可随时重开）
   toggleCaring() {
     const next = !this.data.caringEnabled

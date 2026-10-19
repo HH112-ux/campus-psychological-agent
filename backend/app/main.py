@@ -10,7 +10,16 @@ from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 
-from app.api.routes import auth, crisis, emotion, health, messages, sessions, users
+from app.api.routes import (
+    auth,
+    crisis,
+    emotion,
+    health,
+    messages,
+    practices,
+    sessions,
+    users,
+)
 from app.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.ratelimit import close_redis_client
@@ -69,6 +78,7 @@ def create_app() -> FastAPI:
     app.include_router(sessions.router)
     app.include_router(messages.router)
     app.include_router(emotion.router)
+    app.include_router(practices.router)
     return app
 
 

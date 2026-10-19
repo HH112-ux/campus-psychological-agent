@@ -38,6 +38,15 @@
     <view class="cell-arrow">{{caringEnabled ? '已开启' : '已关闭'}}</view>
   </view>
 
+  <view class="cell" bindtap="goPractice">
+    <view class="cell-icon">🧘</view>
+    <view class="cell-main">
+      <view class="cell-title">练习卡片</view>
+      <view class="cell-sub">呼吸引导 · 正念呼吸空间 · 微小行动</view>
+    </view>
+    <view class="cell-arrow">›</view>
+  </view>
+
   <view class="cell" bindtap="showDisclaimer">
     <view class="cell-icon">⚠</view>
     <view class="cell-title">关于与免责声明</view>

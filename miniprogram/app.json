@@ -3,6 +3,7 @@
     "pages/index/index",
     "pages/chat/chat",
     "pages/logs/logs",
+    "pages/practice/practice",
     "pages/mine/mine",
     "pages/sessions/sessions"
   ],

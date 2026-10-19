@@ -157,4 +157,9 @@ Page({
     // 对话页是 tab，reLaunch 可带全新会话（onLoad 自动新建）
     wx.reLaunch({ url: '/pages/chat/chat' })
   },
+
+  // 练习卡片（V4）：非 tab 页，用 navigateTo 保留首页栈
+  goPractice() {
+    wx.navigateTo({ url: '/pages/practice/practice' })
+  },
 })

@@ -33,6 +33,10 @@
 
 - **V3 主动关怀**：基于情绪日志的主动问候——新增 `app/services/caring.py`，每日在 `CARING_HOUR`（默认 9 时，`main.lifespan` 启动调度、进程退出取消）扫描候选用户（未软删 / 未关闭关怀 / 仍有订阅配额），命中触发条件即经微信订阅消息发送温和问候：① 连续 `CARING_LOW_STREAK_DAYS` 天负面档位（low/anxious/irritable，`low_streak`）；② 打卡中断 `CARING_CHECKIN_GAP_DAYS` 天（`checkin_gap`）。**授权门槛**：仅对 `care_subscribe_count > 0`（一次性订阅每次授权 +1，发送扣减一次）发送；**频控**：同一用户每周最多 `CARING_MAX_PER_WEEK`（默认 2 条），依据 `care_messages` 留档计数；文案为温和邀请、避免说教/命令句式（复用 bad-case `preachy` 负面样本，测试断言红线）。新增 `wechat.send_subscribe_message()`（stable_token 复用 + token 失效强刷重试 + mock 占位）；用户侧接口 `GET/PUT /api/v1/users/me/caring` + `POST /api/v1/users/me/caring/subscribe`（随时开关 + 回填授权结果）。**隐私基线**：`care_messages` 留档仅记触发类型/状态，不含问候原文与情绪证据；数据导出与到期物理删除均纳入该集合。**fail-safe**：未配置订阅模板 ID（`WX_SUBSCRIBE_TEMPLATE_ID`，微信侧外部依赖）时安全跳过，不影响主链路与调度。新增 13 项测试（`test_caring.py`），全量 **135 passed**。
 
+### 增值项（V4 练习卡片）
+
+- **V4 练习卡片**：把提示词里已有的「身体优先 / 呼吸练习」话术产品化——新增 `app/services/practices.py` 内置卡片目录（4-7-8 呼吸 / 箱式呼吸 / 三分钟呼吸空间 / 微小行动），分类 `breathing`（配 `pattern` 驱动呼吸动画）/ `mindfulness`（`steps` 分步引导）/ `activation`（`tasks` 行动清单）。新增接口 `GET /api/v1/practices`（目录 + 今日已完成标记）与 `POST /api/v1/practices/{id}/complete`（完成反馈落库 `practice_logs`，同日可多次、缺省用建议时长；未知 id 返回 2001）。小程序新增 `pages/practice/practice`（呼吸引导缩放动画 + 正念分步计时 + 行动清单勾选），入口位于首页与「我的」页；练习完成记录已纳入数据导出与到期物理删除。**内容边界**：仅做放松/觉察引导，不含诊断/治疗/疗效表述，卡片均标 `reviewed=false` **[待专业审校]（联动 M2 心理中心老师）**。新增 5 项测试（`test_practices.py`，含文案红线与内容断言），全量 **140 passed**。
+
 ### 仓库治理与 CI
 
 - **规范对齐与升级**：`docs/repo-governance.md` 补齐「CI 与质量门」章、命名豁免清单、根目录清洁规则与 Push Checklist（新增敏感/产物复查）；HTML 文档包（`campus-agent-*-doc/*.html` + `_shared/` + `assets/`）移出仓库，**`.md` 为唯一入库来源**。

@@ -77,4 +77,13 @@
     </view>
     <view class="chat-entry-arrow">›</view>
   </view>
+
+  <!-- 练习卡片（V4）：呼吸引导 / 正念呼吸空间 / 行为激活 -->
+  <view class="chat-entry" bindtap="goPractice">
+    <view class="chat-entry-main">
+      <view class="chat-entry-title">练习卡片</view>
+      <view class="chat-entry-sub">呼吸引导 · 正念呼吸空间 · 微小行动</view>
+    </view>
+    <view class="chat-entry-arrow">›</view>
+  </view>
 </view>

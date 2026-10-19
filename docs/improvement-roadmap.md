@@ -259,6 +259,7 @@ flowchart LR
 #### V4 · 练习卡片（原 B4）
 - **做什么**：把提示词里已有的「身体优先 / 呼吸练习」话术产品化——呼吸引导动画、正念音频、行为激活小任务，做成对话中可交互的组件卡片。
 - **注意**：内容需专业审校（联动 M2 心理中心老师）；进度与完成反馈落库，可计入情绪日志。
+- **落地（已完成）**：新增 `app/services/practices.py` 内置目录（4-7-8 呼吸 / 箱式呼吸 / 三分钟呼吸空间 / 微小行动），三档分类 `breathing`（`pattern` 驱动动画）/ `mindfulness`（`steps`）/ `activation`（`tasks`）；接口 `GET /api/v1/practices` + `POST /api/v1/practices/{id}/complete`，完成反馈落库 `practice_logs`（同日可多次、缺省用建议时长），并纳入数据导出与到期物理删除。小程序新增 `pages/practice/practice`（呼吸缩放动画 / 正念分步计时 / 行动清单勾选），入口在首页与「我的」页。**内容边界**：仅放松/觉察引导，无诊断/治疗/疗效表述，均标 `reviewed=false` **[待专业审校]（M2 联动）**；音频形态未纳入本轮（无素材，先做文字引导 + 动画）。5 项测试（含文案红线断言）。
 
 #### V5 · 语音入口（原 B3）— 成本上调 5 → 6
 - **做什么**：小程序录音 → 语音转文字后进入对话；可选 AI 语音回复（TTS）。
@@ -406,6 +407,7 @@ flowchart LR
 | **V1** | 反馈闭环引擎：bad-case 导出 + 复盘模板 | ✅ **机制已落地**（此后按双周节奏执行复盘，产出归因与迭代项） | `services/bad_cases.py` + `scripts/export_bad_cases.py`（近 14 天/全量导出，含触发消息配对与原因聚合）+ `docs/bad-case-review-template.md`；3 项测试 |
 | **V2** | 周报洞察：描述性「本周情绪小结」 | ✅ **已完成**（小结本体未做订阅推送，订阅消息能力由 V3 承接） | `GET /api/v1/emotion/weekly-insight`（`emotion_logs.get_weekly_insight`，复用趋势聚合）+ 小程序日志页小结卡；4 项测试（含归因红线断言与 naive-UTC 时段回归） |
 | **V3** | 主动关怀：连续低落 / 打卡中断 → 订阅消息温和问候 | ✅ **代码完成**（订阅模板 ID 属微信侧外部依赖，未配置安全跳过） | `services/caring.py`（daily 扫描 + 触发检测 + 周频控 + 授权门槛 + fail-safe）；`wechat.send_subscribe_message`；用户开关/订阅接口；`care_messages` 留档；7 项测试 |
+| **V4** | 练习卡片：呼吸 / 正念 / 行为激活可交互组件 | ✅ **已完成**（文案 [待专业审校]，音频形态未纳入本轮） | `services/practices.py` 目录 + `GET /practices` / `POST /practices/{id}/complete`；`practice_logs` 留档；小程序 `pages/practice`（呼吸动画 / 正念计时 / 行动清单），首页与「我的」页入口；5 项测试 |
 
 > 剩余门控（M1 提审、M2 校方合作、M5 生产化基建）仍为待启动/外部驱动项，见第三章关键路径。
 
@@ -421,3 +423,4 @@ flowchart LR
 | v1.2 | 2026-10-16 | 会话并发上限 3 → 5（UX 评估后调整，§9 #6 与 §10.3 同步）；代码与对外文档全量对齐 |
 | v1.3 | 2026-10-19 | 增值项推进：V1 反馈闭环（bad-case 导出 + 复盘模板）、V2 周报洞察（`GET /emotion/weekly-insight` 描述性小结 + 小程序小结卡，含 naive-UTC 时段回归修复）；见 §10.3 |
 | v1.4 | 2026-10-19 | V3 主动关怀（连续低落 / 打卡中断 → 订阅消息温和问候；授权门槛 + 周频控 + 隐私留档 + fail-safe）；见 §10.3 |
+| v1.5 | 2026-10-19 | V4 练习卡片（呼吸引导 / 正念呼吸空间 / 行为激活可交互卡片；目录 + 完成反馈落库 + 小程序练习页）；见 §10.3 |

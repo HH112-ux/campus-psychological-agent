@@ -77,7 +77,9 @@ sequenceDiagram
 | 17 | GET | /api/v1/emotion/records | 情绪记录列表（分页/筛选） | 是 |
 | 18 | GET | /api/v1/emotion/trends | 情绪趋势聚合 | 是 |
 | 19 | GET | /api/v1/emotion/weekly-insight | 本周情绪小结（周报洞察） | 是 |
-| 20 | GET | /api/v1/crisis/resources | 心理求助资源（公开） | 否 |
+| 20 | GET | /api/v1/practices | 练习卡片目录（V4） | 是 |
+| 21 | POST | /api/v1/practices/{practice_id}/complete | 记录练习完成（V4） | 是 |
+| 22 | GET | /api/v1/crisis/resources | 心理求助资源（公开） | 否 |
 
 ## 4 · 认证与用户接口
 
@@ -427,7 +429,47 @@ V2 周报洞察：基于与 `trends` 同源的聚合数据，服务端生成**�
 
 校心理中心电话 [待填]；各地 12356 开通情况以当地为准 [需核实]。小程序按 priority 升序展示。
 
-## 9 · 流式响应协议（SSE over chunked）
+## 9 · 练习卡片接口（V4）
+把提示词里已有的「身体优先 / 呼吸练习」话术产品化——呼吸引导、正念呼吸空间、行为激活小任务，做成可交互卡片。**内容仅供放松与觉察，不替代专业帮助；文案 [待专业审校]（联动 M2 心理中心老师复核）。**
+
+### GET /api/v1/practices
+返回内置卡片目录（含今日已完成标记）。
+
+```
+{ "code": 0, "message": "ok",
+  "data": {
+    "practices": [
+      { "id": "breath_478", "category": "breathing", "title": "4-7-8 呼吸",
+        "subtitle": "睡前放松，帮身体慢慢慢下来", "duration_seconds": 120,
+        "pattern": { "inhale": 4, "hold": 7, "exhale": 8 },
+        "steps": ["找个舒服的姿势坐好或躺下", "..."], "reviewed": false, "completed_today": false },
+      { "id": "activate_micro", "category": "activation", "title": "微小行动",
+        "subtitle": "没力气的时候，从一件小事开始", "duration_seconds": 60,
+        "tasks": ["起身接一杯水", "..."], "reviewed": false, "completed_today": false }
+    ],
+    "completed_today": ["breath_478"]
+  } }
+```
+
+`category` 三档：`breathing`（配 `pattern` 供呼吸动画）/ `mindfulness`（配 `steps` 分步引导）/ `activation`（配 `tasks` 行动清单）。`reviewed=false` 表示尚未经专业审校。
+
+### POST /api/v1/practices/{practice_id}/complete
+记录一次练习完成（同日可多次，仅记录次数与时长，不含对话/情绪原文）。
+
+```
+{ "duration_seconds": 120 }   // 可选，缺省用卡片建议时长
+```
+
+成功响应 200 · code=0
+
+```
+{ "code": 0, "message": "ok",
+  "data": { "practice_id": "breath_478", "completed": true, "times_today": 1 } }
+```
+
+未知 `practice_id` 返回 2001（HTTP 404）。
+
+## 10 · 流式响应协议（SSE over chunked）
 发送消息接口（`stream=true`）返回 `text/event-stream`。小程序 `wx.request` 不支持标准 SSE，但开启 `enableChunked: true` 后可通过 `onChunkReceived` 逐块接收（基础库 2.20.1 起，提审前实测确认最低版本 [需核实]）。服务端按 SSE 帧格式输出，每块为一个或多个完整事件。
 
 #### 事件序列
@@ -463,7 +505,7 @@ data: {"message_id":"671b22d29a3b4c5d6e7f8a9b","degraded":false}
 
 > **断帧处理：**块边界可能切断一个事件（SSE 事件以空行分隔）。前端必须维护接收缓冲区，按 `\n\n` 切分完整事件后再解析；10 秒无新块视为中断，保留已渲染内容并展示重试。
 
-## 10 · 错误码总表
+## 11 · 错误码总表
 
 | code | HTTP | 含义 | 用户可见处理 |
 | --- | --- | --- | --- |
@@ -484,7 +526,7 @@ data: {"message_id":"671b22d29a3b4c5d6e7f8a9b","degraded":false}
 | 9001 | 429 | 触发限流 | 指数退避，提示稍后再试 |
 | 9999 | 500 | 服务端未知错误 | 提示稍后再试，服务端告警 |
 
-## 11 · 数据模型参考
+## 12 · 数据模型参考
 与 MongoDB 集合一一对应，字段定义供前后端对齐。时间均为 ISO 8601 字符串；`emotion.type` 六类：`calm / ok / anxious / depressed / angry / other`。
 ********************
 | 模型 | 字段 |
@@ -494,8 +536,9 @@ data: {"message_id":"671b22d29a3b4c5d6e7f8a9b","degraded":false}
 | EmotionRecord | record_id · user_id · source(message|checkin) · ref_id · emotion · intensity(1–10) · risk_level · created_at |
 | Checkin | checkin_id · user_id · mood · intensity · note(≤200) · date(yyyymmdd，唯一索引 user_id+date) · created_at |
 | RiskEvent | event_id · user_id · session_id · level(low|mid|high) · trigger(lexicon|model) · created_at（仅服务端写入与审计读取，无对外查询接口） |
+| PracticeLog | practice_id · user_id · category(breathing|mindfulness|activation) · duration_seconds · date(yyyymmdd) · created_at（V4；仅服务端写入与统计） |
 
-## 12 · 限流与安全
+## 13 · 限流与安全
 
 | 范围 | 限制 | 说明 |
 | --- | --- | --- |
@@ -511,7 +554,7 @@ data: {"message_id":"671b22d29a3b4c5d6e7f8a9b","degraded":false}
 - 危机卡片资源接口无鉴权是有意设计（公共安全信息），其余无鉴权路径一律不存在。
 - 全链路 HTTPS；小程序侧配置 request 合法域名白名单。
 
-## 13 · 小程序端接入示例
+## 14 · 小程序端接入示例
 登录与请求封装（utils/api.js）
 
 ```

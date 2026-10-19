@@ -1,0 +1,213 @@
+.page {
+  padding: 32rpx 28rpx 60rpx;
+}
+
+.intro {
+  font-size: 26rpx;
+  color: #7a736b;
+  line-height: 1.6;
+  margin: 8rpx 4rpx 28rpx;
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+.card {
+  position: relative;
+  padding: 30rpx 32rpx;
+  background: #ffffff;
+  border-radius: 24rpx;
+  box-shadow: 0 8rpx 24rpx rgba(156, 87, 34, 0.08);
+}
+
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14rpx;
+}
+
+.cat {
+  font-size: 24rpx;
+  color: #3e7a69;
+  background: rgba(62, 122, 105, 0.1);
+  padding: 4rpx 16rpx;
+  border-radius: 999rpx;
+}
+
+.dur {
+  font-size: 24rpx;
+  color: #9c936b;
+}
+
+.card-title {
+  font-size: 34rpx;
+  color: #2f2a24;
+  font-weight: 600;
+}
+
+.card-sub {
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  color: #7a736b;
+  line-height: 1.5;
+}
+
+.done-tag {
+  position: absolute;
+  top: 30rpx;
+  right: 32rpx;
+  font-size: 22rpx;
+  color: #9c5722;
+}
+
+/* ---------- 练习面板 ---------- */
+
+.mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(47, 42, 36, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 20;
+}
+
+.sheet {
+  width: 100%;
+  background: #f7f4ef;
+  border-radius: 32rpx 32rpx 0 0;
+  padding: 40rpx 36rpx calc(48rpx + env(safe-area-inset-bottom));
+}
+
+.sheet-head {
+  text-align: center;
+}
+
+.sheet-title {
+  font-size: 38rpx;
+  font-weight: 600;
+  color: #2f2a24;
+}
+
+.sheet-sub {
+  margin-top: 10rpx;
+  font-size: 26rpx;
+  color: #7a736b;
+}
+
+.breath-wrap {
+  height: 420rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.breath-circle {
+  width: 220rpx;
+  height: 220rpx;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #6fb3a1, #3e7a69);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition-property: transform;
+  transition-timing-function: ease-in-out;
+  box-shadow: 0 16rpx 40rpx rgba(62, 122, 105, 0.25);
+}
+
+.breath-text {
+  color: #ffffff;
+  font-size: 32rpx;
+  letter-spacing: 4rpx;
+}
+
+.mind-wrap {
+  padding: 24rpx 0 8rpx;
+}
+
+.mind-step {
+  padding: 18rpx 20rpx;
+  margin-bottom: 14rpx;
+  font-size: 28rpx;
+  color: #7a736b;
+  background: #ffffff;
+  border-radius: 18rpx;
+  line-height: 1.5;
+}
+
+.mind-step.on {
+  color: #2f2a24;
+  background: rgba(62, 122, 105, 0.12);
+  font-weight: 500;
+}
+
+.task-wrap {
+  padding: 24rpx 0 8rpx;
+}
+
+.task {
+  display: flex;
+  align-items: center;
+  padding: 22rpx 20rpx;
+  margin-bottom: 14rpx;
+  background: #ffffff;
+  border-radius: 18rpx;
+}
+
+.task.on {
+  background: rgba(62, 122, 105, 0.12);
+}
+
+.tick {
+  width: 40rpx;
+  height: 40rpx;
+  margin-right: 18rpx;
+  border-radius: 50%;
+  border: 2rpx solid #3e7a69;
+  color: #3e7a69;
+  font-size: 26rpx;
+  text-align: center;
+  line-height: 38rpx;
+}
+
+.task-text {
+  font-size: 28rpx;
+  color: #2f2a24;
+}
+
+.timer {
+  text-align: center;
+  margin: 24rpx 0 8rpx;
+  font-size: 56rpx;
+  font-weight: 600;
+  color: #3e7a69;
+  font-variant-numeric: tabular-nums;
+}
+
+.btns {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 20rpx;
+}
+
+.btn-main,
+.btn-ghost {
+  flex: 1;
+  font-size: 30rpx;
+  border-radius: 22rpx;
+  line-height: 88rpx;
+}
+
+.btn-main {
+  background: #3e7a69;
+  color: #ffffff;
+}
+
+.btn-ghost {
+  background: #ffffff;
+  color: #3e7a69;
+}
