@@ -5,13 +5,17 @@
 """
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta
 
+import pymongo
 import pytest
+from bson import ObjectId
 from helpers import auth, create_session, login
 
 from app.config import get_settings
-from app.core.timeutil import CST, date_str
+from app.core.timeutil import CST, date_str, now_cst
+from app.db.indexes import COLL_CHECKINS, COLL_EMOTION_RECORDS, COLL_USERS
 from app.services import chat, emotion
 
 EMOTION_JSON = (
@@ -360,3 +364,136 @@ def test_emotion_data_user_isolation(client, db, fake_llm):
     )
     me_b = client.get("/api/v1/users/me", headers=auth(token_b)).json()["data"]
     assert me_b["memory_greeting"] is None
+
+
+# ---------- V2 周报洞察 ----------
+def _sync_db():
+    client = pymongo.MongoClient(os.environ.get("MONGODB_URI", "mongodb://localhost:27017"))
+    return client, client[os.environ.get("MONGODB_DB", "xinyu_test")]
+
+
+def _uid_by_openid(openid="mock_test_user"):
+    client, sdb = _sync_db()
+    doc = sdb[COLL_USERS].find_one({"openid": openid})
+    client.close()
+    return doc["_id"]
+
+
+def _seed_emotion(sdb, uid, emo, intensity, ts):
+    sdb[COLL_EMOTION_RECORDS].insert_one(
+        {
+            "_id": ObjectId(),
+            "user_id": uid,
+            "source": "message",
+            "ref_id": ObjectId(),
+            "emotion": emo,
+            "intensity": intensity,
+            "evidence": None,
+            "risk_level": "none",
+            "strategy_hint": "naming",
+            "created_at": ts,
+        }
+    )
+
+
+def _seed_checkin(sdb, uid, mood, intensity, ts):
+    sdb[COLL_CHECKINS].insert_one(
+        {
+            "_id": ObjectId(),
+            "user_id": uid,
+            "date": ts.strftime("%Y-%m-%d"),
+            "mood": mood,
+            "intensity": intensity,
+            "note": None,
+            "created_at": ts,
+        }
+    )
+
+
+def _at(now, days_ago, hour, minute=0):
+    """业务时区下「N 天前 HH:MM」的时间点（用于构造确定性的时段样本）。"""
+    return (now - timedelta(days=days_ago)).replace(
+        hour=hour, minute=minute, second=0, microsecond=0
+    )
+
+
+def test_weekly_insight_empty(client, db):
+    token = login(client)
+    d = client.get("/api/v1/emotion/weekly-insight", headers=auth(token)).json()["data"]
+    assert d["has_data"] is False
+    assert d["record_count"] == 0 and d["record_days"] == 0
+    assert d["dominant_emotion"] is None and d["peak_period"] is None
+    assert d["intensity_trend"] == "none" and d["period_counts"] == {}
+    assert d["window_days"] == 7 and d["start_date"] and d["end_date"]
+    assert len(d["highlights"]) == 1 and "还没有情绪记录" in d["highlights"][0]
+
+
+def test_weekly_insight_descriptive_peak_and_trend(client, db):
+    """描述性小结：主导情绪 + 时段 + 与上周对比 + 打卡，且不含归因断言。"""
+    token = login(client, mock_openid="wk_insight")
+    uid = _uid_by_openid("wk_insight")
+    sdb_client, sdb = _sync_db()
+    now = now_cst()
+
+    # 本周：3 条焦虑（均出现在晚上/傍晚）+ 1 条平静（早上）
+    _seed_emotion(sdb, uid, "anxious", 8, _at(now, 1, 20))
+    _seed_emotion(sdb, uid, "anxious", 7, _at(now, 1, 19, 30))
+    _seed_emotion(sdb, uid, "anxious", 6, _at(now, 2, 21))
+    _seed_emotion(sdb, uid, "calm", 3, _at(now, 3, 9))
+    # 上一窗口：更高强度（用于趋势对比：本周应「略有下降」）
+    _seed_emotion(sdb, uid, "anxious", 9, _at(now, 9, 20))
+    _seed_emotion(sdb, uid, "anxious", 9, _at(now, 10, 20))
+    # 打卡 2 天
+    _seed_checkin(sdb, uid, "ok", 4, _at(now, 1, 8))
+    _seed_checkin(sdb, uid, "low", 6, _at(now, 2, 8))
+    sdb_client.close()
+
+    d = client.get("/api/v1/emotion/weekly-insight", headers=auth(token)).json()["data"]
+    assert d["has_data"] is True
+    assert d["record_count"] == 6 and d["checkin_days"] == 2
+    assert d["dominant_emotion"]["type"] == "anxious"
+    assert d["peak_period"] == "evening" and d["peak_period_label"] == "晚上"
+    assert d["intensity_trend"] == "down"
+    assert d["avg_intensity"] == 5.7 and d["prev_avg_intensity"] == 9.0
+
+    joined = " ".join(d["highlights"])
+    assert "本周以「焦虑」为主" in joined
+    assert "「焦虑」多出现在晚上" in joined
+    assert "略有下降" in joined
+    assert "本周打卡 2 天" in joined
+    # 红线：只做描述性结论，不得出现归因断言
+    for bad in ("因为", "导致", "由于"):
+        assert bad not in joined
+
+
+def test_weekly_insight_night_not_misbucketed(client, db):
+    """回归：凌晨 02:00（深夜）记录按业务时区归类。
+
+    motor 读回为 naive UTC（02:00 CST = 前一日 18:00 UTC），不做时区归一会被错分到
+    「下午」；本用例确保修正后归为「深夜」。
+    """
+    token = login(client, mock_openid="wk_night")
+    uid = _uid_by_openid("wk_night")
+    sdb_client, sdb = _sync_db()
+    now = now_cst()
+    night = _at(now, 2, 2)
+    _seed_emotion(sdb, uid, "depressed", 6, night)
+    _seed_emotion(sdb, uid, "depressed", 5, night + timedelta(minutes=10))
+    sdb_client.close()
+
+    d = client.get("/api/v1/emotion/weekly-insight", headers=auth(token)).json()["data"]
+    assert d["dominant_emotion"]["type"] == "depressed"
+    assert d["peak_period"] == "night" and d["peak_period_label"] == "深夜"
+    assert "「低落」多出现在深夜" in " ".join(d["highlights"])
+
+
+def test_weekly_insight_user_isolation(client, db):
+    login(client, mock_openid="wk_a")
+    token_b = login(client, mock_openid="wk_b")
+    uid_a = _uid_by_openid("wk_a")
+    sdb_client, sdb = _sync_db()
+    _seed_emotion(sdb, uid_a, "anxious", 7, now_cst() - timedelta(hours=1))
+    sdb_client.close()
+
+    d = client.get("/api/v1/emotion/weekly-insight", headers=auth(token_b)).json()["data"]
+    assert d["has_data"] is False and d["record_count"] == 0

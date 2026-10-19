@@ -24,6 +24,15 @@
     <view class="chart-legend">近 7 天情绪强度（1–10，无记录日跳过不补 0）</view>
   </view>
 
+  <!-- 本周小结（V2 周报洞察，仅描述性结论） -->
+  <view wx:if="{{insight && insight.has_data}}" class="insight-card">
+    <view class="insight-title">本周情绪小结</view>
+    <view class="insight-line" wx:for="{{insight.highlights}}" wx:key="*this">
+      <text class="insight-dot">·</text>{{item}}
+    </view>
+    <view class="insight-range">{{insight.start_date}} 至 {{insight.end_date}}</view>
+  </view>
+
   <!-- 筛选 -->
   <view class="filters">
     <view

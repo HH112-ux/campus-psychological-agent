@@ -30,6 +30,7 @@ Page({
     avgIntensity: null,
     trendDesc: '',
     dominantText: '',
+    insight: null, // 本周小结（V2 周报洞察，has_data 为 false 时不展示）
     bars: [], // {date, label, height, dominant, count, avg}
     items: [],
     page: 0,
@@ -48,9 +49,17 @@ Page({
 
   refresh() {
     this.setData({ items: [], page: 0, hasMore: true, loading: true })
-    Promise.all([this.loadTrend(), this.loadRecords(true)])
+    Promise.all([this.loadTrend(), this.loadInsight(), this.loadRecords(true)])
       .catch(() => wx.showToast({ title: '加载失败，请稍后重试', icon: 'none' }))
       .finally(() => this.setData({ loading: false }))
+  },
+
+  loadInsight() {
+    // V2 周报洞察：服务端已生成描述性小结文案，小程序只渲染
+    return api
+      .get('/api/v1/emotion/weekly-insight?days=7')
+      .then((d) => this.setData({ insight: d }))
+      .catch(() => {})
   },
 
   loadTrend() {

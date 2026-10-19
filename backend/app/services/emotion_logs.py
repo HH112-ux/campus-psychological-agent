@@ -7,7 +7,8 @@
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from collections import Counter
+from datetime import UTC, datetime, timedelta
 
 from bson import ObjectId
 
@@ -164,7 +165,20 @@ async def list_records(
     return {"total": total, "page": page, "page_size": page_size, "items": sliced}
 
 
+def _to_cst(dt: datetime) -> datetime:
+    """统一到业务时区（Asia/Shanghai）。
+
+    motor 从 MongoDB 读回的 datetime 为 **naive UTC**，直接 strftime/hour 会得到
+    UTC 值时相（偏差 8 小时，"深夜"记录会被错分到前一天/下午）；此处按 UTC 解释
+    后转 CST，已是 aware 的直接转换。
+    """
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(CST)
+
+
 def _bucket_key(dt: datetime, granularity: str) -> str:
+    dt = _to_cst(dt)  # 先归一到业务时区再分桶，避免 naive UTC 造成的 8 小时偏移
     if granularity == "week":
         # ISO 周（周一为一周开始）
         iso = dt.isocalendar()
@@ -258,4 +272,151 @@ async def get_trends(user_id: ObjectId, days: int, granularity: str) -> dict:
         "dominant_emotion": (
             {"type": dominant_type, "ratio": round(ratio, 2)} if dominant_type else None
         ),
+    }
+
+
+# ---------- V2 周报洞察 ----------
+
+# 时段归类（按业务时区小时划分）：早上 5–11 / 下午 12–17 / 晚上 18–22 / 深夜 23–4
+_PERIOD_ORDER = ("morning", "afternoon", "evening", "night")
+_PERIOD_LABELS = {"morning": "早上", "afternoon": "下午", "evening": "晚上", "night": "深夜"}
+
+# 六类情绪 → 中文标签（周报文案用）
+_EMOTION_LABELS = {
+    "calm": "平静",
+    "ok": "还行",
+    "anxious": "焦虑",
+    "depressed": "低落",
+    "angry": "烦躁",
+    "other": "其他",
+}
+
+
+def _period_key(dt: datetime) -> str:
+    hour = _to_cst(dt).hour
+    if hour < 5:
+        return "night"
+    if hour < 12:
+        return "morning"
+    if hour < 18:
+        return "afternoon"
+    if hour < 23:
+        return "evening"
+    return "night"
+
+
+def _records_avg(records: list[dict]) -> float | None:
+    if not records:
+        return None
+    return round(sum(r.get("intensity", 0) for r in records) / len(records), 1)
+
+
+async def get_weekly_insight(user_id: ObjectId, days: int = 7) -> dict:
+    """V2 周报洞察：基于既有趋势聚合生成描述性「本周情绪小结」。
+
+    红线（roadmap §V2）：只输出**描述性**结论（如「本周焦虑多出现在晚上」），
+    严禁归因断言——不出现「因为 / 导致 / 由于」类因果句式，不替用户解释成因。
+    无记录时返回 has_data=false 与一句引导文案，不报错。
+    """
+    now = datetime.now(tz=CST)
+    window = days if days in (7, 30) else 7
+    cur_start = _day_start(now) - timedelta(days=window - 1)
+    cur_end = _day_start(now) + timedelta(days=1)
+    prev_start = cur_start - timedelta(days=window)
+
+    cur_emo = await _collect_emotion_records(user_id, cur_start, cur_end)
+    cur_check = await _collect_checkins(user_id, cur_start, cur_end)
+    prev_records = await _collect_emotion_records(
+        user_id, prev_start, cur_start
+    ) + await _collect_checkins(user_id, prev_start, cur_start)
+    cur_records = cur_emo + cur_check
+
+    base = {
+        "window_days": window,
+        "start_date": cur_start.strftime("%Y-%m-%d"),
+        "end_date": (cur_end - timedelta(days=1)).strftime("%Y-%m-%d"),
+    }
+    avg_prev = _records_avg(prev_records)
+
+    if not cur_records:
+        return {
+            **base,
+            "has_data": False,
+            "record_count": 0,
+            "record_days": 0,
+            "checkin_days": 0,
+            "avg_intensity": None,
+            "prev_avg_intensity": avg_prev,
+            "intensity_trend": "none",
+            "dominant_emotion": None,
+            "peak_period": None,
+            "peak_period_label": None,
+            "period_counts": {},
+            "highlights": [f"近 {window} 天还没有情绪记录，聊聊天或打个卡就有了。"],
+        }
+
+    avg_cur = _records_avg(cur_records)
+    trend = "none"
+    if avg_cur is not None and avg_prev is not None:
+        diff = round(avg_cur - avg_prev, 1)
+        trend = "flat" if abs(diff) < 0.5 else ("up" if diff > 0 else "down")
+
+    dominant_type, ratio = _emotion_count(cur_records)
+    dominant_label = _EMOTION_LABELS.get(dominant_type, dominant_type)
+
+    record_days = {
+        _to_cst(r["created_at"]).strftime("%Y-%m-%d")
+        for r in cur_records
+        if r.get("created_at")
+    }
+    checkin_days = len({c.get("date") for c in cur_check if c.get("date")})
+
+    period_counts = Counter(
+        _period_key(r["created_at"]) for r in cur_records if r.get("created_at")
+    )
+    # 主导情绪的时段分布：找它出现最多的时段（并列时取更早时段，保持确定性）
+    dom_period_counts = Counter(
+        _period_key(r["created_at"])
+        for r in cur_records
+        if r.get("created_at") and r.get("emotion") == dominant_type
+    )
+    peak_period = None
+    if dom_period_counts:
+        peak_period = max(
+            dom_period_counts,
+            key=lambda k: (dom_period_counts[k], -_PERIOD_ORDER.index(k)),
+        )
+
+    highlights: list[str] = [
+        f"近 {window} 天你记录了 {len(record_days)} 天、共 {len(cur_records)} 条情绪记录。"
+    ]
+    if dominant_type:
+        highlights.append(f"本周以「{dominant_label}」为主（占 {round((ratio or 0) * 100)}%）。")
+        if peak_period:
+            highlights.append(f"「{dominant_label}」多出现在{_PERIOD_LABELS[peak_period]}。")
+    if trend == "down":
+        highlights.append(f"整体情绪强度比上周略有下降（{avg_prev} → {avg_cur}）。")
+    elif trend == "up":
+        highlights.append(f"整体情绪强度比上周略有上升（{avg_prev} → {avg_cur}）。")
+    elif trend == "flat":
+        highlights.append("整体情绪强度与上周基本持平。")
+    if checkin_days > 0:
+        highlights.append(f"本周打卡 {checkin_days} 天。")
+
+    return {
+        **base,
+        "has_data": True,
+        "record_count": len(cur_records),
+        "record_days": len(record_days),
+        "checkin_days": checkin_days,
+        "avg_intensity": avg_cur,
+        "prev_avg_intensity": avg_prev,
+        "intensity_trend": trend,
+        "dominant_emotion": (
+            {"type": dominant_type, "ratio": round(ratio, 2)} if dominant_type else None
+        ),
+        "peak_period": peak_period,
+        "peak_period_label": _PERIOD_LABELS.get(peak_period) if peak_period else None,
+        "period_counts": dict(period_counts),
+        "highlights": highlights,
     }

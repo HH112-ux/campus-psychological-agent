@@ -73,7 +73,8 @@ sequenceDiagram
 | 13 | POST | /api/v1/emotion/checkins | 每日打卡（覆盖当日） | 是 |
 | 14 | GET | /api/v1/emotion/records | 情绪记录列表（分页/筛选） | 是 |
 | 15 | GET | /api/v1/emotion/trends | 情绪趋势聚合 | 是 |
-| 16 | GET | /api/v1/crisis/resources | 心理求助资源（公开） | 否 |
+| 16 | GET | /api/v1/emotion/weekly-insight | 本周情绪小结（周报洞察） | 是 |
+| 17 | GET | /api/v1/crisis/resources | 心理求助资源（公开） | 否 |
 
 ## 4 · 认证与用户接口
 
@@ -344,6 +345,35 @@ intensity 由 mood 按默认映射生成（calm=2 / ok=4 / low=6 / anxious=7 / i
     "dominant_emotion": { "type": "anxious", "ratio": 0.62 }
   } }
 ```
+
+### GET /api/v1/emotion/weekly-insight
+V2 周报洞察：基于与 `trends` 同源的聚合数据，服务端生成**描述性**「本周情绪小结」，供情绪日志页展示。文案只陈述现象（如「焦虑多出现在晚上」），**不做归因断言**（不出现「因为 / 导致 / 由于」类因果句式）。
+
+| Query 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| days | int | 可选 | 统计窗口，7 或 30，默认 7 |
+
+```
+{ "code": 0, "message": "ok",
+  "data": {
+    "window_days": 7, "start_date": "2026-10-13", "end_date": "2026-10-19",
+    "has_data": true, "record_count": 9, "record_days": 4, "checkin_days": 3,
+    "avg_intensity": 5.4, "prev_avg_intensity": 6.1, "intensity_trend": "down",
+    "dominant_emotion": { "type": "anxious", "ratio": 0.44 },
+    "peak_period": "evening", "peak_period_label": "晚上",
+    "period_counts": { "morning": 1, "afternoon": 2, "evening": 5, "night": 1 },
+    "highlights": [
+      "近 7 天你记录了 4 天、共 9 条情绪记录。",
+      "本周以「焦虑」为主（占 44%）。",
+      "「焦虑」多出现在晚上。",
+      "整体情绪强度比上周略有下降（6.1 → 5.4）。",
+      "本周打卡 3 天。"
+    ]
+  } }
+```
+
+- `has_data: false` 时 `dominant_emotion` / `peak_period` 为 null、`period_counts` 为空对象，`highlights` 仅含一句引导；客户端据此决定是否展示小结卡。
+- 时段按业务时区（Asia/Shanghai）划分：早上 5–11 / 下午 12–17 / 晚上 18–22 / 深夜 23–4；`intensity_trend` 为 `up | down | flat | none`（`none` 表示无上周可比数据）；`highlights` 为服务端拼好的中文短句列表，小程序只渲染。
 
 ## 8 · 危机资源接口
 

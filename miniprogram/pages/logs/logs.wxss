@@ -93,6 +93,39 @@
   color: var(--text-3);
 }
 
+/* 本周小结（V2）：屿青淡染卡，文案来自服务端 */
+.insight-card {
+  background: var(--brand-tint);
+  border-radius: var(--radius-md);
+  padding: 28rpx 32rpx;
+  box-shadow: var(--shadow-soft);
+  margin-bottom: 24rpx;
+}
+
+.insight-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--brand-ink);
+  margin-bottom: 16rpx;
+}
+
+.insight-line {
+  font-size: 27rpx;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.insight-dot {
+  color: var(--brand);
+  margin-right: 10rpx;
+}
+
+.insight-range {
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  color: var(--text-3);
+}
+
 .filters {
   display: flex;
   flex-wrap: wrap;

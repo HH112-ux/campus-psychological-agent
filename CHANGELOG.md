@@ -25,6 +25,10 @@
 
 - **V1 bad-case 复盘机制**：把已收集的点赞/点踩从「只收集不迭代」升级为闭环——“收集 → 复盘 → 迭代 → 回归验证”。新增 `app/services/bad_cases.py`（收集点踩回复，按时间序配对触发它的用户消息、解密内容、关联会话标题，并按原因聚合计数）+ `scripts/export_bad_cases.py`（近 14 天 / 自定义窗口 / 全量导出，支持 `--out` 落文件）+ `docs/bad-case-review-template.md`（逐条归因表 + 迭代项汇总 + 闭环健康度自检，留档不粘贴原文）。隐私：导出文件含解密对话内容，`.gitignore` 新增 `bad-cases*.json` 防御规则。新增 3 项测试（`test_bad_cases.py`）。
 
+### 增值项（V2 周报洞察）
+
+- **V2 本周情绪小结**：基于与 `trends` 同源的聚合数据，服务端生成「本周情绪小结」（新增 `GET /api/v1/emotion/weekly-insight`，复用 `emotion_logs` 聚合逻辑，不新增数据采集）——覆盖记录覆盖天数/条数、主导情绪、主导情绪的**时段分布**（早上/下午/晚上/深夜）、与上周强度对比、打卡天数，并拼装为中文短句列表 `highlights`，小程序情绪日志页以小结卡渲染。红线：只输出**描述性**结论（如「焦虑多出现在晚上」），**严禁归因断言**（不出现「因为 / 导致 / 由于」类因果句式，测试断言强制校验）。附带修复：`emotion_logs` 时区归一（`_to_cst`）——motor 读回的 `created_at` 为 naive UTC，此前 `trends` 按 UTC 分桶存在 8 小时偏移（深夜记录被错分前一日/下午），现统一转为业务时区后再分桶/判时段。新增 4 项测试（`test_emotion.py` 周报洞察段）。
+
 ### 仓库治理与 CI
 
 - **规范对齐与升级**：`docs/repo-governance.md` 补齐「CI 与质量门」章、命名豁免清单、根目录清洁规则与 Push Checklist（新增敏感/产物复查）；HTML 文档包（`campus-agent-*-doc/*.html` + `_shared/` + `assets/`）移出仓库，**`.md` 为唯一入库来源**。

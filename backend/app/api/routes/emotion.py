@@ -54,3 +54,14 @@ async def emotion_trends(
     return ok_response(
         await emotion_logs.get_trends(current_user["_id"], days, granularity)
     )
+
+
+@router.get("/weekly-insight")
+async def weekly_insight(
+    days: int = Query(7, ge=7, le=30),
+    current_user: dict = Depends(get_current_user),
+):
+    """V2 周报洞察：描述性「本周情绪小结」（只陈述现象、不做归因）。"""
+    return ok_response(
+        await emotion_logs.get_weekly_insight(current_user["_id"], days)
+    )
