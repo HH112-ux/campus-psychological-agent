@@ -49,6 +49,10 @@ python3.12 -m venv .venv
 .venv/bin/uvicorn app.main:app --reload --port 8000
 ```
 
+> V1 双周复盘：`.venv/bin/python scripts/export_bad_cases.py --days 14 --out /tmp/bad-cases.json`
+> 导出点踩 bad-case（含解密对话内容，产物已 gitignore，**严禁入库**），
+> 按 `docs/bad-case-review-template.md` 归类复盘。
+
 ### 微信登录配置（P1）
 
 真机登录需在小程序后台获取 `WX_SECRET`；本地无 Secret 时用 mock 模式（`.env`）：

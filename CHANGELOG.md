@@ -21,6 +21,10 @@
 - **M4 人工响应 SOP（草案）**：新增 `docs/crisis-response-sop.md`，定义高危事件的触发条件、值班角色、SLA、升级路径与留痕隐私红线（校方联系人、SLA 数值等待 M2 / 运营补齐，G11）。
 - **二期路线规划**：新增 `docs/improvement-roadmap.md`（v1.1），确立三轨道（门控 M / 使能 E / 增值 V）与「门控项置于关键路径」的排期原则。
 
+### 增值项（V1 反馈闭环）
+
+- **V1 bad-case 复盘机制**：把已收集的点赞/点踩从「只收集不迭代」升级为闭环——“收集 → 复盘 → 迭代 → 回归验证”。新增 `app/services/bad_cases.py`（收集点踩回复，按时间序配对触发它的用户消息、解密内容、关联会话标题，并按原因聚合计数）+ `scripts/export_bad_cases.py`（近 14 天 / 自定义窗口 / 全量导出，支持 `--out` 落文件）+ `docs/bad-case-review-template.md`（逐条归因表 + 迭代项汇总 + 闭环健康度自检，留档不粘贴原文）。隐私：导出文件含解密对话内容，`.gitignore` 新增 `bad-cases*.json` 防御规则。新增 3 项测试（`test_bad_cases.py`）。
+
 ### 仓库治理与 CI
 
 - **规范对齐与升级**：`docs/repo-governance.md` 补齐「CI 与质量门」章、命名豁免清单、根目录清洁规则与 Push Checklist（新增敏感/产物复查）；HTML 文档包（`campus-agent-*-doc/*.html` + `_shared/` + `assets/`）移出仓库，**`.md` 为唯一入库来源**。

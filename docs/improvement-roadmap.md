@@ -244,6 +244,7 @@ flowchart LR
 - **做什么**：把已收集的点赞/点踩 bad-case 做成定期复盘机制（每周导出 → 人工归类 → 提示词/危机词库迭代 → 回归评估集），形成「收集 → 复盘 → 迭代 → 验证」的循环。
 - **价值**：当前只收集不迭代，反馈数据在浪费；此机制是整个体验迭代的发动机。
 - **验收**：每两周至少一个可归因的迭代项，且过 E1 回归门。
+- **落地（已完成）**：`backend/scripts/export_bad_cases.py`（近 14 天/自定义窗口/全量导出，自动配对触发消息并按原因聚合，含解密内容——产物已 gitignore）+ `backend/app/services/bad_cases.py` + `docs/bad-case-review-template.md`（逐条归因表/迭代项汇总/闭环自检）。此后按双周节奏执行复盘。
 
 #### V2 · 周报洞察（原 B5）
 - **做什么**：基于现有趋势聚合生成「本周情绪小结」，展示在情绪日志页或作为订阅消息发送。
@@ -400,6 +401,7 @@ flowchart LR
 | **M5 ③** | 监控告警 MVP（敏感点全覆盖） | ✅ **代码完成**（生产需配置 `ALERT_WEBHOOK_URL` 企业微信群机器人） | `services/alerting.py`：webhook + 同 key 冷却去抖 + 异常不抛出；三处挂点——高危事件通知值班人、模型兜底命中追加词库漏报信号、LLM 降级告警；告警不含命中词与原文；9 项测试，全量 115 passed |
 | **M3** | 为 `purge_expired_data()` 接入 lifespan 调度 + 留存期限可配置 + 到期物理删除测试 | ✅ **代码完成**（留存期限待 M2 确认） | `privacy.run_purge_scheduler()`（`main.lifespan` 启动/取消）；新增 `test_purge_expired_data`（未到期不删 / 到期全删）；配置 `ERASE_RECOVER_DAYS` / `DATA_PURGE_ENABLED` / `DATA_PURGE_INTERVAL_SECONDS` |
 | **M4** | 高危事件人工响应 SOP | ⏳ **草案已出，值班人触达通道已落地**（排班名单/SLA 数值待 M2/运营补齐） | `docs/crisis-response-sop.md`（值班/SLA/升级/留痕）；high 事件即时推送值班群（M5 ③ 企业微信群机器人 webhook，见 §2.2 B 方案） |
+| **V1** | 反馈闭环引擎：bad-case 导出 + 复盘模板 | ✅ **机制已落地**（此后按双周节奏执行复盘，产出归因与迭代项） | `services/bad_cases.py` + `scripts/export_bad_cases.py`（近 14 天/全量导出，含触发消息配对与原因聚合）+ `docs/bad-case-review-template.md`；3 项测试 |
 
 > 剩余门控（M1 提审、M2 校方合作、M5 生产化基建）仍为待启动/外部驱动项，见第三章关键路径。
 

@@ -62,3 +62,10 @@ campus-agent-dev-doc/assets/
 tmp/
 temp/
 .venv39/
+
+# ===== V1 复盘导出产物（含解密对话内容，严禁入库）=====
+bad-cases*.json
+
+# ===== 微信开发者工具误生成的配置（仅 miniprogram/ 下的正式配置入库）=====
+/project.config.json
+/backend/project.config.json
