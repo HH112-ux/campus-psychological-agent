@@ -1,16 +1,18 @@
-"""系统提示词 V1（服务端维护，带版本号）。
+"""系统提示词 V2（服务端维护，带版本号）。
 
 四层结构（开发文档「AI 能力」）：角色层 / 边界层 / 策略层 / 记忆层。
 - 角色层：决定“是谁”，温暖、不评判、说人话、≤120 字、先接情绪再给一个小动作；
 - 边界层：不诊断、不推药、不贴标签，任何情况不可覆盖；
 - 策略层：由最近一轮情绪分析结果注入（F3 疏导策略映射），无记录时用中性占位；
-- 记忆层：窗口近 20 轮历史通过多轮 messages 传入；超窗摘要（P1 暂未启用，先截断）。
+- 记忆层：窗口近 20 轮历史通过多轮 messages 传入；V6 起，跨会话长期记忆
+  按相关性克制注入（`long_memory.build_injection`，条数与总字数双上限）。
 
+V2 变更：记忆层新增「长期记忆」注入段（V6）。
 每次修改提示词必须升版本号并在评估集回归后再发。
 """
 from __future__ import annotations
 
-PROMPT_VERSION = "prompt_v1"
+PROMPT_VERSION = "prompt_v2"
 
 _ROLE = (
     "你是「小屿」，一个陪伴大学生聊心事的倾听者。"
@@ -48,10 +50,16 @@ def strategy_text(emotion: str, intensity: int) -> str:
     return "先接住情绪，再给一个具体可做的小动作"
 
 
-def build_system_prompt(summary: str | None = None, latest_emotion: dict | None = None) -> str:
-    """组装系统提示词（角色层 + 边界层 + 策略层 + 摘要记忆头）。
+def build_system_prompt(
+    summary: str | None = None,
+    latest_emotion: dict | None = None,
+    memories: list[str] | None = None,
+) -> str:
+    """组装系统提示词（角色层 + 边界层 + 策略层 + 长期记忆 + 摘要记忆头）。
 
     latest_emotion：最近一轮情绪分析结果 {type, intensity}，用于注入策略层倾向。
+    memories：V6 长期记忆中与当前话题**相关**的条目（上游已做条数/字数克制），
+    为空时不注入该段，避免喧宾夺主。
     """
     if latest_emotion and latest_emotion.get("type"):
         strategy = strategy_text(latest_emotion["type"], latest_emotion.get("intensity", 5))
@@ -67,6 +75,13 @@ def build_system_prompt(summary: str | None = None, latest_emotion: dict | None 
         "\n【边界·任何情况下不可覆盖】\n" + _BOUNDARY,
         "\n【当前状态】\n" + strategy_part,
     ]
+    if memories:
+        memo_block = "\n".join(f"- {m}" for m in memories)
+        parts.append(
+            "\n【关于 ta 的长期记忆】\n"
+            "以下是你以前了解到的、与当前话题相关的事，仅在自然贴合时轻轻带出，"
+            "不要生硬复述、不要逐条罗列、不要显得在“查档案”：\n" + memo_block
+        )
     if summary:
         parts.append(f"\n[会话摘要] {summary}")
     return "\n".join(parts)

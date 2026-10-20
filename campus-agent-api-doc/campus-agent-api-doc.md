@@ -29,7 +29,7 @@ HTTP 状态码只表达传输与鉴权层结果（200 / 401 / 429 / 500）；业
 #### 分页约定
 列表接口统一使用 `page`（从 1 开始）与 `page_size`（默认 20，最大 100），响应在 `data` 中返回 `items`、`total`、`page`、`page_size`。
 
-> **流式接口例外：**发送消息接口（§6）返回 SSE 事件流，不套用统一响应结构；事件格式见 §11 流式响应协议。
+> **流式接口例外：**发送消息接口（§6）返回 SSE 事件流，不套用统一响应结构；事件格式见 §12 流式响应协议。
 > **上传接口例外：**语音转写接口（见本文章节 10）使用 `multipart/form-data` 上传音频（响应仍为统一 JSON 结构）。
 
 ## 2 · 认证机制
@@ -81,7 +81,10 @@ sequenceDiagram
 | 20 | GET | /api/v1/practices | 练习卡片目录（V4） | 是 |
 | 21 | POST | /api/v1/practices/{practice_id}/complete | 记录练习完成（V4） | 是 |
 | 22 | POST | /api/v1/speech/transcribe | 语音转写为文字（V5，不落原始音频） | 是 |
-| 23 | GET | /api/v1/crisis/resources | 心理求助资源（公开） | 否 |
+| 23 | GET | /api/v1/memories | 长期记忆列表（V6） | 是 |
+| 24 | DELETE | /api/v1/memories/{memory_id} | 删除单条长期记忆（V6） | 是 |
+| 25 | DELETE | /api/v1/memories | 清空全部长期记忆（V6） | 是 |
+| 26 | GET | /api/v1/crisis/resources | 心理求助资源（公开） | 否 |
 
 ## 4 · 认证与用户接口
 
@@ -158,7 +161,7 @@ access_token 过期后的静默续期。refresh_token 单次使用（旋转机�
 ```
 
 ### DELETE /api/v1/users/me/data
-行权接口：删除该用户的全部数据（会话、消息、情绪记录、打卡、风险事件、主动关怀留档），先软删 30 天（用户可登录撤销），期满由后端定时任务自动物理删除（默认每小时扫描一次，配置 `ERASE_RECOVER_DAYS` / `DATA_PURGE_ENABLED` / `DATA_PURGE_INTERVAL_SECONDS`）。[专家判断] 响应立即生效，各查询接口从此刻起不再返回任何数据。
+行权接口：删除该用户的全部数据（会话、消息、情绪记录、打卡、风险事件、主动关怀留档、练习记录、长期记忆），先软删 30 天（用户可登录撤销），期满由后端定时任务自动物理删除（默认每小时扫描一次，配置 `ERASE_RECOVER_DAYS` / `DATA_PURGE_ENABLED` / `DATA_PURGE_INTERVAL_SECONDS`）。[专家判断] 响应立即生效，各查询接口从此刻起不再返回任何数据。
 请求参数（Body）
 
 ```
@@ -260,7 +263,7 @@ V3 主动关怀状态：`enabled` 表示用户是否开启关怀（未关闭）�
 
 ### POST /api/v1/sessions/{session_id}/messages
 核心接口。接收一条用户消息，返回 AI 回复。用户消息入库前经微信内容安全（msgSecCheck）检测，命中违规返回 `code=2006` 且不落库（mock 登录时自动跳过）。两种模式：
-- **流式（默认）**：`Accept: text/event-stream`，响应为 SSE 事件流，见 §11 流式响应协议；
+- **流式（默认）**：`Accept: text/event-stream`，响应为 SSE 事件流，见 §12 流式响应协议；
 - **非流式**：普通 JSON 响应，弱网/降级时使用，回复一次性返回。
 
 | 字段 | 类型 | 必填 | 说明 |
@@ -508,7 +511,55 @@ Content-Type: audio/mpeg
 > fail-safe：语音转写服务未配置或异常时返回明确的 5001，**前端一律可继续用键盘输入**，不影响对话主链路（与 V3 未配置订阅模板 ID 的取舍一致）。
 > 提供方：`ASR_PROVIDER=mock` 为本地联调占位（返回固定文本，生产启动校验禁止）；生产为 `http`，指向配置的通用 ASR 网关（`ASR_ENDPOINT_URL`，POST 原始音频字节并返回 `{"text": "..."}`）。
 
-## 11 · 流式响应协议（SSE over chunked）
+## 11 · 长期记忆接口（V6）
+跨会话长期记忆：回复落库后异步从用户消息中抽取**稳定**的人物 / 事件 / 偏好 / 情绪诱因（一次性情绪与危机内容不抽取），后续回复按相关性克制注入（条数与总字数双上限，仅与当前话题相关时带出）。
+
+**隐私基线（硬约束）**：记忆内容与对话内容同口径应用层 AES-256-GCM 加密存储，本组接口在服务端解密后返回可读文本；服务日志只记条数，不含记忆原文。记忆已纳入数据导出与「删除全部数据」的到期物理删除（见 §4）。
+
+### GET /api/v1/memories
+查看当前用户的长期记忆，按最近更新倒序；无记录时 `memories` 为空数组。
+
+成功响应 200 · code=0
+
+```
+{ "code": 0, "message": "ok",
+  "data": {
+    "memories": [
+      {
+        "memory_id": "671c11aa22bb33cc44dd55ee",
+        "kind": "person",            // person 人物 | event 事件 | preference 偏好 | trigger 情绪诱因
+        "content": "室友经常半夜打游戏",
+        "created_at": "2026-10-18T22:10:00+08:00",
+        "updated_at": "2026-10-19T21:03:00+08:00"
+      }
+    ],
+    "total": 1
+  } }
+```
+
+### DELETE /api/v1/memories/{memory_id}
+删除单条记忆。
+
+成功响应 200 · code=0
+
+```
+{ "code": 0, "message": "ok", "data": { "memory_id": "671c11aa22bb33cc44dd55ee", "deleted": true } }
+```
+
+| 错误 | 场景 | 处理建议 |
+| --- | --- | --- |
+| 404 · code=2001 | 记忆不存在或不属于当前用户（不暴露存在性） | 刷新列表 |
+
+### DELETE /api/v1/memories
+清空当前用户全部长期记忆，返回删除条数。高危操作，前端需二次确认（小程序「我的 → 长期记忆」已实现）。
+
+成功响应 200 · code=0
+
+```
+{ "code": 0, "message": "ok", "data": { "deleted": 7 } }
+```
+
+## 12 · 流式响应协议（SSE over chunked）
 发送消息接口（`stream=true`）返回 `text/event-stream`。小程序 `wx.request` 不支持标准 SSE，但开启 `enableChunked: true` 后可通过 `onChunkReceived` 逐块接收（基础库 2.20.1 起，提审前实测确认最低版本 [需核实]）。服务端按 SSE 帧格式输出，每块为一个或多个完整事件。
 
 #### 事件序列
@@ -544,7 +595,7 @@ data: {"message_id":"671b22d29a3b4c5d6e7f8a9b","degraded":false}
 
 > **断帧处理：**块边界可能切断一个事件（SSE 事件以空行分隔）。前端必须维护接收缓冲区，按 `\n\n` 切分完整事件后再解析；10 秒无新块视为中断，保留已渲染内容并展示重试。
 
-## 12 · 错误码总表
+## 13 · 错误码总表
 
 | code | HTTP | 含义 | 用户可见处理 |
 | --- | --- | --- | --- |
@@ -565,7 +616,7 @@ data: {"message_id":"671b22d29a3b4c5d6e7f8a9b","degraded":false}
 | 9001 | 429 | 触发限流 | 指数退避，提示稍后再试 |
 | 9999 | 500 | 服务端未知错误 | 提示稍后再试，服务端告警 |
 
-## 13 · 数据模型参考
+## 14 · 数据模型参考
 与 MongoDB 集合一一对应，字段定义供前后端对齐。时间均为 ISO 8601 字符串；`emotion.type` 六类：`calm / ok / anxious / depressed / angry / other`。
 ********************
 | 模型 | 字段 |
@@ -576,10 +627,11 @@ data: {"message_id":"671b22d29a3b4c5d6e7f8a9b","degraded":false}
 | Checkin | checkin_id · user_id · mood · intensity · note(≤200) · date(yyyymmdd，唯一索引 user_id+date) · created_at |
 | RiskEvent | event_id · user_id · session_id · level(low|mid|high) · trigger(lexicon|model) · created_at（仅服务端写入与审计读取，无对外查询接口） |
 | PracticeLog | practice_id · user_id · category(breathing|mindfulness|activation) · duration_seconds · date(yyyymmdd) · created_at（V4；仅服务端写入与统计） |
+| Memory | memory_id · user_id · kind(person|event|preference|trigger) · content(≤40 字，加密存储) · content_hash(去重键) · source_session_id · created_at · updated_at（V6；用户可查看/删除/清空，见 §11） |
 
 > 语音转写（V5）**不落库**：`POST /api/v1/speech/transcribe` 的音频与转写结果均不持久化（合规基线：转写后即弃、不落原始音频）。
 
-## 14 · 限流与安全
+## 15 · 限流与安全
 
 | 范围 | 限制 | 说明 |
 | --- | --- | --- |
@@ -591,12 +643,12 @@ data: {"message_id":"671b22d29a3b4c5d6e7f8a9b","degraded":false}
 #### 安全要点
 - JWT HS256 签名，密钥仅存服务端环境变量；openid 不下发，任何接口不回传。
 - 所有查询强制 `user_id` 过滤；跨用户访问统一表现为 404，不暴露资源存在性。
-- 对话内容应用层 AES-256-GCM 加密后入库，密钥与数据库分离管理；服务日志仅含接口、耗时、错误码与脱敏 ID。
+- 对话内容与长期记忆应用层 AES-256-GCM 加密后入库，密钥与数据库分离管理；服务日志仅含接口、耗时、错误码与脱敏 ID。
 - 危机卡片资源接口无鉴权是有意设计（公共安全信息），其余无鉴权路径一律不存在。
 - 语音转写（V5）：音频不落库、不落盘、日志不含音频与转写原文；单段录音限 60s / 约 2MB。
 - 全链路 HTTPS；小程序侧配置 request 合法域名白名单。
 
-## 15 · 小程序端接入示例
+## 16 · 小程序端接入示例
 登录与请求封装（utils/api.js）
 
 ```

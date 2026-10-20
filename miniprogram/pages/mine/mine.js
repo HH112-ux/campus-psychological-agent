@@ -108,6 +108,11 @@ Page({
     wx.navigateTo({ url: '/pages/practice/practice' })
   },
 
+  // V6 长期记忆入口（查看 / 删除 / 清空，PIPL 行权）
+  goMemories() {
+    wx.navigateTo({ url: '/pages/memories/memories' })
+  },
+
   // V3 主动关怀：开关（关闭后后端不再发起订阅消息，可随时重开）
   toggleCaring() {
     const next = !this.data.caringEnabled

@@ -17,6 +17,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
@@ -31,7 +32,7 @@ from app.db.indexes import COLL_MESSAGES, COLL_SESSIONS
 from app.db.mongo import mongo
 from app.db.oid import parse_oid
 from app.llm.zhipu import ZhipuProvider
-from app.services import alerting, content_security, memory
+from app.services import alerting, content_security, long_memory, memory
 from app.services import emotion as emotion_svc
 from app.services.crisis import (
     CrisisResult,
@@ -163,11 +164,29 @@ async def _build_messages(turn: Turn) -> list[dict]:
     history = await memory.load_window(turn.session["_id"])
     # 策略层：注入本会话最近一轮情绪分析结果（F3），无记录则用中性占位
     latest_emotion = await emotion_svc.latest_session_emotion(turn.session["_id"])
+    # 记忆层（V6）：跨会话长期记忆中与当前话题相关的条目（无关则返回空，克制注入）
+    memo_lines = await long_memory.build_injection(turn.user["_id"], turn.content)
     return [
-        {"role": "system", "content": build_system_prompt(latest_emotion=latest_emotion)},
+        {
+            "role": "system",
+            "content": build_system_prompt(latest_emotion=latest_emotion, memories=memo_lines),
+        },
         *history,
         {"role": "user", "content": turn.content},
     ]
+
+
+def _schedule_memory_extraction(turn: Turn) -> None:
+    """V6：回复送达后**异步**抽取长期记忆（后台任务，fail-safe，不阻塞回复）。
+
+    - 危机（high）路径不抽取——只做陪伴，不把危机内容长期留存；
+    - 抽取在独立任务中执行，任何失败由 long_memory.extract_and_save 内部兜底。
+    """
+    if not get_settings().long_memory_enabled or turn.crisis.level == "high":
+        return
+    asyncio.create_task(
+        long_memory.extract_and_save(turn.user["_id"], turn.session["_id"], turn.content)
+    )
 
 
 async def _generate_nonstream(turn: Turn) -> tuple[str, bool]:
@@ -225,6 +244,8 @@ async def reply_nonstream(turn: Turn) -> dict:
         assistant_text, degraded = await _generate_nonstream(turn)
 
     message_id = await _finalize(turn, assistant_text, degraded)
+    # V6：后台异步抽取长期记忆（不阻塞返回；high 危机路径内部跳过）
+    _schedule_memory_extraction(turn)
     emotion = None
     if turn.crisis.level != "high" and get_settings().emotion_analysis_enabled:
         # 回复落库后做情绪分析：成功回填 assistant 消息并写 emotion_records
@@ -264,6 +285,9 @@ async def stream_events(turn: Turn) -> AsyncIterator[tuple[str, dict]]:
         yield "delta", {"content": piece}
     assistant_text = "".join(chunks)
     message_id = await _finalize(turn, assistant_text, degraded)
+
+    # V6：后台异步抽取长期记忆（不阻塞流；high 危机路径内部跳过）
+    _schedule_memory_extraction(turn)
 
     # mid：流结束后插入求助卡片
     if turn.crisis.level == "mid" and turn.crisis_payload:

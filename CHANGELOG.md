@@ -41,6 +41,10 @@
 
 - **V5 语音入口（录音 → 转写 → 用户确认后发送）**：新增 `app/services/speech.py` 与 `POST /api/v1/speech/transcribe`（`multipart/form-data` 上传录音，返回 `{"text": ...}`）。**合规基线（M3 预案）**：音频仅用于本次转写，**转写后即弃、不落原始音频**——不写库、不落盘，日志只记体积与结果状态，不含音频与转写原文；转写结果回到对话输入框，由**用户确认（可编辑）后再发送**，作为普通消息进入对话主链路后才由内容安全与危机拦截统一处理（语音不另开旁路）。**提供方抽象**：`ASR_PROVIDER=mock`（本地联调占位，返回固定文本，生产启动校验禁止）/ `http`（通用 ASR 网关 `ASR_ENDPOINT_URL`，POST 原始音频字节，期望 `{"text": "..."}`）。**fail-safe**：未配置 / 转写失败 / 未识别出文字时返回明确 `code=5001`，前端降级回键盘输入，不阻断主链路；单段录音限 60s / 约 2MB。小程序：对话页新增麦克风按钮（录音计时态 / 转写中态），`utils/api.js` 新增 `uploadFile` / `transcribeAudio`。新增依赖 `python-multipart==0.0.32`（接收音频上传）。**TTS 语音回复本轮未做**：需接第三方 TTS 服务与小程序端音频分发，成本与增量延迟单列评估后再定。E1：评估集按 `docs/eval-gate.md §4` 约定扩充——新增 6 条语音转写噪声样本（口语/无标点/转述对抗），59 → 65 条，报告计数改为动态。新增 11 项测试（`test_speech.py`，含「不落原始音频」断言）+ 3 项生产配置校验（`test_prod_config.py`），全量 **153 passed**。
 
+### 增值项（V6 长期记忆）
+
+- **V6 长期记忆（跨会话记住重要的人与事）**：在 20 轮窗口记忆之外，新增 `app/services/long_memory.py`——回复落库后异步触发轻量模型抽取（`glm-4-flash`、temperature 0.2、8s 硬超时、fail-safe 不阻断对话主链路），只记**稳定可复用**的事实（`person` 人物 / `event` 事件 / `preference` 偏好 / `trigger` 情绪诱因），一次性情绪与危机内容一律不抽取；`content_hash`（类别 + 归一化正文 SHA-256）upsert 去重，单轮 ≤3 条、单条 ≤40 字、单用户上限 100 条（超出删最旧，最小化留存）。**隐私红线**：记忆内容同样 AES-256-GCM 加密存储（复用 `core.crypto`），日志只记条数不含原文；数据导出（解密可读）与到期物理删除均纳入 `memories` 集合。**克制注入**：按当前消息与记忆的字符 2-gram 重合度筛选相关记忆，条数（≤5）与总字数（≤200）双上限，注入 prompt_v2「关于 ta 的长期记忆」段，只在与当前话题相关时带出。**行权接口**：`GET /api/v1/memories`（按最近更新倒序）、`DELETE /api/v1/memories/{id}`（不存在返回 2001/404）、`DELETE /api/v1/memories`（清空）。小程序新增 `pages/memories/memories`（按类别分组查看 / 删除单条 / 二次确认清空全部，空态引导），「我的」页新增入口。E1 同步扩充：`scripts/eval_long_memory.py --gate`（综合命中率 < 80% 退出 1；评估集 `memory_eval_v1.json` 18 条：正向 12 + 对抗 6——一次性情绪/危机/闲聊/琐事/反讽/他人事件），CI `eval` job 同步执行。新增 19 项测试（`test_long_memory.py`），全量 **172 passed**。
+
 ### 仓库治理与 CI
 
 - **规范对齐与升级**：`docs/repo-governance.md` 补齐「CI 与质量门」章、命名豁免清单、根目录清洁规则与 Push Checklist（新增敏感/产物复查）；HTML 文档包（`campus-agent-*-doc/*.html` + `_shared/` + `assets/`）移出仓库，**`.md` 为唯一入库来源**。

@@ -5,7 +5,8 @@
     "pages/logs/logs",
     "pages/practice/practice",
     "pages/mine/mine",
-    "pages/sessions/sessions"
+    "pages/sessions/sessions",
+    "pages/memories/memories"
   ],
   "window": {
     "navigationBarTitleText": "心屿",

@@ -94,3 +94,14 @@ jobs:
           MONGODB_DB: xinyu_ci
           WX_MOCK_LOGIN: "true"
           JWT_SECRET: ci-secret-please-change-0123456789abcdef
+
+      # V6 长期记忆抽取回归门：综合命中率 < 80% 时 job 失败；无 secret 同样 SKIP
+      - name: 长期记忆抽取回归门
+        working-directory: backend
+        run: python scripts/eval_long_memory.py --gate
+        env:
+          ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
+          MONGODB_URI: mongodb://localhost:27017
+          MONGODB_DB: xinyu_ci
+          WX_MOCK_LOGIN: "true"
+          JWT_SECRET: ci-secret-please-change-0123456789abcdef

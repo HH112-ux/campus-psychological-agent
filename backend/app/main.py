@@ -15,6 +15,7 @@ from app.api.routes import (
     crisis,
     emotion,
     health,
+    memory,
     messages,
     practices,
     sessions,
@@ -81,6 +82,7 @@ def create_app() -> FastAPI:
     app.include_router(emotion.router)
     app.include_router(practices.router)
     app.include_router(speech.router)
+    app.include_router(memory.router)
     return app
 
 

@@ -1,0 +1,91 @@
+/* pages/memories/memories.wxss —— 长期记忆（V6），复用 app.wxss 设计令牌 */
+.page {
+  padding: 32rpx 28rpx 60rpx;
+}
+
+.intro {
+  font-size: 26rpx;
+  color: var(--text-3);
+  line-height: 1.6;
+  margin: 8rpx 4rpx 28rpx;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 4rpx 20rpx;
+}
+
+.total {
+  font-size: 24rpx;
+  color: var(--text-3);
+}
+
+.clear {
+  font-size: 26rpx;
+  color: var(--danger);
+  padding: 8rpx 20rpx;
+}
+
+.hint {
+  text-align: center;
+  color: var(--text-3);
+  font-size: 26rpx;
+  padding: 60rpx 0;
+}
+
+.group {
+  margin-bottom: 28rpx;
+}
+
+.group-title {
+  font-size: 24rpx;
+  color: var(--brand);
+  font-weight: 600;
+  margin: 0 4rpx 16rpx;
+}
+
+.mem {
+  display: flex;
+  align-items: center;
+  padding: 24rpx 28rpx;
+  margin-bottom: 14rpx;
+}
+
+.mem-content {
+  flex: 1;
+  font-size: 28rpx;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.mem-del {
+  margin-left: 20rpx;
+  font-size: 24rpx;
+  color: var(--text-3);
+  padding: 8rpx 16rpx;
+}
+
+.empty {
+  padding: 120rpx 40rpx;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 72rpx;
+  margin-bottom: 24rpx;
+}
+
+.empty-title {
+  font-size: 32rpx;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.empty-sub {
+  margin-top: 12rpx;
+  font-size: 26rpx;
+  color: var(--text-3);
+  line-height: 1.6;
+}

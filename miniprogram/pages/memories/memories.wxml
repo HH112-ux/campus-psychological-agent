@@ -1,0 +1,35 @@
+<!-- pages/memories/memories.wxml —— 长期记忆（V6） -->
+<view class="page">
+  <view class="intro">
+    我会记住你提到的重要人物、事件、偏好与情绪诱因，让以后的陪伴更懂你。
+    记忆内容加密存储，只有你能看到，也可以随时删除。
+  </view>
+
+  <view class="toolbar" wx:if="{{total > 0}}">
+    <view class="total">共 {{total}} 条记忆</view>
+    <view class="clear" bindtap="clearAll">清空全部</view>
+  </view>
+
+  <view wx:if="{{loading}}" class="hint">加载中…</view>
+
+  <block wx:elif="{{groups.length > 0}}">
+    <view class="group" wx:for="{{groups}}" wx:key="kind" wx:for-item="group">
+      <view class="group-title">{{group.label}}</view>
+      <view class="card mem" wx:for="{{group.items}}" wx:key="memory_id" wx:for-item="item">
+        <view class="mem-content">{{item.content}}</view>
+        <view
+          class="mem-del"
+          data-id="{{item.memory_id}}"
+          data-content="{{item.content}}"
+          catchtap="removeOne"
+        >删除</view>
+      </view>
+    </view>
+  </block>
+
+  <view wx:else class="empty">
+    <view class="empty-icon">🏝</view>
+    <view class="empty-title">还没有长期记忆</view>
+    <view class="empty-sub">和我多聊聊吧——你提到的重要人和事，我会温柔地记住。</view>
+  </view>
+</view>

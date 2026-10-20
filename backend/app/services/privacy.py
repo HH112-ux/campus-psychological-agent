@@ -21,6 +21,7 @@ from app.db.indexes import (
     COLL_CARE_MESSAGES,
     COLL_CHECKINS,
     COLL_EMOTION_RECORDS,
+    COLL_MEMORIES,
     COLL_MESSAGES,
     COLL_PRACTICE_LOGS,
     COLL_RISK_EVENTS,
@@ -151,6 +152,17 @@ async def export_user_data(user_id: ObjectId) -> dict:
             "created_at": to_iso(p.get("created_at")) if p.get("created_at") else None,
         })
 
+    # 长期记忆（V6；解密 content 后导出可读文本）
+    memories = []
+    async for m in mongo.db[COLL_MEMORIES].find({"user_id": uid}).sort("created_at", 1):
+        memories.append({
+            "memory_id": str(m["_id"]),
+            "kind": m.get("kind"),
+            "content": decrypt(m.get("content")),
+            "created_at": to_iso(m.get("created_at")) if m.get("created_at") else None,
+            "updated_at": to_iso(m.get("updated_at")) if m.get("updated_at") else None,
+        })
+
     return {
         "user": user_info,
         "sessions": sessions,
@@ -160,6 +172,7 @@ async def export_user_data(user_id: ObjectId) -> dict:
         "risk_events": risk_events,
         "care_messages": care_messages,
         "practice_logs": practice_logs,
+        "memories": memories,
         "exported_at": to_iso(now_cst()),
     }
 
@@ -241,6 +254,7 @@ async def purge_expired_data() -> int:
         await mongo.db[COLL_RISK_EVENTS].delete_many({"user_id": uid})
         await mongo.db[COLL_CARE_MESSAGES].delete_many({"user_id": uid})
         await mongo.db[COLL_PRACTICE_LOGS].delete_many({"user_id": uid})
+        await mongo.db[COLL_MEMORIES].delete_many({"user_id": uid})
         await mongo.db[COLL_USERS].delete_one({"_id": uid})
         count += 1
         logger.info("物理删除用户 %s 全部数据", uid)

@@ -10,6 +10,7 @@
 | 单元/集成测试 | `pytest -q`（含危机拦截双链路、内容安全 8 项） | 全绿 | 本地 + CI `backend` job（每次 push/PR） |
 | 小程序语法门 | `node --check` 全量 JS | 全绿 | 本地 + CI `miniprogram` job |
 | **情绪一致率回归门** | `python scripts/eval_emotion_p5.py --gate` | **严格一致率 ≥ 80%** | 本地随时；CI `eval` job（仓库配置 `ZHIPU_API_KEY` secret 后真跑，未配置自动 SKIP 不阻塞） |
+| **长期记忆抽取回归门（V6）** | `python scripts/eval_long_memory.py --gate` | **综合命中率 ≥ 80%**（正向命中类别+关键词、对抗输出空） | 同上，CI `eval` job 同步执行 |
 
 ## 2. 用法
 
@@ -17,17 +18,20 @@
 cd backend
 ./.venv/bin/python scripts/eval_emotion_p5.py          # 出报告 docs/emotion-eval-p5.md，退出 0
 ./.venv/bin/python scripts/eval_emotion_p5.py --gate   # 回归门：< 80% 退出 1
+./.venv/bin/python scripts/eval_long_memory.py          # 出报告 docs/memory-eval-v6.md，退出 0
+./.venv/bin/python scripts/eval_long_memory.py --gate   # 回归门：< 80% 退出 1
 ```
 
 - 评估集：`backend/scripts/eval-data/emotion_eval_v2.json`（65 条：四类 16/18/18/13 + 对抗 11 + 语音转写噪声 6，含黄金强度标注）。
-- 链路与线上一致：`glm-4-flash`、temperature 0.2、同一系统指令与解析器（`app/services/emotion.py`）。
-- 报告每次运行都会重写 `docs/emotion-eval-p5.md`——它是**滚动基线**，重大口径变化时单独留档（如 M3 首测 `emotion-eval-m3.md`）。
+- 长期记忆评估集：`backend/scripts/eval-data/memory_eval_v1.json`（18 条：正向 12 覆盖人物/事件/偏好/情绪诱因 + 对抗 6：一次性情绪、危机内容、闲聊、琐事、反讽、他人事件）。
+- 链路与线上一致：`glm-4-flash`、temperature 0.2、同一系统指令与解析器（`app/services/emotion.py`、`app/services/long_memory.py`）。
+- 报告每次运行都会重写 `docs/emotion-eval-p5.md` 与 `docs/memory-eval-v6.md`——它们是**滚动基线**，重大口径变化时单独留档（如 M3 首测 `emotion-eval-m3.md`）。
 
 ## 3. CI 行为
 
 - `eval` job 每次 push/PR 触发；`ZHIPU_API_KEY` 从仓库 Secrets 注入。
 - **未配置 secret**：脚本打印 `SKIP` 退出 0，job 绿——不阻塞无 key 的贡献者；配置后即转为真门。
-- 评估成本：59 条 × `glm-4-flash` × 200 max_tokens，单次可忽略。
+- 评估成本：65 条 × `glm-4-flash` × 200 max_tokens + 18 条（长期记忆）× 300 max_tokens，单次可忽略。
 
 ## 4. 扩充约定（新增 LLM 能力 → 新增评估样本）
 

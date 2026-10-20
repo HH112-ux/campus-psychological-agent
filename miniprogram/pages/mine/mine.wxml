@@ -47,6 +47,15 @@
     <view class="cell-arrow">›</view>
   </view>
 
+  <view class="cell" bindtap="goMemories">
+    <view class="cell-icon">🏝</view>
+    <view class="cell-main">
+      <view class="cell-title">长期记忆</view>
+      <view class="cell-sub">我记住的人与事，加密存储，可随时查看和删除</view>
+    </view>
+    <view class="cell-arrow">›</view>
+  </view>
+
   <view class="cell" bindtap="showDisclaimer">
     <view class="cell-icon">⚠</view>
     <view class="cell-title">关于与免责声明</view>

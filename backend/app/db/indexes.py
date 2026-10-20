@@ -14,6 +14,7 @@ COLL_CRISIS_LEXICON = "crisis_lexicon"  # 危机词库（P1 起使用，配置�
 COLL_CRISIS_RESOURCES = "crisis_resources"  # 求助资源（运营配置，P1 起使用）
 COLL_CARE_MESSAGES = "care_messages"  # 主动关怀发送留档（V3，周频控依据；仅记类型/状态，不含内容）
 COLL_PRACTICE_LOGS = "practice_logs"  # 练习卡片完成记录（V4；仅记练习 id/类别/时长，不含对话或情绪原文）
+COLL_MEMORIES = "memories"  # 长期记忆（V6；人物/事件/偏好/情绪诱因，正文加密，支持查看与删除）
 
 _INDEX_SPECS: dict[str, list[tuple[list[tuple[str, int]], dict]]] = {
     COLL_USERS: [([("openid", 1)], {"unique": True})],
@@ -24,6 +25,11 @@ _INDEX_SPECS: dict[str, list[tuple[list[tuple[str, int]], dict]]] = {
     COLL_RISK_EVENTS: [([("user_id", 1), ("created_at", -1)], {})],
     COLL_CARE_MESSAGES: [([("user_id", 1), ("created_at", -1)], {})],
     COLL_PRACTICE_LOGS: [([("user_id", 1), ("created_at", -1)], {})],
+    # 查看/注入按最近更新倒序；content_hash 唯一索引用于抽取去重（同一事实不重复入库）
+    COLL_MEMORIES: [
+        ([("user_id", 1), ("updated_at", -1)], {}),
+        ([("user_id", 1), ("content_hash", 1)], {"unique": True}),
+    ],
 }
 
 

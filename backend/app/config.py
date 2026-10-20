@@ -111,6 +111,17 @@ class Settings(BaseSettings):
     asr_max_audio_bytes: int = 2 * 1024 * 1024  # 单段录音体积上限（约 2MB；前端同步限时长 60s）
     asr_mock_text: str = "这是一段语音输入的内容"  # mock 提供方固定返回（仅本地联调）
 
+    # 长期记忆（V6）：跨会话记住人物/事件/偏好/情绪诱因，回复时按相关性克制注入
+    # 总开关关闭时不抽取、不注入（已存记忆仍可在「我的」中查看与删除）
+    long_memory_enabled: bool = True
+    # 抽取调用硬超时（秒），超过即跳过本轮（抽取在后台任务中执行，不阻塞回复）
+    long_memory_extract_timeout_seconds: float = 8.0
+    # 单用户记忆条数上限，超出丢弃最旧的（最小化留存）
+    long_memory_max_items: int = 100
+    # 注入克制：单轮最多带入条数与总字数上限
+    long_memory_inject_max_items: int = 5
+    long_memory_inject_max_chars: int = 200
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @model_validator(mode="after")
