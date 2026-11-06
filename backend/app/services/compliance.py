@@ -156,8 +156,13 @@ _THIRD_PARTY_RE = re.compile(
     r"|朋友|同学|室友|闺蜜|同事|表姐|表哥|表妹|表弟|家人|亲戚"
     r"|医生说|咨询师说|老师说|老师提到|他|她"
 )
-# 科普主语：「抑郁症患者常有这种表现」是在讲群体，不是在给用户下结论
-_GENERIC_SUBJECT_RE = re.compile(r"患者|的人|人群|病友|群体")
+# 科普主语：「抑郁症患者常有这种表现」是在讲群体，不是在给用户下结论。
+# 注意：这里只是「候选」——必须先确认主语不指向用户才能豁免，
+# 否则「你是抑郁症患者」「你可能是一名抑郁症患者」会被一起放行。
+_GENERIC_SUBJECT_RE = re.compile(r"患者|病人|的人|人群|病友|群体")
+# 用户本人充当「患者」的句式：「你作为抑郁症患者」「身为抑郁症患者的你」
+_USER_ROLE_PRE_RE = re.compile(r"(?:你|您)(?:也)?(?:作为|身为|是|就?是|属于)")
+_USER_ROLE_POST_RE = re.compile(r"(?:患者|病人)(?:之一)?(?:的)?(?:你|您)")
 # 科普/泛指语境（「有些人可能会得抑郁症」），用于豁免「推测词 + 明确病名」判定
 _GENERIC_PRE_RE = re.compile(r"有些人|有人|有的人|很多人|人们|大家")
 
@@ -167,16 +172,36 @@ def _third_party(pre: str) -> bool:
     return bool(_THIRD_PARTY_RE.search(pre)) and not _USER_RE.search(pre)
 
 
+def _user_subject(pre: str, post: str) -> bool:
+    """这一处病名的中心语/主语是否指向用户本人。
+
+    - 「身为抑郁症患者的你」「…患者之一」：中心语就是「你」，指向用户；
+    - 第三方/转述主语且整句没有「你/您」：不指向用户；
+    - 病名前出现「你/您」（你是… / 你作为… / 你可能是一名…）：指向用户。
+    """
+    if _USER_ROLE_POST_RE.match(post):
+        return True
+    if _third_party(pre):
+        return False
+    return bool(_USER_RE.search(pre))
+
+
 def _diagnosis(text: str) -> bool:
     """判断一句话是否在给用户下诊断结论（而非描述情绪）。"""
     # 1) 明确病名：需要判断/分度/推断/归类语境，单纯科普「抑郁症很常见」放行
     for match in _DISORDER_RE.finditer(text):
         pre = _before(text, match.start())
-        post = text[match.end() : match.end() + 4]
-        if _GENERIC_SUBJECT_RE.match(post) or _third_party(pre):
+        post = text[match.end() : match.end() + 10]
+        # 「患者/病人」只在主语明确是第三方或泛称时豁免；指向用户时不豁免
+        if _GENERIC_SUBJECT_RE.match(post) and not _user_subject(pre, post):
+            continue
+        if _third_party(pre):
             continue
         if _NEGATED_DIAGNOSIS_RE.search(pre):
             continue
+        # 「你作为抑郁症患者」「身为抑郁症患者的你」：用户本人即患者
+        if _USER_ROLE_PRE_RE.search(pre) or _USER_ROLE_POST_RE.match(post):
+            return True
         if _DIAG_VERB_RE.search(pre) or _SEVERITY_RE.search(pre) or _CLASSIFY_RE.search(pre):
             return True
         if _PERSON_RE.search(pre) and (_INFER_RE.search(pre) or re.search(r"[是有]", pre)):
@@ -197,8 +222,10 @@ def _diagnosis(text: str) -> bool:
         if text[match.end() : match.end() + 1] == "症":
             continue  # 明确病名，已在上面的分支处理
         pre = _before(text, match.start(), 12)
-        post = text[match.end() : match.end() + 3]
-        if _third_party(pre) or _GENERIC_SUBJECT_RE.match(post):
+        post = text[match.end() : match.end() + 10]
+        if _third_party(pre):
+            continue
+        if _GENERIC_SUBJECT_RE.match(post) and not _user_subject(pre, post):
             continue
         if _NEGATED_DIAGNOSIS_RE.search(pre):
             continue
@@ -245,7 +272,14 @@ def _efficacy_hit(sentence: str) -> bool:
 
 
 def detect(sentence: str) -> str | None:
-    """返回该句命中的违规类别（diagnosis/medication/efficacy），未命中返回 None。"""
+    """返回该句命中的违规类别（diagnosis/medication/efficacy），未命中返回 None。
+
+    多行输入按与 `sanitize` 完全相同的跨行规则判定，保证「检测」与「替换」口径一致，
+    不会把两行独立句子压成一句假诊断。
+    """
+    if "\n" in sentence:
+        _, hits = sanitize(sentence)
+        return hits[0] if hits else None
     text = _squash(sentence)
     if _diagnosis(text):
         return "diagnosis"

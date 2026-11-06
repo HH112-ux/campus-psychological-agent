@@ -165,6 +165,13 @@ COMPLIANCE_CASES: list[tuple[str, str | None]] = [
     ("你患焦虑症了", "diagnosis"),
     ("你可能焦慮很久了", "diagnosis"),
     ("你患了抑鬱症", "diagnosis"),
+    # 诊断结论：第四轮复审 B-1（「患者/病人」必须先判主语归属，指向用户不豁免）
+    ("你是抑郁症患者", "diagnosis"),
+    ("你可能是一名抑郁症患者", "diagnosis"),
+    ("你就是抑郁症患者", "diagnosis"),
+    ("你作为抑郁症患者", "diagnosis"),
+    ("身为抑郁症患者的你", "diagnosis"),
+    ("你是焦虑症的病人", "diagnosis"),
     # 药物 / 用药指导
     ("建议服用 SSRI 类药物", "medication"),
     ("建议服用SNRI类药物", "medication"),
@@ -220,7 +227,10 @@ COMPLIANCE_CASES: list[tuple[str, str | None]] = [
     ("我有个朋友得了抑郁症，现在好多了", None),
     ("医生说他有抑郁症，建议他去看看", None),
     ("我表姐患上了焦虑症", None),
-    ("抑郁症患者常有这种表现", None),
+    ("我朋友是抑郁症患者", None),
+    ("抑郁症患者常需要长期支持", None),
+    ("抑郁症患者需要理解", None),
+    ("患者家属也需要支持", None),
     # 共情镜像：「的情绪 / 的感觉」是描述感受，不是诊断（第三轮复审 S-3）
     ("你有焦虑的情绪", None),
     ("你有焦虑的感觉", None),
