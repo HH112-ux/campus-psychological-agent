@@ -7,9 +7,11 @@ Component({
     resources: { type: Array, value: [] },
     closable: { type: Boolean, value: false }, // high 常驻不可关；mid 可关
   },
+  // data 只能声明一次：对象字面量中后写的同名键会覆盖先写的，故合并为单一来源
   data: {
     title: '',
     subtitle: '',
+    _items: [],
   },
   observers: {
     level(v) {
@@ -32,11 +34,6 @@ Component({
       }))
       this.setData({ _items: decorated })
     },
-  },
-  data: {
-    title: '',
-    subtitle: '',
-    _items: [],
   },
   methods: {
     onCall(e) {
