@@ -19,11 +19,11 @@
 /* 连续记录：暖沙橘高光 */
 .streak-badge {
   display: inline-block;
-  font-size: 28rpx;
+  font-size: var(--fs-body-s);
   font-weight: 600;
   color: var(--accent-ink);
   background: var(--accent-tint);
-  border-radius: 12rpx;
+  border-radius: var(--radius-sm);
   padding: 6rpx 18rpx;
 }
 
@@ -34,13 +34,13 @@
 
 .trend-desc {
   margin-top: 18rpx;
-  font-size: 30rpx;
+  font-size: var(--fs-body);
   color: var(--text);
 }
 
 .trend-dom {
   margin-top: 8rpx;
-  font-size: 26rpx;
+  font-size: var(--fs-caption);
   color: var(--text-2);
 }
 
@@ -64,7 +64,7 @@
   display: flex;
   align-items: flex-end;
   background: var(--input-bg);
-  border-radius: 8rpx;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
@@ -72,7 +72,7 @@
 .bar {
   width: 100%;
   background: linear-gradient(180deg, var(--brand-soft), var(--brand));
-  border-radius: 8rpx 8rpx 0 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   min-height: 6rpx;
 }
 
@@ -83,13 +83,13 @@
 
 .bar-label {
   margin-top: 10rpx;
-  font-size: 22rpx;
+  font-size: var(--fs-micro);
   color: var(--text-3);
 }
 
 .chart-legend {
   margin-top: 12rpx;
-  font-size: 22rpx;
+  font-size: var(--fs-micro);
   color: var(--text-3);
 }
 
@@ -103,14 +103,14 @@
 }
 
 .insight-title {
-  font-size: 28rpx;
+  font-size: var(--fs-body-s);
   font-weight: 600;
   color: var(--brand-ink);
   margin-bottom: 16rpx;
 }
 
 .insight-line {
-  font-size: 27rpx;
+  font-size: var(--fs-body-s);
   color: var(--text);
   line-height: 1.6;
 }
@@ -122,7 +122,7 @@
 
 .insight-range {
   margin-top: 14rpx;
-  font-size: 22rpx;
+  font-size: var(--fs-micro);
   color: var(--text-3);
 }
 
@@ -135,10 +135,10 @@
 .chip {
   margin: 0 12rpx 16rpx 0;
   padding: 10rpx 28rpx;
-  font-size: 26rpx;
+  font-size: var(--fs-caption);
   color: var(--text-2);
   background: var(--surface);
-  border-radius: 32rpx;
+  border-radius: 999rpx;
   box-shadow: var(--shadow-soft);
 }
 
@@ -168,7 +168,7 @@
 .tl-badge {
   width: 72rpx;
   height: 72rpx;
-  border-radius: 36rpx;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -194,35 +194,35 @@
 
 .tl-int {
   margin-left: 12rpx;
-  font-size: 26rpx;
+  font-size: var(--fs-caption);
   color: var(--text-2);
 }
 
 .tl-time {
   margin-left: auto;
-  font-size: 24rpx;
+  font-size: var(--fs-caption);
   color: var(--text-3);
 }
 
 .tl-src {
   margin-top: 6rpx;
-  font-size: 24rpx;
+  font-size: var(--fs-caption);
   color: var(--text-3);
 }
 
 .tl-evidence {
   margin-top: 8rpx;
-  font-size: 26rpx;
+  font-size: var(--fs-caption);
   color: var(--text);
   background: var(--input-bg);
-  border-radius: 10rpx;
+  border-radius: var(--radius-sm);
   padding: 10rpx 16rpx;
   line-height: 1.5;
 }
 
 .tl-action {
   margin-top: 10rpx;
-  font-size: 24rpx;
+  font-size: var(--fs-caption);
   color: var(--brand);
 }
 
@@ -237,13 +237,13 @@
 
 .empty-text {
   margin-top: 16rpx;
-  font-size: 28rpx;
+  font-size: var(--fs-body-s);
   color: var(--text-3);
 }
 
 .loading {
   padding: 28rpx 0;
   text-align: center;
-  font-size: 24rpx;
+  font-size: var(--fs-caption);
   color: var(--text-3);
 }

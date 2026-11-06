@@ -9,14 +9,14 @@
 }
 
 .hero-title {
-  font-size: 44rpx;
+  font-size: var(--fs-display);
   font-weight: 600;
   color: var(--text);
 }
 
 .hero-sub {
   margin-top: 12rpx;
-  font-size: 28rpx;
+  font-size: var(--fs-body-s);
   color: var(--text-2);
 }
 
@@ -29,14 +29,14 @@
 }
 
 .quote-text {
-  font-size: 30rpx;
+  font-size: var(--fs-body);
   color: var(--brand-ink);
   line-height: 1.6;
 }
 
 .quote-foot {
   margin-top: 10rpx;
-  font-size: 24rpx;
+  font-size: var(--fs-caption);
   color: var(--brand-soft);
   text-align: right;
 }
@@ -51,13 +51,14 @@
   margin-bottom: 24rpx;
 }
 
+/* emoji 字形位：P1 图标体系替换前的过渡 */
 .memory-icon {
   font-size: 40rpx;
   margin-right: 16rpx;
 }
 
 .memory-text {
-  font-size: 28rpx;
+  font-size: var(--fs-body-s);
   color: var(--memory-text);
   line-height: 1.6;
   flex: 1;
@@ -72,7 +73,7 @@
 }
 
 .card-title {
-  font-size: 34rpx;
+  font-size: var(--fs-h2);
   font-weight: 600;
   margin-bottom: 24rpx;
   display: flex;
@@ -81,7 +82,7 @@
 }
 
 .card-date {
-  font-size: 24rpx;
+  font-size: var(--fs-caption);
   font-weight: 400;
   color: var(--text-3);
 }
@@ -98,7 +99,7 @@
   background: var(--input-bg);
   border-radius: var(--radius-sm);
   border: 2rpx solid transparent;
-  transition: transform 0.1s ease;
+  transition: transform var(--dur-fast) ease;
 }
 
 .mood-item--on {
@@ -113,7 +114,7 @@
 
 .mood-label {
   margin-top: 8rpx;
-  font-size: 26rpx;
+  font-size: var(--fs-caption);
   color: var(--text);
 }
 
@@ -129,7 +130,7 @@
   border-radius: var(--radius-sm);
   padding: 20rpx 24rpx 44rpx;
   box-sizing: border-box;
-  font-size: 28rpx;
+  font-size: var(--fs-body-s);
 }
 
 .note-ph {
@@ -140,7 +141,7 @@
   position: absolute;
   right: 20rpx;
   bottom: 14rpx;
-  font-size: 22rpx;
+  font-size: var(--fs-micro);
   color: var(--text-3);
 }
 
@@ -151,7 +152,7 @@
   text-align: center;
   background: var(--brand);
   color: #fff;
-  font-size: 32rpx;
+  font-size: var(--fs-h2);
   border-radius: var(--radius-sm);
 }
 
@@ -177,7 +178,7 @@
 }
 
 .done-line {
-  font-size: 30rpx;
+  font-size: var(--fs-body);
   color: var(--text);
   display: flex;
   align-items: center;
@@ -187,16 +188,16 @@
 /* 连续打卡：暖沙橘，鼓励性高光 */
 .streak-badge {
   margin-left: 12rpx;
-  font-size: 24rpx;
+  font-size: var(--fs-caption);
   color: var(--accent-ink);
   background: var(--accent-tint);
-  border-radius: 12rpx;
+  border-radius: var(--radius-sm);
   padding: 4rpx 14rpx;
 }
 
 .done-note {
   margin-top: 8rpx;
-  font-size: 26rpx;
+  font-size: var(--fs-caption);
   color: var(--text-2);
 }
 
@@ -214,18 +215,18 @@
 }
 
 .chat-entry-title {
-  font-size: 32rpx;
+  font-size: var(--fs-h2);
   font-weight: 600;
   color: var(--text);
 }
 
 .chat-entry-sub {
   margin-top: 8rpx;
-  font-size: 24rpx;
+  font-size: var(--fs-caption);
   color: var(--text-3);
 }
 
 .chat-entry-arrow {
-  font-size: 40rpx;
+  font-size: var(--fs-h2);
   color: var(--text-3);
 }

@@ -30,6 +30,10 @@ page {
   --text-3: #7a736b;
   --disabled: #bfd1c9;    /* 禁用态填充 */
 
+  /* 原生 TabBar 读不到 WXSS 变量，配色写在 app.json：
+     color=--text-3 / selectedColor=--brand / backgroundColor=--surface-warm，
+     改这三个令牌时须同步改 app.json，图标见 assets/tabbar/ */
+
   /* —— 语义色（安全功能，语义不得被主色同化） —— */
   --danger: #c1342a;
   --danger-tint: #fcebe8;
@@ -44,17 +48,33 @@ page {
   --memory-bg: #fbf4e6;
   --memory-text: #7a6437;
 
-  /* —— 形状与层次 —— */
-  --radius-lg: 28rpx;
-  --radius-md: 22rpx;
-  --radius-sm: 16rpx;
+  /* —— 形状（圆角 3 档 + 特例；此外禁用） —— */
+  --radius-lg: 28rpx;   /* 大卡片、底部弹层、危机卡 */
+  --radius-md: 20rpx;   /* 标准卡片、气泡、输入框 */
+  --radius-sm: 12rpx;   /* 小卡、内部色块、情绪项、徽章 */
+  /* 特例：圆形 50%（头像/色点）、胶囊 999rpx（按钮/chip）、气泡指向角 8rpx */
   --shadow-card: 0 6rpx 20rpx rgba(63, 58, 50, 0.05);
   --shadow-soft: 0 2rpx 10rpx rgba(63, 58, 50, 0.04);
+  --shadow-brand: 0 16rpx 40rpx rgba(62, 122, 105, 0.25);  /* 品牌投影：仅呼吸圆、主按钮等单点强调 */
+  --scrim: rgba(47, 42, 36, 0.45);                          /* 弹层遮罩 */
+
+  /* —— 字阶（6 档，此外字号禁用；emoji 字形位为 P1 替换前的过渡例外） —— */
+  --fs-display: 40rpx;  /* 页面大标题 / 问候语 */
+  --fs-h2: 32rpx;       /* 卡片标题、功能入口标题 */
+  --fs-body: 30rpx;     /* 正文、气泡、输入框 */
+  --fs-body-s: 28rpx;   /* 次要正文、日签、记忆问候 */
+  --fs-caption: 24rpx;  /* 元信息、时间戳、说明 */
+  --fs-micro: 22rpx;    /* 角标、图例、字数统计 */
+
+  /* —— 动效时长（3 档；呼吸练习动画为功能例外，不受限） —— */
+  --dur-fast: 120ms;    /* 按下 / 选中反馈 */
+  --dur-base: 240ms;    /* 卡片出现、弹层 */
+  --dur-slow: 400ms;    /* 氛围动效上限 */
 
   background: var(--bg);
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
   color: var(--text);
-  font-size: 30rpx;
+  font-size: var(--fs-body);
 }
 
 .container {

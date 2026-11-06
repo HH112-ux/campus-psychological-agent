@@ -1,10 +1,11 @@
+/* pages/practice/practice.wxss —— 练习页，全部使用 app.wxss 设计令牌，不持有字面色值 */
 .page {
   padding: 32rpx 28rpx 60rpx;
 }
 
 .intro {
-  font-size: 26rpx;
-  color: #7a736b;
+  font-size: var(--fs-body-s);
+  color: var(--text-3);
   line-height: 1.6;
   margin: 8rpx 4rpx 28rpx;
 }
@@ -18,9 +19,9 @@
 .card {
   position: relative;
   padding: 30rpx 32rpx;
-  background: #ffffff;
-  border-radius: 24rpx;
-  box-shadow: 0 8rpx 24rpx rgba(156, 87, 34, 0.08);
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
 }
 
 .card-top {
@@ -31,28 +32,28 @@
 }
 
 .cat {
-  font-size: 24rpx;
-  color: #3e7a69;
-  background: rgba(62, 122, 105, 0.1);
+  font-size: var(--fs-caption);
+  color: var(--brand);
+  background: var(--brand-tint);
   padding: 4rpx 16rpx;
   border-radius: 999rpx;
 }
 
 .dur {
-  font-size: 24rpx;
-  color: #9c936b;
+  font-size: var(--fs-caption);
+  color: var(--text-3);
 }
 
 .card-title {
-  font-size: 34rpx;
-  color: #2f2a24;
+  font-size: var(--fs-h2);
+  color: var(--text);
   font-weight: 600;
 }
 
 .card-sub {
   margin-top: 8rpx;
-  font-size: 26rpx;
-  color: #7a736b;
+  font-size: var(--fs-body-s);
+  color: var(--text-3);
   line-height: 1.5;
 }
 
@@ -60,8 +61,8 @@
   position: absolute;
   top: 30rpx;
   right: 32rpx;
-  font-size: 22rpx;
-  color: #9c5722;
+  font-size: var(--fs-micro);
+  color: var(--accent-ink);
 }
 
 /* ---------- 练习面板 ---------- */
@@ -69,7 +70,7 @@
 .mask {
   position: fixed;
   inset: 0;
-  background: rgba(47, 42, 36, 0.45);
+  background: var(--scrim);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -78,8 +79,8 @@
 
 .sheet {
   width: 100%;
-  background: #f7f4ef;
-  border-radius: 32rpx 32rpx 0 0;
+  background: var(--bg);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   padding: 40rpx 36rpx calc(48rpx + env(safe-area-inset-bottom));
 }
 
@@ -88,15 +89,15 @@
 }
 
 .sheet-title {
-  font-size: 38rpx;
+  font-size: var(--fs-display);
   font-weight: 600;
-  color: #2f2a24;
+  color: var(--text);
 }
 
 .sheet-sub {
   margin-top: 10rpx;
-  font-size: 26rpx;
-  color: #7a736b;
+  font-size: var(--fs-body-s);
+  color: var(--text-3);
 }
 
 .breath-wrap {
@@ -110,18 +111,18 @@
   width: 220rpx;
   height: 220rpx;
   border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, #6fb3a1, #3e7a69);
+  background: radial-gradient(circle at 30% 30%, var(--brand-soft), var(--brand));
   display: flex;
   align-items: center;
   justify-content: center;
   transition-property: transform;
   transition-timing-function: ease-in-out;
-  box-shadow: 0 16rpx 40rpx rgba(62, 122, 105, 0.25);
+  box-shadow: var(--shadow-brand);
 }
 
 .breath-text {
   color: #ffffff;
-  font-size: 32rpx;
+  font-size: var(--fs-h2);
   letter-spacing: 4rpx;
 }
 
@@ -132,16 +133,16 @@
 .mind-step {
   padding: 18rpx 20rpx;
   margin-bottom: 14rpx;
-  font-size: 28rpx;
-  color: #7a736b;
-  background: #ffffff;
-  border-radius: 18rpx;
+  font-size: var(--fs-body-s);
+  color: var(--text-3);
+  background: var(--surface);
+  border-radius: var(--radius-sm);
   line-height: 1.5;
 }
 
 .mind-step.on {
-  color: #2f2a24;
-  background: rgba(62, 122, 105, 0.12);
+  color: var(--text);
+  background: var(--brand-tint);
   font-weight: 500;
 }
 
@@ -154,12 +155,12 @@
   align-items: center;
   padding: 22rpx 20rpx;
   margin-bottom: 14rpx;
-  background: #ffffff;
-  border-radius: 18rpx;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
 }
 
 .task.on {
-  background: rgba(62, 122, 105, 0.12);
+  background: var(--brand-tint);
 }
 
 .tick {
@@ -167,24 +168,25 @@
   height: 40rpx;
   margin-right: 18rpx;
   border-radius: 50%;
-  border: 2rpx solid #3e7a69;
-  color: #3e7a69;
-  font-size: 26rpx;
+  border: 2rpx solid var(--brand);
+  color: var(--brand);
+  font-size: var(--fs-caption);
   text-align: center;
   line-height: 38rpx;
 }
 
 .task-text {
-  font-size: 28rpx;
-  color: #2f2a24;
+  font-size: var(--fs-body-s);
+  color: var(--text);
 }
 
+/* 功能性例外：计时数字需在 220rpx 圆内远距离可读，保留 56rpx 大字号 */
 .timer {
   text-align: center;
   margin: 24rpx 0 8rpx;
   font-size: 56rpx;
   font-weight: 600;
-  color: #3e7a69;
+  color: var(--brand);
   font-variant-numeric: tabular-nums;
 }
 
@@ -197,17 +199,17 @@
 .btn-main,
 .btn-ghost {
   flex: 1;
-  font-size: 30rpx;
-  border-radius: 22rpx;
+  font-size: var(--fs-body);
+  border-radius: var(--radius-md);
   line-height: 88rpx;
 }
 
 .btn-main {
-  background: #3e7a69;
+  background: var(--brand);
   color: #ffffff;
 }
 
 .btn-ghost {
-  background: #ffffff;
-  color: #3e7a69;
+  background: var(--surface);
+  color: var(--brand);
 }

@@ -4,7 +4,7 @@
 }
 
 .intro {
-  font-size: 26rpx;
+  font-size: var(--fs-body-s);
   color: var(--text-3);
   line-height: 1.6;
   margin: 8rpx 4rpx 28rpx;
@@ -18,12 +18,12 @@
 }
 
 .total {
-  font-size: 24rpx;
+  font-size: var(--fs-caption);
   color: var(--text-3);
 }
 
 .clear {
-  font-size: 26rpx;
+  font-size: var(--fs-caption);
   color: var(--danger);
   padding: 8rpx 20rpx;
 }
@@ -31,7 +31,7 @@
 .hint {
   text-align: center;
   color: var(--text-3);
-  font-size: 26rpx;
+  font-size: var(--fs-body-s);
   padding: 60rpx 0;
 }
 
@@ -40,7 +40,7 @@
 }
 
 .group-title {
-  font-size: 24rpx;
+  font-size: var(--fs-caption);
   color: var(--brand);
   font-weight: 600;
   margin: 0 4rpx 16rpx;
@@ -55,14 +55,14 @@
 
 .mem-content {
   flex: 1;
-  font-size: 28rpx;
+  font-size: var(--fs-body-s);
   color: var(--text);
   line-height: 1.5;
 }
 
 .mem-del {
   margin-left: 20rpx;
-  font-size: 24rpx;
+  font-size: var(--fs-caption);
   color: var(--text-3);
   padding: 8rpx 16rpx;
 }
@@ -78,14 +78,14 @@
 }
 
 .empty-title {
-  font-size: 32rpx;
+  font-size: var(--fs-h2);
   color: var(--text);
   font-weight: 600;
 }
 
 .empty-sub {
   margin-top: 12rpx;
-  font-size: 26rpx;
+  font-size: var(--fs-body-s);
   color: var(--text-3);
   line-height: 1.6;
 }

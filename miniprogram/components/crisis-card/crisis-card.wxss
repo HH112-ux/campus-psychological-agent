@@ -1,7 +1,7 @@
-/* components/crisis-card/crisis-card.wxss
-   危机卡片 —— 安全功能，语义强度不可被主题弱化。
+/* 危机卡片 —— 安全功能，语义强度不可被主题弱化。
    仅做「色相微暖 + 圆角统一」的协调，保留红/琥珀的醒目度与相互区分度。
-   组件内使用字面色值，避免依赖全局变量继承（样式隔离下更稳妥）。 */
+   组件内保留字面色值与字面字号：组件样式隔离下不依赖全局变量继承，更稳妥；
+   字面字号已对齐全局 6 档字阶（22/24/28/30/32），色值即语义红/琥珀/暖灰的唯一定义处。 */
 .crisis-card {
   border-radius: 28rpx;
   padding: 28rpx 28rpx 24rpx;
@@ -42,18 +42,18 @@
   height: 48rpx;
   line-height: 44rpx;
   text-align: center;
-  font-size: 40rpx;
+  font-size: 32rpx;
   color: #8a7f78;
 }
 .cc-title {
   margin-top: 16rpx;
-  font-size: 34rpx;
+  font-size: 32rpx;
   font-weight: 700;
   color: #2b2825;
 }
 .cc-subtitle {
   margin-top: 10rpx;
-  font-size: 27rpx;
+  font-size: 28rpx;
   line-height: 1.6;
   color: #5e5852;
 }
@@ -77,13 +77,13 @@
   min-width: 0;
 }
 .cc-item-name {
-  font-size: 29rpx;
+  font-size: 30rpx;
   font-weight: 600;
   color: #2b2825;
 }
 .cc-item-meta {
   margin-top: 6rpx;
-  font-size: 23rpx;
+  font-size: 24rpx;
   color: #8a7f78;
 }
 .cc-item-right {
@@ -92,7 +92,7 @@
 }
 /* 求助电话：高危红，保证一眼可拨 */
 .cc-phone {
-  font-size: 28rpx;
+  font-size: 30rpx;
   font-weight: 700;
   color: #c1342a;
   letter-spacing: 0.5rpx;

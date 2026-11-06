@@ -17,10 +17,10 @@
 .avatar {
   width: 104rpx;
   height: 104rpx;
-  border-radius: 52rpx;
+  border-radius: 50%;
   background: linear-gradient(135deg, var(--brand-soft), var(--brand));
   color: #ffffff;
-  font-size: 48rpx;
+  font-size: var(--fs-display);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -33,13 +33,13 @@
 }
 
 .nickname {
-  font-size: 36rpx;
+  font-size: var(--fs-h2);
   font-weight: 600;
 }
 
 .profile-sub {
   margin-top: 8rpx;
-  font-size: 24rpx;
+  font-size: var(--fs-caption);
   color: var(--text-3);
   line-height: 1.5;
 }
@@ -54,6 +54,7 @@
   box-shadow: var(--shadow-card);
 }
 
+/* emoji 字形位：P1 图标体系替换前的过渡 */
 .cell-icon {
   font-size: 36rpx;
   margin-right: 20rpx;
@@ -65,24 +66,24 @@
 
 .cell-sub {
   margin-top: 6rpx;
-  font-size: 24rpx;
+  font-size: var(--fs-caption);
   color: var(--text-3);
   line-height: 1.5;
 }
 
 .cell-title {
   flex: 1;
-  font-size: 30rpx;
+  font-size: var(--fs-body);
   color: var(--text);
 }
 
 .cell-arrow {
-  font-size: 36rpx;
+  font-size: var(--fs-h2);
   color: var(--text-3);
 }
 
 .group-title {
-  font-size: 24rpx;
+  font-size: var(--fs-caption);
   color: var(--text-3);
   margin: 8rpx 8rpx 16rpx;
 }
@@ -102,18 +103,18 @@
 }
 
 .hotline-name {
-  font-size: 30rpx;
+  font-size: var(--fs-body);
   color: var(--text);
 }
 
 .hotline-meta {
   margin-top: 6rpx;
-  font-size: 24rpx;
+  font-size: var(--fs-caption);
   color: var(--text-3);
 }
 
 .hotline-phone {
-  font-size: 30rpx;
+  font-size: var(--fs-body);
   font-weight: 600;
   color: var(--brand);
 }
@@ -121,6 +122,6 @@
 .version {
   margin-top: 32rpx;
   text-align: center;
-  font-size: 24rpx;
+  font-size: var(--fs-caption);
   color: var(--text-3);
 }
