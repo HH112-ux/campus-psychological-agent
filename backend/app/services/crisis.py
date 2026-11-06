@@ -35,6 +35,39 @@ from app.services.crisis_data import (
 _CACHE_TTL_SECONDS = 60.0
 _cache: dict = {"ts": 0.0, "l1": list(LEVEL1_PHRASES), "l2": list(LEVEL2_PHRASES)}
 
+# 否定/夸张语境剥离（只用于匹配，不改变原始文本）：
+# - 否定：「我不想死」「我没想自杀」不构成危机表达；
+# - 寒暄/夸张：「想死你了」「热得要死了」「累死我了」是口语修辞。
+# 这是误报收窄的主要手段：先剥离安全语境，再做词表匹配。
+_SAFE_CONTEXT_PATTERNS: tuple[str, ...] = (
+    "不想死", "不想自杀", "没想自杀", "不会自杀", "不想轻生", "不自杀", "没想死",
+    "想死你了", "想死你", "想死你们", "想死我了", "想死您了",
+    "得要死了", "得要死", "得要命",
+    "笑死", "累死", "热死", "冷死", "吓死", "困死", "饿死", "气死", "忙死", "烦死",
+)
+
+
+def strip_safe_context(norm_text: str) -> str:
+    """剥离否定与夸张语境后再匹配，降低日常表达的误报。"""
+    for pattern in _SAFE_CONTEXT_PATTERNS:
+        if pattern in norm_text:
+            norm_text = norm_text.replace(pattern, "")
+    return norm_text
+
+
+def _dedupe_overlapping(hits: list[str]) -> list[str]:
+    """重叠词只保留最长的一个：「没人在乎我」同时命中「没人在乎」时只计一次分。
+
+    否则相邻词条会被重复计分（历史上「累到不想动」+「不想动了」=4 分把
+    “今天累到不想动了”直接判成 high）。
+    """
+    kept: list[str] = []
+    for phrase in sorted(set(hits), key=len, reverse=True):
+        if any(phrase != other and phrase in other for other in kept):
+            continue
+        kept.append(phrase)
+    return sorted(kept)
+
 
 def refresh_lexicon_cache() -> None:
     """运营热更新后可手动清缓存。"""
@@ -93,19 +126,20 @@ async def contains_crisis_terms(text: str) -> list[str]:
     if not text:
         return []
     l1, l2 = await _load_lexicon()
-    norm = normalize(text)
+    norm = strip_safe_context(normalize(text))
     return sorted({p for p in (*l1, *l2) if p in norm})
 
 
 def evaluate(norm_text: str, session: dict, l1: list[str], l2: list[str]) -> CrisisResult:
     """纯同步判定：归一化文本 + 会话状态 + 两级词表 → 检测结果（不访问 DB，便于测试）。"""
     current_score = session.get("crisis_score", 0) or 0
+    norm_text = strip_safe_context(norm_text)
 
-    l1_hit = sorted({p for p in l1 if p in norm_text})
+    l1_hit = _dedupe_overlapping([p for p in l1 if p in norm_text])
     if l1_hit:
         return CrisisResult(level="high", l1_matches=l1_hit, new_score=current_score)
 
-    l2_hit = sorted({p for p in l2 if p in norm_text})
+    l2_hit = _dedupe_overlapping([p for p in l2 if p in norm_text])
     if l2_hit:
         added = LEVEL2_SCORE_PER_HIT * len(l2_hit)
         new_score = current_score + added

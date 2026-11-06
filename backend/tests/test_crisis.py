@@ -103,3 +103,55 @@ SAFE_CASES = [
 def test_safe_text_not_flagged(text):
     r = detect(text)
     assert r.level == "none", f"正常句误报：{text!r}（级别 {r.level}）"
+
+
+# ---------- 复审复现：生理疲惫被判 high ----------
+def test_tired_not_crisis():
+    """复审实测：命中「累到不想动」+「不想动了」两条重叠词 → 4 分 → high。"""
+    r = detect("今天累到不想动了")
+    assert r.level == "none"
+    assert r.l2_matches == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "今天累到不想动了",
+        "累了一天，不想动了",
+        "我不想死",          # 否定
+        "我没想自杀",
+        "我想死你了",        # 寒暄
+        "你真是想死我了",
+        "我热得要死了",      # 夸张
+        "笑死我了",
+        "今天累死我了",
+        "饿死我了",
+    ],
+)
+def test_everyday_expressions_not_flagged(text):
+    assert detect(text).level == "none", f"日常表达误报：{text!r}"
+
+
+def test_overlapping_l2_terms_counted_once():
+    """「没人在乎我」同时命中「没人在乎」与完整词条，只计一次分（mid 而非 high）。"""
+    r = detect("没人在乎我")
+    assert r.level == "mid"
+    assert r.score_added == 2
+    assert r.l2_matches == ["没人在乎我"]
+
+
+# ---------- 收窄后真实危机仍必须命中 ----------
+CRISIS_STILL_CAUGHT = [
+    ("我想死", "high"),
+    ("我不想活了", "high"),
+    ("我想自杀", "high"),
+    ("我准备跳楼", "high"),
+    ("活着没意思", "mid"),
+    ("真的撑不下去了", "mid"),
+    ("没人在乎我，活着好累", "high"),  # 2 个不重叠的二级词
+]
+
+
+@pytest.mark.parametrize(("text", "level"), CRISIS_STILL_CAUGHT)
+def test_real_crisis_still_caught(text, level):
+    assert detect(text).level == level, f"收窄后漏报：{text!r}"
