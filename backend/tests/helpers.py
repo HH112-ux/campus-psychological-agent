@@ -7,7 +7,12 @@ def auth(token: str) -> dict:
 
 
 def login(client, mock_openid: str | None = None) -> str:
-    """mock 登录并返回 access_token；可临时指定 openid 制造第二个用户。"""
+    """mock 登录并返回 access_token；可临时指定 openid 制造第二个用户。
+
+    指定 openid 时会临时改写全局 wx_mock_openid（Settings 为进程内单例），
+    该改写由 conftest 的 _restore_settings 夹具在每个用例结束后统一还原，
+    不会泄漏到后续用例。
+    """
     if mock_openid is not None:
         from app.config import get_settings
         get_settings().wx_mock_openid = mock_openid

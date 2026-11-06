@@ -47,7 +47,7 @@ class BoomRedis:
 @pytest.fixture()
 def redis_backend(monkeypatch):
     settings = get_settings()
-    monkeypatch.setattr(settings, "ratelimit_backend", "redis")
+    monkeypatch.setattr(settings, "shared_state_backend", "redis")
     fake = FakeRedisZSet()
 
     async def get_client():
@@ -61,11 +61,11 @@ def redis_backend(monkeypatch):
 
 def test_factory_selects_backend(monkeypatch):
     settings = get_settings()
-    monkeypatch.setattr(settings, "ratelimit_backend", "memory")
+    monkeypatch.setattr(settings, "shared_state_backend", "memory")
     ratelimit.reset_all()
     assert isinstance(ratelimit._get_backend(), ratelimit.MemoryBackend)
 
-    monkeypatch.setattr(settings, "ratelimit_backend", "redis")
+    monkeypatch.setattr(settings, "shared_state_backend", "redis")
     ratelimit.reset_all()
     assert isinstance(ratelimit._get_backend(), ratelimit.RedisBackend)
     ratelimit.reset_all()
@@ -154,7 +154,7 @@ def test_real_redis_integration(client, monkeypatch):
     import redis.asyncio as aioredis
 
     settings = get_settings()
-    monkeypatch.setattr(settings, "ratelimit_backend", "redis")
+    monkeypatch.setattr(settings, "shared_state_backend", "redis")
     monkeypatch.setattr(settings, "redis_url", REDIS_TEST_URL)
     ratelimit.reset_all()
 

@@ -14,23 +14,23 @@
 from __future__ import annotations
 
 import logging
-import time
 
 import httpx
 
 from app.config import get_settings
+from app.core import counter
 
 logger = logging.getLogger(__name__)
 
 _WEBHOOK_TIMEOUT_SECONDS = 3.0
 
-# 冷却表：key → 上次 webhook 发送时间（monotonic）
-_last_sent: dict[str, float] = {}
+# 冷却 key 前缀：跨实例共享（M5；原进程内 `_last_sent` 字典多实例下各算各的）
+_COOLDOWN_PREFIX = "alert:cooldown:"
 
 
 def reset_cooldowns() -> None:
-    """清空冷却表（测试钩子）。"""
-    _last_sent.clear()
+    """清空冷却与计数（测试钩子）。"""
+    counter.reset_all()
 
 
 async def send_alert(key: str, title: str, lines: list[str]) -> None:
@@ -42,9 +42,8 @@ async def send_alert(key: str, title: str, lines: list[str]) -> None:
     if not settings.alert_enabled or not settings.alert_webhook_url:
         return
 
-    now = time.monotonic()
-    last = _last_sent.get(key)
-    if last is not None and now - last < settings.alert_cooldown_seconds:
+    cooldown_key = f"{_COOLDOWN_PREFIX}{key}"
+    if not await counter.cooldown_allows(cooldown_key, settings.alert_cooldown_seconds):
         logger.info("alert[%s] 冷却中，跳过 webhook 发送", key)
         return
 
@@ -55,8 +54,9 @@ async def send_alert(key: str, title: str, lines: list[str]) -> None:
                 json={"msgtype": "text", "text": {"content": content}},
             )
             resp.raise_for_status()
-        _last_sent[key] = now
     except Exception:
+        # 发送失败不占冷却：下轮仍可重试（与原先「成功才记时间」语义一致）
+        await counter.clear(cooldown_key)
         logger.exception("alert[%s] webhook 发送失败（不影响主链路）", key)
 
 

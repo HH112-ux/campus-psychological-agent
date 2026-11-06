@@ -18,6 +18,7 @@ os.environ.setdefault("JWT_SECRET", "test-secret-please-change-0123456789abcdef"
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+from app.config import get_settings  # noqa: E402
 from app.db.indexes import (  # noqa: E402
     COLL_CARE_MESSAGES,
     COLL_CHECKINS,
@@ -49,8 +50,24 @@ _CLEAN_COLLS = [
 def client():
     with TestClient(app) as c:
         if not mongo.is_connected:
-            pytest.skip("本地 MongoDB 未启动，跳过 DB 集成测试")
+            pytest.skip(
+                "本地 MongoDB 未启动：本次跳过全部 DB 集成用例（危机入库/加密落库/隐私物理删除均未验证）"
+            )
         yield c
+
+
+@pytest.fixture(autouse=True)
+def _restore_settings():
+    """隔离测试对全局 settings 的改写（顺序依赖型偶发失败的根因）。
+
+    Settings 是进程内单例：helpers.login(mock_openid=...) 会直接改写
+    wx_mock_openid 且不还原，若不隔离会泄漏到后续用例，导致结果依赖执行顺序。
+    """
+    settings = get_settings()
+    snapshot = settings.model_dump()
+    yield
+    for key, value in snapshot.items():
+        setattr(settings, key, value)
 
 
 @pytest.fixture()
@@ -71,8 +88,9 @@ def db(client):
         sync_db[name].delete_many({})
     sync_client.close()
 
-    from app.core import ratelimit
+    from app.core import counter, ratelimit
     from app.services import crisis as crisis_svc
     ratelimit.reset_all()
+    counter.reset_all()
     crisis_svc.refresh_lexicon_cache()
     yield mongo.db

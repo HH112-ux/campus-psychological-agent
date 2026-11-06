@@ -36,9 +36,9 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     await mongo.connect()
     settings = get_settings()
-    if settings.env == "prod" and settings.ratelimit_backend != "redis":
+    if settings.env == "prod" and settings.shared_state_backend != "redis":
         # 生产多实例下内存限流各实例独立计数、形同虚设（G4）；不阻断启动，但必须可见
-        logger.warning("生产环境 RATELIMIT_BACKEND 非 redis，限流计数不跨实例共享")
+        logger.warning("生产环境 SHARED_STATE_BACKEND 非 redis，限流/告警冷却/计数不跨实例共享")
     # M3：到期数据物理删除必须真实生效（G7），否则「软删 N 天后物理删除」的合规承诺不兑现
     purge_task = (
         asyncio.create_task(privacy_svc.run_purge_scheduler())

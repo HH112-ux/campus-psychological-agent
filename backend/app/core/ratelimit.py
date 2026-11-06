@@ -6,7 +6,7 @@
   - redis（生产多实例）：ZSET 滑动窗口 + Lua 原子判定（被拒请求不占窗口），
     计数跨实例共享（M5/G4）。Redis 不可达时 fail-open（告警依赖 M5 监控），
     不因限流基础设施故障阻断对话主链路。
-- 切换：RATELIMIT_BACKEND=redis + REDIS_URL，无需改业务代码。
+- 切换：SHARED_STATE_BACKEND=redis + REDIS_URL，无需改业务代码（兼容旧名 RATELIMIT_BACKEND）。
 """
 from __future__ import annotations
 
@@ -14,10 +14,10 @@ import logging
 import time
 import uuid
 from collections import defaultdict
-from contextlib import suppress
 from typing import Protocol
 
 from app.config import get_settings
+from app.core import redis_client
 from app.core.exceptions import CODE_RATE_LIMITED, BizError
 
 logger = logging.getLogger(__name__)
@@ -91,29 +91,16 @@ class RedisBackend:
 
 _memory_backend = MemoryBackend()
 _backend: RateLimitBackend | None = None
-_redis_client = None
 
 
 async def _get_redis_client():
-    """Redis 客户端单例（延迟创建；连接池复用）。"""
-    global _redis_client
-    if _redis_client is None:
-        # 延迟导入：memory 后端（dev/CI）不引入 redis 运行时依赖
-        import redis.asyncio as aioredis
-
-        _redis_client = aioredis.Redis.from_url(
-            get_settings().redis_url, decode_responses=True
-        )
-    return _redis_client
+    """Redis 客户端（委托 core.redis_client 单例；保留本模块名以便测试打桩）。"""
+    return await redis_client.get_client()
 
 
 async def close_redis_client() -> None:
     """关闭 Redis 连接（lifespan 停机时调用）。"""
-    global _redis_client
-    if _redis_client is not None:
-        with suppress(Exception):
-            await _redis_client.aclose()
-        _redis_client = None
+    await redis_client.close_client()
 
 
 def _get_backend() -> RateLimitBackend:
@@ -121,7 +108,7 @@ def _get_backend() -> RateLimitBackend:
     if _backend is None:
         _backend = (
             RedisBackend()
-            if get_settings().ratelimit_backend.lower() == "redis"
+            if get_settings().shared_state_backend.lower() == "redis"
             else _memory_backend
         )
     return _backend
