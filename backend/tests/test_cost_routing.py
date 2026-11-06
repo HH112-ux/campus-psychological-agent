@@ -24,6 +24,16 @@ def _enable_routing(monkeypatch, enabled: bool = True) -> None:
     monkeypatch.setattr(get_settings(), "cost_routing_enabled", enabled)
 
 
+def test_record_call_never_raises(monkeypatch):
+    """计量失败不得影响主链路：get_settings 抛异常时 record_call 仍应静默返回。"""
+
+    def boom():
+        raise RuntimeError("settings unavailable")
+
+    monkeypatch.setattr(cost, "get_settings", boom)
+    cost.record_call("chat", 10, 20)  # 不抛异常即通过
+
+
 # ---------- select_tier ----------
 
 def test_routing_disabled_always_chat(monkeypatch):

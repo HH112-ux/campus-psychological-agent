@@ -29,22 +29,25 @@ def _model_for_tier(tier: str) -> str:
 
 def record_call(tier: str, prompt_chars: int, completion_chars: int) -> None:
     """记录一次模型调用（仅累计，不做 IO；任何异常均不应影响主链路）。"""
-    if not get_settings().cost_tracking_enabled:
-        return
-    _COUNT[tier] = _COUNT.get(tier, 0) + 1
-    _PROMPT_CHARS[tier] = _PROMPT_CHARS.get(tier, 0) + max(0, prompt_chars)
-    _COMPLETION_CHARS[tier] = _COMPLETION_CHARS.get(tier, 0) + max(0, completion_chars)
+    try:
+        if not get_settings().cost_tracking_enabled:
+            return
+        _COUNT[tier] = _COUNT.get(tier, 0) + 1
+        _PROMPT_CHARS[tier] = _PROMPT_CHARS.get(tier, 0) + max(0, prompt_chars)
+        _COMPLETION_CHARS[tier] = _COMPLETION_CHARS.get(tier, 0) + max(0, completion_chars)
 
-    total = sum(_COUNT.values())
-    logger.debug(
-        "成本基线 %s(%s) prompt=%d completion=%d",
-        tier,
-        _model_for_tier(tier),
-        prompt_chars,
-        completion_chars,
-    )
-    if total % _LOG_EVERY == 0:
-        logger.info("成本基线累计 %d 次 %s", total, snapshot())
+        total = sum(_COUNT.values())
+        logger.debug(
+            "成本基线 %s(%s) prompt=%d completion=%d",
+            tier,
+            _model_for_tier(tier),
+            prompt_chars,
+            completion_chars,
+        )
+        if total % _LOG_EVERY == 0:
+            logger.info("成本基线累计 %d 次 %s", total, snapshot())
+    except Exception:  # noqa: BLE001 —— 计量失败绝不能影响对话主链路
+        logger.exception("成本计量失败（已忽略）tier=%s", tier)
 
 
 def snapshot() -> dict[str, dict[str, int]]:
