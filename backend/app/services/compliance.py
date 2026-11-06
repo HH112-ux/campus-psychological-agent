@@ -1,12 +1,18 @@
 """输出侧合规过滤（H）：对助手回复做确定性规则拦截。
 
 红线（对齐 review-package / 非医疗定位）：
-- 不得给出**诊断结论**（「你就是抑郁症」「你可能是抑郁症」「你的情况是中度抑郁」）；
-- 不得**推荐药物**或指导用药（「可以试试百忧解」「建议吃舍曲林」「自行加量」）；
-- 不得宣称**疗效**（「一定能治好」「根治」「一次见效」）。
+- 不得给出**诊断结论**（「你就是抑郁症」「你可能是抑郁症」「这属于抑郁症」）；
+- 不得**推荐药物**或指导用药（「可以试试百忧解」「建议服用 SSRI」「自行加量」）；
+- 不得宣称**疗效**（「一定能治好」「坚持吃药就会好起来」「根治」）。
 
 实现为纯规则（正则 + 分句），不依赖模型自觉；命中后丢弃违规句并替换为
 固定安全话术，日志只记类别不记原文。
+
+两条关键边界：
+1. 「对用户情绪的描述」与「对用户下诊断结论」分开：`你有点焦虑`、`你可能焦虑`
+   属共情镜像，放行；`你抑郁了`、`你可能抑郁了`、`这属于抑郁症` 属结论，拦截。
+2. 检测前做 NFKC 归一化并去掉全部空白（含换行），因此模型输出的
+   `你有抑\\n郁症`、`你 患 上 了 抑 郁 症`、`ＳＳＲＩ` 都能识别。
 
 流式场景（`OutputGuard`）的关键约束：违规句可能被拆在多个 chunk 里，
 因此**任何已经下发的文本都不能再与后续文本拼成违规句**。做法是只在句末
@@ -17,6 +23,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 
 # 违规句替换话术（短句，避免进一步给出任何建议性结论）
 SAFE_TEXT: dict[str, str] = {
@@ -29,64 +36,44 @@ SAFE_TEXT: dict[str, str] = {
 _DISORDERS = (
     "抑郁症|焦虑症|双相情感障碍|双相障碍|躁郁症|强迫症|精神分裂症|精神分裂|"
     "创伤后应激障碍|PTSD|进食障碍|人格障碍|多动症|ADHD|自闭症|"
-    "惊恐障碍|社交恐惧症|社交焦虑障碍|躯体化障碍|疑病症|失眠症"
+    "惊恐障碍|社交恐惧症|社交焦虑障碍|躯体化障碍|疑病症|失眠症|"
+    "抑郁障碍|焦虑障碍"
 )
-# 裸病名：只在出现判断/分度语境时才算诊断结论，避免误伤「焦虑的情绪很正常」
-_BARE = "抑郁|焦虑"
+_DISORDER_RE = re.compile(f"({_DISORDERS})", re.IGNORECASE)
 
+# 裸病名：只有出现在判断/推断/归类语境时才构成诊断结论
+_BARE_RE = re.compile(r"(抑郁|焦虑)")
+
+# 强判断/确诊动词：直接下结论
+_DIAG_VERB_RE = re.compile(
+    r"就是|属于|患有|患了|患上了?|得了|确诊(?:为|是)?|诊断(?:为|是)?|符合|典型"
+)
 # 分度/倾向词（轻中度、疑似…）
-_SEVERITY = (
-    r"(?:(?:轻|中|重)度|轻中度|疑似|偏重|倾向(?:于)?|可能是|也许是|疑似患有)"
+_SEVERITY_RE = re.compile(r"轻度|中度|重度|轻中度|疑似|偏重|倾向(?:于)?")
+# 推测词
+_INFER_RE = re.compile(r"可能|也许|大概|似乎|好像|听起来|看起来|像是|像|疑似")
+# 人称代词
+_PERSON_RE = re.compile(r"你|您|ta|他|她")
+# 无主语的归类句式（这属于 / 这就是）
+_CLASSIFY_RE = re.compile(r"(?:这|那|这个|这种情况|这情况|以上)(?:也)?(?:就)?(?:是|属于|算)")
+# 共情强度修饰：出现即视为「情绪描述」而非诊断结论
+_DEGREE_RE = re.compile(
+    r"有点|有些|有点儿|一点|挺|蛮|比较|稍微|特别|非常|那么|这么|很多|太多"
 )
-# 强判断动词：直接下结论
-_ASSERTIVE = r"(?:就是|属于|患有|患了|得了|确诊为|诊断为|符合|典型(?:的)?|确诊|诊断)"
-# 弱判断动词：仍需跟明确病名（或有分度词）
-_WEAK = r"(?:可能|也许|大概|似乎|听起来像|看起来像|像是|像|疑似|是|有)"
-# 纯粹的表判断/存在（与裸病名相邻时才判定）
-_COPULA = r"(?:是|有)"
-# 推断词（与裸病名同现时必须带分度词，否则「考试前你可能会焦虑」会被误伤）
-_INFER = r"(?:可能|也许|大概|似乎|听起来|看起来|像是|像|疑似)"
-_PERSON = r"(?:你|您|ta|他|她)"
-_OWNER = r"(?:的(?:情况|症状|表现|状态|问题))?"
-
-_DIAGNOSIS = re.compile(
-    # 1) 第二人称 + 强判断动词 + 病名（含裸病名）
-    rf"{_PERSON}{_OWNER}[^，。！？\n]{{0,8}}?{_ASSERTIVE}"
-    rf"[^，。！？\n]{{0,6}}?{_SEVERITY}?(?:{_DISORDERS}|{_BARE})"
-    # 2) 第二人称 + 弱判断动词 + 明确病名
-    rf"|{_PERSON}{_OWNER}[^，。！？\n]{{0,8}}?{_WEAK}"
-    rf"[^，。！？\n]{{0,6}}?{_SEVERITY}?(?:{_DISORDERS})"
-    # 3) 第二人称 + 是/有 + 裸病名（「你是抑郁」「你有焦虑」，间隔 ≤2）
-    #    「你有点焦虑情绪」属正常化共情，不算诊断结论
-    rf"|{_PERSON}{_OWNER}[^，。！？\n]{{0,8}}?{_COPULA}"
-    rf"[^，。！？\n]{{0,2}}?{_SEVERITY}?(?:{_BARE})(?!情绪|感受|心情)"
-    # 4) 第二人称 + 推断词 + 分度 + 裸病名（「你可能是中度抑郁」）
-    rf"|{_PERSON}{_OWNER}[^，。！？\n]{{0,8}}?{_INFER}"
-    rf"[^，。！？\n]{{0,4}}?{_SEVERITY}(?:{_BARE})"
-    # 5) 无主语：「这听起来像焦虑症」
-    rf"|(?:这|那|这个|这种情况|你的情况)?(?:听起来|看起来|感觉|似乎)"
-    rf"(?:像|像是|是|属于)?[^，。！？\n]{{0,6}}?{_SEVERITY}?(?:{_DISORDERS}|{_BARE})"
-    # 6) 病情判断句：「你的症状符合双相情感障碍」
-    rf"|(?:你的|您的|ta的|他的|她的|其)(?:症状|情况|表现|状态)"
-    rf"[^，。！？\n]{{0,10}}?(?:符合|可能是|是|说明|表明|提示|倾向于)"
-    rf"[^，。！？\n]{{0,6}}?{_SEVERITY}?(?:{_DISORDERS}|{_BARE})"
-    # 7) 确诊/诊断：「确诊为抑郁症」
-    rf"|(?:确诊|诊断)(?:结果)?(?:为|是)?[^，。！？\n]{{0,6}}?{_SEVERITY}?(?:{_DISORDERS}|{_BARE})"
-    # 8) 单纯分度前缀：「中度抑郁」
-    rf"|(?:轻度|中度|重度|轻中度)(?:{_DISORDERS}|{_BARE})",
-    re.IGNORECASE,
-)
+# 否定诊断（「你不是抑郁症」「并没有抑郁」）不构成结论
+_NEGATED_DIAGNOSIS_RE = re.compile(r"(?:不是|没有|并非|算不上|不属于)$")
 
 _DRUGS = (
     # 通用名
     "舍曲林|氟西汀|帕罗西汀|氟伏沙明|艾司西酞普兰|西酞普兰|文拉法辛|度洛西汀|"
     "米氮平|曲唑酮|丁螺环酮|劳拉西泮|阿普唑仑|氯硝西泮|地西泮|奥氮平|喹硫平|"
     "丙戊酸钠|碳酸锂|唑吡坦|右佐匹克隆|阿米替林|多塞平|氯米帕明|舍曲林片|"
+    "氟哌啶醇|坦度螺酮|奥沙西泮|"
     # 常见商品名（患者/模型更常说品牌名）
     "百忧解|左洛复|来士普|赛乐特|怡诺思|欣百达|瑞美隆|思诺思|黛力新|"
-    "舒乐安定|佳静安定|安定片|阿普唑仑片|米安色林|曲舍林"
-    # 品类
-    "|安眠药|褪黑素|抗抑郁药|抗焦虑药|镇静剂|抗精神病药"
+    "舒乐安定|佳静安定|安定片|阿普唑仑片|米安色林|曲舍林|"
+    # 药品类别（SSRI/SNRI 等缩写模型经常直接说）
+    "SSRI|SNRI|安眠药|褪黑素|抗抑郁药|抗焦虑药|镇静剂|抗精神病药"
 )
 _DRUGS_RE = re.compile(rf"({_DRUGS})", re.IGNORECASE)
 
@@ -97,23 +84,84 @@ _STOP_ADVICE_RE = re.compile(
 )
 # 否定/遵医嘱语境：同一分句内出现即视为安全叮嘱，不拦截
 _NEGATION_RE = re.compile(r"(?:不要|不能|不可|别|勿|切勿|避免|禁止|不建议|遵医嘱|听医生|按医生)")
-_CLAUSE_SPLIT_RE = re.compile(r"[，,；;。！？!?\n]")
+_CLAUSE_SPLIT_RE = re.compile(r"[，,；;。！？!?]")
 
-_EFFICACY = re.compile(
-    r"(一定|肯定|保证|绝对|百分百|100%|包)(能|会|可以)?"
-    r"(治好|治愈|康复|痊愈|好起来|见效)"
-    r"|(根治|包治|药到病除|立竿见影|一次见效|治愈率|彻底治愈|永不复发)"
-    r"|(几天|一周|两周|一个月|很快|马上)(就|就能|就会|即可)(好|痊愈|康复|见效)"
+# 疗效承诺：
+# 1) 无条件强承诺（根治/包治/一次见效/保证治愈…）直接拦截；
+# 2) 「治疗语境 + 结果承诺」拦截（坚持吃药就会好起来）；
+# 3) 单纯祝福（你一定会好起来的）放行，中性用药叮嘱（按医嘱服药）放行。
+_EFFICACY_STRONG_RE = re.compile(
+    r"根治|包治|药到病除|立竿见影|一次见效|治愈率|彻底治愈|永不复发|包好|"
+    r"保证(?:能|会|可以)?(?:治好|治愈|康复|痊愈|好起来)|"
+    r"(?:一定|肯定|绝对|百分百|100%)(?:能|会)(?:治好|治愈|康复|痊愈)|"
+    r"百分百(?:能|会)?(?:治好|治愈|好)"
+)
+_TREATMENT_CTX_RE = re.compile(r"吃药|服药|用药|药物|这个药|那种药|治疗|疗法|疗程")
+_EFFICACY_RESULT_RE = re.compile(
+    r"(?:就|一定|肯定|保证|绝对|百分百|包|很快|马上|几天|一周|两周|一个月|坚持)"
+    r"(?:能|会|可以|就能|就会|即可)?(?:治好|治愈|康复|痊愈|好起来|见效)"
 )
 
-# 分句但保留分隔符，便于按句替换
-_SENTENCE_RE = re.compile(r"(?<=[。！？!?\n])")
+# 分句但保留分隔符，便于按句替换。
+# 换行不再作为句子边界：模型可能把词写在两行（「你有抑\n郁症」），
+# 拆行会让两半都逃过检测。
+_SENTENCE_RE = re.compile(r"(?<=[。！？!?])")
 
-# 流式切分点：只在句末标点后切
-_TERMINATOR_RE = re.compile(r"[。！？!?\n]")
+# 流式切分点：只在句末标点后切（含换行同理）
+_TERMINATOR_RE = re.compile(r"[。！？!?]")
 # 无标点时的保留窗口：必须大于任一规则的最大匹配跨度，
 # 否则一个违规句可能被切在「已下发」与「保留区」两侧（上一轮 200 字强制切分即此缺陷）。
 _HOLD_BACK = 48
+
+
+def _squash(text: str) -> str:
+    """NFKC（全角→半角）+ 去掉所有空白，消除换行/空格/全角造成的断词。"""
+    return re.sub(r"\s+", "", unicodedata.normalize("NFKC", text))
+
+
+def _before(text: str, index: int, size: int = 14) -> str:
+    return text[max(0, index - size) : index]
+
+
+def _diagnosis(text: str) -> bool:
+    """判断一句话是否在给用户下诊断结论（而非描述情绪）。"""
+    # 1) 明确病名：需要判断/分度/推断/归类语境，单纯科普「抑郁症很常见」放行
+    for match in _DISORDER_RE.finditer(text):
+        pre = _before(text, match.start())
+        if _NEGATED_DIAGNOSIS_RE.search(pre):
+            continue
+        if _DIAG_VERB_RE.search(pre) or _SEVERITY_RE.search(pre) or _CLASSIFY_RE.search(pre):
+            return True
+        if _PERSON_RE.search(pre) and (_INFER_RE.search(pre) or re.search(r"[是有]", pre)):
+            return True
+        if re.search(r"(?:这|那|这个|这种情况|这情况)", pre) and (
+            _INFER_RE.search(pre) or re.search(r"[是有]", pre)
+        ):
+            return True
+        if _INFER_RE.search(pre) and re.search(r"像|听起来|看起来|似乎", pre):
+            return True
+
+    # 2) 裸病名：必须带结论性语境才算诊断；「有点/有些」等共情修饰放行
+    for match in _BARE_RE.finditer(text):
+        if text[match.end() : match.end() + 1] == "症":
+            continue  # 明确病名，已在上面的分支处理
+        pre = _before(text, match.start(), 12)
+        post = text[match.end() : match.end() + 3]
+        if _NEGATED_DIAGNOSIS_RE.search(pre):
+            continue
+        if post.startswith(("情绪", "感受", "心情", "状态")):
+            continue
+        if _DIAG_VERB_RE.search(pre) or _SEVERITY_RE.search(pre) or _CLASSIFY_RE.search(pre):
+            return True
+        if _DEGREE_RE.search(pre):
+            continue
+        # 「你可能抑郁了」「你抑郁了」：完成体「了」+ 人称/推测
+        if post.startswith("了") and (_PERSON_RE.search(pre) or _INFER_RE.search(pre)):
+            return True
+        # 「你有焦虑」「你是抑郁」：判断/存在动词紧邻裸病名
+        if re.search(r"(?:是|有)[^，。！？]{0,2}$", pre):
+            return True
+    return False
 
 
 def _drug_or_advice_hit(sentence: str) -> bool:
@@ -129,13 +177,20 @@ def _drug_or_advice_hit(sentence: str) -> bool:
     return False
 
 
+def _efficacy_hit(sentence: str) -> bool:
+    if _EFFICACY_STRONG_RE.search(sentence):
+        return True
+    return bool(_TREATMENT_CTX_RE.search(sentence) and _EFFICACY_RESULT_RE.search(sentence))
+
+
 def detect(sentence: str) -> str | None:
     """返回该句命中的违规类别（diagnosis/medication/efficacy），未命中返回 None。"""
-    if _DIAGNOSIS.search(sentence):
+    text = _squash(sentence)
+    if _diagnosis(text):
         return "diagnosis"
-    if _drug_or_advice_hit(sentence):
+    if _drug_or_advice_hit(text):
         return "medication"
-    if _EFFICACY.search(sentence):
+    if _efficacy_hit(text):
         return "efficacy"
     return None
 

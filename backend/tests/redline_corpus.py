@@ -1,4 +1,4 @@
-"""红线语料（冻结）：危机判定 / 长期记忆兜底。
+"""红线语料（冻结）：危机判定 / 长期记忆兜底 / 输出侧合规。
 
 来源（只增不减，删改样本需在提交说明中写明理由）：
 - docs/code-review-recheck-2026-11-06.md
@@ -103,6 +103,99 @@ MEMORY_CASES: list[tuple[str, bool]] = [
     ("室友小琳常半夜打电话", False),
 ]
 
+# ---------- 输出侧合规：(文本, 期望类别 diagnosis/medication/efficacy/None) ----------
+COMPLIANCE_CASES: list[tuple[str, str | None]] = [
+    # 诊断结论：既有样本
+    ("你有抑郁症", "diagnosis"),
+    ("你可能是抑郁症", "diagnosis"),
+    ("这听起来像焦虑症", "diagnosis"),
+    ("你的情况是中度抑郁", "diagnosis"),
+    ("你这是典型的抑郁症。", "diagnosis"),
+    ("根据你的描述，你患了焦虑症。", "diagnosis"),
+    ("你的症状符合双相情感障碍。", "diagnosis"),
+    ("你疑似抑郁症。", "diagnosis"),
+    ("你是轻度焦虑。", "diagnosis"),
+    ("你的表现提示重度抑郁。", "diagnosis"),
+    # 诊断结论：第二轮复审漏放
+    ("你患上了抑郁症", "diagnosis"),
+    ("你可能抑郁了", "diagnosis"),
+    ("你抑郁了", "diagnosis"),
+    ("这属于抑郁症", "diagnosis"),
+    ("你得了抑郁症", "diagnosis"),
+    ("你患了焦虑症", "diagnosis"),
+    ("你有焦虑", "diagnosis"),
+    ("这就是抑郁症", "diagnosis"),
+    ("这可能是焦虑症", "diagnosis"),
+    ("确诊为抑郁症", "diagnosis"),
+    ("你符合抑郁症的诊断标准", "diagnosis"),
+    ("你这属于焦虑症", "diagnosis"),
+    ("我觉得你可能是抑郁症", "diagnosis"),
+    ("你好像得了抑郁症", "diagnosis"),
+    ("你的症状倾向于抑郁症", "diagnosis"),
+    ("其实你就是抑郁症", "diagnosis"),
+    ("中度抑郁", "diagnosis"),
+    # 诊断结论：跨换行 / 空格 / 全半角断词
+    ("你 患 上 了 抑 郁 症", "diagnosis"),
+    ("你有抑\n郁症", "diagnosis"),
+    ("你可能是抑 郁症", "diagnosis"),
+    ("你\n抑郁\n了", "diagnosis"),
+    ("你 有 抑 郁 症。", "diagnosis"),
+    # 药物 / 用药指导
+    ("建议服用 SSRI 类药物", "medication"),
+    ("建议服用SNRI类药物", "medication"),
+    ("建议服用ＳＳＲＩ类药物", "medication"),
+    ("吃点氟哌啶醇吧", "medication"),
+    ("可以试试坦度螺酮", "medication"),
+    ("用点奥沙西泮", "medication"),
+    ("可以试试百忧解。", "medication"),
+    ("建议服用艾司西酞普兰。", "medication"),
+    ("地西泮睡前吃半片。", "medication"),
+    ("可以服用褪黑素改善睡眠。", "medication"),
+    ("建议吃舍曲林", "medication"),
+    ("用点奥氮平", "medication"),
+    ("觉得好些了就可以停药。", "medication"),
+    ("你可以自己减量试试。", "medication"),
+    ("先停掉舍曲林观察几天。", "medication"),
+    ("如果效果不好可以自行加量。", "medication"),
+    # 疗效承诺
+    ("坚持两周一定能治好。", "efficacy"),
+    ("这个方法可以根治焦虑。", "efficacy"),
+    ("按这个练法一次见效。", "efficacy"),
+    ("坚持吃药就会好起来", "efficacy"),
+    ("这个药一定能治好你", "efficacy"),
+    ("保证彻底治愈", "efficacy"),
+    ("永不复发", "efficacy"),
+    # 必须放行的情绪描述 / 共情 / 中性表述
+    ("你有点焦虑", None),
+    ("你有些焦虑", None),
+    ("你看起来有些焦虑", None),
+    ("你最近是不是有点焦虑", None),
+    ("你是不是有点焦虑", None),
+    ("感觉你最近挺焦虑的", None),
+    ("你好像有点抑郁", None),
+    ("你一定会好起来的，我相信你", None),
+    ("你一定会慢慢好起来的", None),
+    ("按医嘱服药", None),
+    ("按时吃药、遵医嘱复诊就好。", None),
+    ("我在听，慢慢来，你不用一个人扛着。", None),
+    ("如果最近一直睡不好，可以去校心理中心找老师聊聊。", None),
+    ("焦虑是很常见的情绪。", None),
+    ("考试前你可能会焦虑，这很正常。", None),
+    ("你有点焦虑情绪是很正常的。", None),
+    ("不要自行停药，有任何不适及时找医生。", None),
+    ("你今天感觉怎么样", None),
+    ("你最近压力大，有些焦虑是正常的。", None),
+]
+
+# ---------- 流式守卫：(分块序列, 期望类别) ----------
+COMPLIANCE_STREAM_CASES: list[tuple[list[str], str]] = [
+    (["你这是抑郁", "症。", "我在听。"], "diagnosis"),
+    (["a" * 198, "你这", "是抑郁症。", "我在听。"], "diagnosis"),
+    (["建议服用 S", "SRI 类", "药物。"], "medication"),
+    (["你有抑", "\n郁症。", "我在听。"], "diagnosis"),
+    (["坚持吃药", "就会好", "起来。"], "efficacy"),
+]
+
 
 def _actual_crisis() -> list[str]:
     from app.services import crisis
@@ -127,6 +220,8 @@ def _actual_memory() -> list[bool]:
 
 def collect() -> dict:
     """返回当前代码对全部语料的判定，供基线/差异对比。"""
+    from app.services import compliance
+
     return {
         "crisis": [
             {"text": text, "expected": expected, "actual": actual}
@@ -136,7 +231,27 @@ def collect() -> dict:
             {"text": text, "expected": expected, "actual": actual}
             for (text, expected), actual in zip(MEMORY_CASES, _actual_memory(), strict=True)
         ],
+        "compliance": [
+            {"text": text, "expected": expected, "actual": compliance.detect(text)}
+            for text, expected in COMPLIANCE_CASES
+        ],
+        "stream": [
+            {
+                "text": "".join(pieces),
+                "expected": expected,
+                "actual": _stream_detect(pieces),
+            }
+            for pieces, expected in COMPLIANCE_STREAM_CASES
+        ],
     }
+
+
+def _stream_detect(pieces: list[str]) -> str | None:
+    from app.services import compliance
+
+    guard = compliance.OutputGuard()
+    "".join([*(guard.feed(p) for p in pieces), guard.flush()])
+    return guard.hits[0] if guard.hits else None
 
 
 if __name__ == "__main__":

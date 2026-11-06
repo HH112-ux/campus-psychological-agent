@@ -1,7 +1,7 @@
-"""红线回归（第一道门）：危机判定 / 长期记忆兜底。
+"""红线回归（第一道门）：危机判定 / 长期记忆兜底 / 输出侧合规。
 
 语料见 `tests/redline_corpus.py`（两轮复审的全部样本，正反俱全）。
-任何人改动危机词表、否定剥离或长期记忆兜底，先跑本文件：
+任何人改动危机词表、否定剥离、合规规则或长期记忆兜底，先跑本文件：
 
     pytest -q tests/test_redline_regression.py
 
@@ -15,9 +15,14 @@ import pytest
 from bson import ObjectId
 
 from app.db.indexes import COLL_RISK_EVENTS
-from app.services import alerting, crisis
+from app.services import alerting, compliance, crisis
 from app.services.crisis_data import LEVEL1_PHRASES, LEVEL2_PHRASES
-from tests.redline_corpus import CRISIS_CASES, MEMORY_CASES
+from tests.redline_corpus import (
+    COMPLIANCE_CASES,
+    COMPLIANCE_STREAM_CASES,
+    CRISIS_CASES,
+    MEMORY_CASES,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -92,3 +97,35 @@ def test_help_seeking_crisis_triggers_alert(monkeypatch, text):
 @pytest.mark.parametrize(("text", "expected"), MEMORY_CASES)
 def test_memory_fallback_corpus(text, expected):
     assert bool(asyncio.run(crisis.contains_crisis_terms(text))) is expected, text
+
+
+# ---------- 输出侧合规：非流式 ----------
+@pytest.mark.parametrize(("text", "expected"), COMPLIANCE_CASES)
+def test_compliance_corpus(text, expected):
+    assert compliance.detect(text) == expected, f"{text!r} 期望 {expected}"
+    safe, hits = compliance.sanitize(text)
+    if expected is None:
+        assert safe == text and hits == []
+    else:
+        assert hits == [expected]
+        assert safe == compliance.SAFE_TEXT[expected]
+
+
+# ---------- 输出侧合规：流式分段 ----------
+@pytest.mark.parametrize(("pieces", "expected"), COMPLIANCE_STREAM_CASES)
+def test_compliance_stream_corpus(pieces, expected):
+    guard = compliance.OutputGuard()
+    out = "".join([*(guard.feed(p) for p in pieces), guard.flush()])
+    assert expected in guard.hits
+    assert compliance.SAFE_TEXT[expected] in out
+
+
+@pytest.mark.parametrize(("text", "expected"), COMPLIANCE_CASES)
+def test_compliance_never_escapes_when_streamed_char_by_char(text, expected):
+    """逐字喂入仍必须命中，证明规则最大匹配跨度 < 保留窗，不会被切点拆开。"""
+    if expected is None:
+        return
+    guard = compliance.OutputGuard()
+    out = "".join([*(guard.feed(ch) for ch in text), guard.flush()])
+    assert expected in guard.hits, f"逐字流式漏检：{text!r}"
+    assert compliance.SAFE_TEXT[expected] in out
