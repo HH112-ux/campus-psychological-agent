@@ -290,13 +290,76 @@ def _joinable(previous: dict) -> bool:
     return bool(text) and text[-1] not in _TERMINATORS
 
 
+# 语气/完成体助词：换行正好落在术语末尾时，下一行只有以这些字开头才算「词被拆开」
+_PARTICLES = "了吧吗呢啊呀哦哈"
+
+# 跨行拼接只认「词表术语被换行切断」：把相邻两行拼起来时，只有拼接处确实落在
+# 某个已知术语（病名/药名/用药与疗效词）内部，才允许做跨行判定。这样「你有抑
+# \n郁症」仍会被拦，而「你最近是不是睡不好\n抑郁症患者常有这种表现」不会把上一
+# 行的人称/判断词借给下一行的独立句子（第三轮复审 H-1 的误拦根因）。
+_TERM_TOKENS: tuple[str, ...] = tuple(
+    sorted(
+        {
+            *(term for term in _DISORDERS.split("|") if term),
+            *(term for term in _DRUGS.split("|") if term),
+            "抑郁", "焦虑",
+            "停药", "减药", "减量", "加量", "换药", "断药", "治疗", "服药",
+            "吃药", "用药", "根治", "治愈", "痊愈", "康复", "复发", "见效",
+            "好起来", "药到病除", "立竿见影", "一次见效",
+        },
+        key=len,
+        reverse=True,
+    )
+)
+
+
+def _term_straddles(segments: list[dict], start: int, stop: int) -> bool:
+    """窗口内的换行是否切断了词表里的某个术语（切断了才允许跨行判定）。
+
+    两种算「断词」：
+    1. 换行落在术语内部（`你有抑` / `郁症`）；
+    2. 换行正好在术语末尾，且下一行以语气词开头（`你 抑郁` / `了`），
+       此时断的是「词 + 语气」而不是两句话。
+    """
+    text = ""
+    boundaries: list[int] = []
+    for seg in segments[start:stop]:
+        part = _squash(seg["text"])
+        if text:
+            boundaries.append(len(text))
+        text += part
+    if not text or not boundaries:
+        return False
+    lowered = text.lower()
+    for term in _TERM_TOKENS:
+        needle = term.lower()
+        index = lowered.find(needle)
+        while index != -1:
+            end = index + len(needle)
+            for boundary in boundaries:
+                if index < boundary < end:
+                    return True
+                if boundary == end and boundary < len(text) and text[boundary] in _PARTICLES:
+                    return True
+            index = lowered.find(needle, index + 1)
+    return False
+
+
+def _is_single_char_fragment(seg: dict) -> bool:
+    """单字行（模型按字换行的残片）：不是整句，也没有句末标点。"""
+    text = seg["text"].strip()
+    return len(text) == 1 and text not in _TERMINATORS
+
+
 def _mark_cross_line_hits(segments: list[dict]) -> None:
     """跨行断词二次判定：只给参与命中的连续 segment 打标，不做整段替换。
 
     单行检测已能覆盖「你 患 上 了 抑 郁 症」这类空格断词；这里只处理
-    换行造成的断词（「你有抑\\n郁症」「你的情况\\n可能是抑郁症」）。拼接仅在
-    `_joinable` 成立（上一行不是完整句）时进行，窗口总长受
-    `_CROSS_LINE_MAX_CHARS` 限制，且窗口内每个 segment 单独判定都未命中。
+    换行造成的断词（「你有抑\\n郁症」）。拼接需要同时满足：
+    1. `_joinable`：上一行不是完整句（避免跨句借上下文）；
+    2. `_term_straddles`：换行处确实切断了词表里的术语（避免把人称/判断词
+       借给下一行的独立句子）；
+    3. 窗口总长受 `_CROSS_LINE_MAX_CHARS` 限制，且窗口内每个 segment 单独判定都未命中。
     """
     total = len(segments)
     index = 0
@@ -321,6 +384,8 @@ def _mark_cross_line_hits(segments: list[dict]) -> None:
         for stop in range(index + 2, run_end + 1):
             if any(seg.get("replace_cat") for seg in segments[index:stop]):
                 break
+            if not _term_straddles(segments, index, stop):
+                continue
             category = detect("".join(seg["text"] for seg in segments[index:stop]))
             if category:
                 matched = (stop, category)
@@ -341,6 +406,12 @@ def _mark_cross_line_hits(segments: list[dict]) -> None:
                     start = candidate
                     shrunk = True
                     break
+        # 残字收敛：命中片段被单字行包围时（模型按字换行），把相邻单字行一并纳入，
+        # 避免输出里留下「你\n[安全话术]\n症」这种孤立残字。
+        while start > 0 and _is_single_char_fragment(segments[start - 1]):
+            start -= 1
+        while stop < total and _is_single_char_fragment(segments[stop]):
+            stop += 1
         for seg in segments[start:stop]:
             seg["replace_cat"] = category
         index = stop

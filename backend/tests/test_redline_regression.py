@@ -188,6 +188,26 @@ def test_multiline_context_across_line_still_blocked():
     assert safe == f"你的情况\n{compliance.SAFE_TEXT['diagnosis']}"
 
 
+def test_multiline_third_party_not_borrowed():
+    """H-1：跨行不借上一行的人称/判断词，第三方叙述与科普原样保留。"""
+    for text in (
+        "你最近是不是睡不好\n抑郁症患者常有这种表现",
+        "我有个朋友得了\n抑郁症，现在好多了",
+    ):
+        assert compliance.sanitize(text) == (text, [])
+
+
+def test_multiline_split_word_still_blocked():
+    """H-1/H-2：术语被换行切断仍拦，按字换行不留孤立残字。"""
+    safe, hits = compliance.sanitize("你有抑\n郁症")
+    assert hits == ["diagnosis"]
+    assert safe == compliance.SAFE_TEXT["diagnosis"]
+
+    safe, hits = compliance.sanitize("你\n有\n抑\n郁\n症")
+    assert hits == ["diagnosis"]
+    assert safe == compliance.SAFE_TEXT["diagnosis"]
+
+
 @pytest.mark.parametrize(("text", "expected"), COMPLIANCE_CASES)
 def test_compliance_never_escapes_when_streamed_char_by_char(text, expected):
     """逐字喂入仍必须命中，证明规则最大匹配跨度 < 保留窗，不会被切点拆开。"""
