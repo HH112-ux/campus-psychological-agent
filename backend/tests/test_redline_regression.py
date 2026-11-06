@@ -208,6 +208,34 @@ def test_multiline_split_word_still_blocked():
     assert safe == compliance.SAFE_TEXT["diagnosis"]
 
 
+def test_multiline_adjacent_different_categories_keep_newline():
+    """S-1：相邻不同类别的命中句各自替换时，中间的换行必须保留。"""
+    safe, hits = compliance.sanitize("你有抑郁症\n建议服用舍曲林")
+
+    assert hits == ["diagnosis", "medication"]
+    assert safe == (
+        f"{compliance.SAFE_TEXT['diagnosis']}\n{compliance.SAFE_TEXT['medication']}"
+    )
+
+
+def test_stream_hold_back_counts_normalized_chars():
+    """S-4：保留窗按归一化后长度计算，长空格/逐字换行不能把违规句拆成两半。"""
+    guard = compliance.OutputGuard()
+    out = guard.feed("疑" + " " * 60 + "似患有创伤后应激障碍")
+    out += guard.flush()
+
+    assert "diagnosis" in guard.hits
+    assert out == compliance.SAFE_TEXT["diagnosis"]
+    assert "疑" not in out
+
+
+def test_stream_normal_text_prefix_still_released():
+    """S-4 不把保留窗放大：纯文本无标点时仍按 48 个归一化字符切。"""
+    guard = compliance.OutputGuard()
+
+    assert guard.feed("啊" * 100) == "啊" * 52
+
+
 @pytest.mark.parametrize(("text", "expected"), COMPLIANCE_CASES)
 def test_compliance_never_escapes_when_streamed_char_by_char(text, expected):
     """逐字喂入仍必须命中，证明规则最大匹配跨度 < 保留窗，不会被切点拆开。"""

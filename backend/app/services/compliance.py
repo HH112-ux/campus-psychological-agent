@@ -438,25 +438,44 @@ def sanitize(
     hits: list[str] = []
     seen = inserted if inserted is not None else set()
     out: list[str] = []
-    prev_replaced = False
+    prev_cat: str | None = None
     for seg in segments:
         separator = "\n" if seg["newline_before"] else ""
         category = seg.get("replace_cat")
         if category is None:
             out.append(separator + seg["text"])
-            prev_replaced = False
+            prev_cat = None
             continue
         if category not in hits:
             hits.append(category)
-        # 与上一个被替换句相邻时丢弃换行，避免安全话术之间出现空行
-        if not prev_replaced and separator and out:
+        # 与上一个被替换句「同类」时既不重复插入话术，也不补换行；
+        # 不同类时保留换行，避免「诊断话术」「用药话术」被压成一行。
+        if separator and out and prev_cat != category:
             out.append(separator)
         # 同类违规话术在同一条回复内只插入一次，避免安全提示刷屏
         if category not in seen:
             seen.add(category)
             out.append(SAFE_TEXT[category])
-        prev_replaced = True
+        prev_cat = category
     return "".join(out), hits
+
+
+def _hold_back_cut(buf: str) -> int:
+    """按 `_HOLD_BACK` 个「归一化后字符」计算保留窗起点（返回可下发的切点）。
+
+    保留窗必须覆盖规则的最大匹配跨度，而规则跑在 `_squash` 后的文本上：
+    逐字换行、成片空格会让同一个违规句的原始长度远大于归一化长度
+    （「疑 似 患 有 …」原始 70 字，归一化仅 12 字）。按原始字符切会把
+    违规句拆到「已下发 / 保留区」两侧，因此这里逐字符累加 `_squash` 长度。
+    """
+    kept = 0
+    index = len(buf)
+    while index > 0:
+        index -= 1
+        kept += len(_squash(buf[index]))
+        if kept >= _HOLD_BACK:
+            return index
+    return 0
 
 
 class OutputGuard:
@@ -464,8 +483,9 @@ class OutputGuard:
 
     切分规则：
     1. 有句末标点：切到最后一个句末标点，整句判定后下发；
-    2. 无句末标点：仅当缓冲超过 `_HOLD_BACK` 时，下发「缓冲长度 - _HOLD_BACK」的前缀，
-       末 48 字保留到下一轮。保留窗大于规则最大匹配跨度，跨窗违规句因此仍会被整体判定。
+    2. 无句末标点：仅当缓冲的「归一化后长度」超过 `_HOLD_BACK` 时，下发此前缀，
+       末 `_HOLD_BACK` 个归一化字符保留到下一轮。保留窗大于规则最大匹配跨度，
+       跨窗违规句因此仍会被整体判定。
     """
 
     def __init__(self) -> None:
@@ -479,8 +499,8 @@ class OutputGuard:
         cut = 0
         for match in _TERMINATOR_RE.finditer(self._buf):
             cut = match.end()
-        if not cut and len(self._buf) > _HOLD_BACK:
-            cut = len(self._buf) - _HOLD_BACK
+        if not cut:
+            cut = _hold_back_cut(self._buf)
         if not cut:
             return ""
         ready, self._buf = self._buf[:cut], self._buf[cut:]
