@@ -92,9 +92,11 @@ async def _load_lexicon() -> tuple[list[str], list[str]]:
             elif doc.get("level") == 2:
                 l2.append(phrase)
 
-    # DB 未配置（未跑种子）时用内置兜底，保证红线始终可用
-    l1 = sorted(set(l1 or LEVEL1_PHRASES))
-    l2 = sorted(set(l2 or LEVEL2_PHRASES))
+    # 数据库词库只做「追加」，与内置词表取并集：
+    # 若这里改成替换（l1 or LEVEL1_PHRASES），运营只要在库里写一条词，内置红线
+    # 词表就整体失效，危机召回会直接坍塌。
+    l1 = sorted(set(LEVEL1_PHRASES) | set(l1))
+    l2 = sorted(set(LEVEL2_PHRASES) | set(l2))
     _cache.update(ts=now, l1=l1, l2=l2)
     return l1, l2
 

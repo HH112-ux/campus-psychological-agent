@@ -155,3 +155,26 @@ CRISIS_STILL_CAUGHT = [
 @pytest.mark.parametrize(("text", "level"), CRISIS_STILL_CAUGHT)
 def test_real_crisis_still_caught(text, level):
     assert detect(text).level == level, f"收窄后漏报：{text!r}"
+
+
+def test_db_lexicon_merges_with_builtin(client, db):
+    """数据库词库只能追加，不得整体替换内置红线词表。"""
+    from app.db.indexes import COLL_CRISIS_LEXICON
+    from app.db.mongo import mongo
+    from app.services import crisis as crisis_svc
+
+    async def _run():
+        await mongo.db[COLL_CRISIS_LEXICON].insert_one(
+            {"phrase": "自定义危机词", "level": 1, "enabled": True}
+        )
+        crisis_svc.refresh_lexicon_cache()
+        try:
+            l1, _ = await crisis_svc._load_lexicon()
+            return l1
+        finally:
+            await mongo.db[COLL_CRISIS_LEXICON].delete_many({"phrase": "自定义危机词"})
+            crisis_svc.refresh_lexicon_cache()
+
+    l1 = client.portal.call(_run)
+    assert "想死" in l1, "内置红线词表被数据库词库整体替换了"
+    assert "自定义危机词" in l1
