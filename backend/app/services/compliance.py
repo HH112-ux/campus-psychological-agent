@@ -25,6 +25,15 @@ from __future__ import annotations
 import re
 import unicodedata
 
+# ---------- 归一化 vs 原文（红线约定，勿破） ----------
+# 模式匹配可以跑 `_squash`（NFKC + 繁简归并 + 去空白）；但「前后文邻接 / 豁免 /
+# 边界判定」必须使用**保留标点**的文本：
+# - `_squash` 只去空白，**保留标点**，因此 `_diagnosis` 里的 `pre` / `post` 切片是安全的；
+# - 换行是硬边界：只能由 `_split_segments` 切开、再由 `_cross_line_join_allowed`
+#   显式判定「能否拼接」，任何函数都不得先抹掉 `\n` 再做邻接判断；
+# - 禁止用 `app.core.text.normalize`（它会删标点）做任何边界判断——危机侧
+#   「想死你」吞句、寒暄前缀剥离、碰撞豁免三次同形漏报都源于在去标点文本上判邻接。
+
 # 违规句替换话术（短句，避免进一步给出任何建议性结论）
 SAFE_TEXT: dict[str, str] = {
     "diagnosis": "我不能给出诊断，具体需要专业医生评估。",
@@ -46,7 +55,8 @@ _BARE_RE = re.compile(r"(抑郁|忧郁|焦虑)")
 
 # 强判断/确诊动词：直接下结论（「患(?!者)」排除「抑郁症患者」这类科普主语）
 _DIAG_VERB_RE = re.compile(
-    r"就是|属于|患有|患了|患上了?|患(?!者)|得了|确诊(?:为|是)?|诊断(?:为|是)?|符合|典型"
+    r"就是|属于|患有|患了|患上了?|患(?!者)|得了|确诊(?:为|是)?|诊断(?:为|是)?|"
+    r"符合|满足|达到|典型"
 )
 # 分度/倾向词（轻中度、疑似…）
 _SEVERITY_RE = re.compile(r"轻度|中度|重度|轻中度|疑似|偏重|倾向(?:于)?")
@@ -265,6 +275,10 @@ def _diagnosis(text: str) -> bool:
             )
         ):
             continue
+        # 「我研究的是焦虑的成因」「这是一本关于抑郁的书」：裸病名作定语，
+        # 讨论的是课题/成因/文献，不是给用户下结论（第五轮 H-2）。
+        if re.match(r"的(?:成因|机制|研究|课题|定义|概念|书|文章|文献|报道|科普)", post):
+            continue
         if _DIAG_VERB_RE.search(pre) or _SEVERITY_RE.search(pre) or _CLASSIFY_RE.search(pre):
             return True
         if _DEGREE_RE.search(pre):
@@ -379,25 +393,58 @@ _TERM_TOKENS: tuple[str, ...] = tuple(
 # 判断/推测线索词：换行可能正好落在「线索词 | 病名」之间（「你得了\n抑郁症」
 # 「你可能\n是抑郁症」）。只有上一段**以线索词收尾**时才允许继续往下一行拼，
 # 因此「你最近是不是睡不好\n抑郁症患者常有这种表现」这类普通叙述不会被拼接。
+# 线索词允许后面紧跟完成体/语气词、宾语人称与量词定语（见 `_CUE_TAIL_CHARS`）：
+# 「你已经确诊了」「你被确诊了」「医生已经诊断你为」「你是一名」「你可能是一位」
+# 都应按「线索词收尾」处理，而不是要求上一个字符恰好是线索词最后一个字。
 _CUE_TOKENS: tuple[str, ...] = (
     "患上了", "患有", "患了", "患上", "得了",
     "确诊为", "确诊是", "诊断为", "诊断是", "确诊", "诊断",
-    "符合", "属于", "就是", "可能是", "好像", "可能", "也许", "大概",
-    "疑似", "是",
+    "符合", "满足", "达到", "属于", "作为", "就是", "可能是",
+    "好像", "可能", "也许", "大概", "疑似", "是",
 )
-# 线索词后到术语之间允许隔着的引导字（「可能\n是抑郁症」里的「是」）
-_LEAD_CUE_RE = re.compile(r"^(?:是|为|属于|就是|得了|患了|患上|患有|有)?$")
+# 线索词之后允许的尾缀字符：完成体/语气词（了/啦/的/过）、宾语人称（你/您/我/他/她）、
+# 介词（为）、量词定语（一/位/个/名）。判定方式是从段尾剥离这些字符再比对线索词，
+# 而不是用「固定字偏移阈值」把「一名」「作为」这类两三字的引导卡掉。
+_CUE_TAIL_CHARS = "了啦的过你您我他她一位个名为"
+# 换行后到术语之间允许出现的引导串（「可能\n是抑郁症」的「是」、
+# 「你是一名\n一个抑郁症患者」的「一个」）。只认白名单组合，长度不限但成分受限，
+# 因此不需要再设 `offset > 2` 之类的硬阈值。
+_LEAD_CUE_RE = re.compile(
+    r"^(?:(?:是|为|属于|就是|得了|患了|患上|患有|有|一名|一位|一个|个|名))*$"
+)
+
+
+def _ends_with_cue(previous: str) -> bool:
+    """上一段是否以「线索词 + 可选尾缀」收尾（只认 `_CUE_TOKENS` 白名单）。
+
+    - 「你得了」→ 直接命中线索词「得了」；
+    - 「你已经确诊了」→ 先剥尾缀「了」，剩下「你已经确诊」以「确诊」收尾；
+    - 「医生已经诊断你为」→ 剥尾缀「为你」，剩下「医生已经诊断」以「诊断」收尾；
+    - 「你可能是一名」→ 剥尾缀「一名」，剩下「你可能是」以「是」收尾。
+    剥不干净（尾缀里混入实词）就不算线索词收尾，避免把普通叙述借给下一行。
+    """
+    if any(previous.endswith(cue) for cue in _CUE_TOKENS):
+        return True
+    end = len(previous)
+    while end > 0 and previous[end - 1] in _CUE_TAIL_CHARS:
+        end -= 1
+    if end == len(previous):
+        return False
+    return any(previous[:end].endswith(cue) for cue in _CUE_TOKENS)
 
 
 def _cross_line_join_allowed(segments: list[dict], start: int, stop: int) -> bool:
     """窗口内的换行是否属于「把一句话切断」，从而允许跨行判定。
 
-    只认两类换行，其余一律视为独立句子、不拼接：
+    只认三类换行，其余一律视为独立句子、不拼接：
     1. 换行落在词表术语内部（`你有抑` / `郁症`）；或正好在术语末尾且下一行以
        语气词开头（`你 抑郁` / `了`）——断的是「词 + 语气」；
-    2. 换行落在「判断线索词 | 病名」之间：上一段以 `_CUE_TOKENS` 收尾，且下一段
-       紧贴换行处（中间最多一个引导字）就是词表术语。
-    第 2 类要求「上一段结尾本身就是线索词」，而不是任意结尾，避免把人称/上下文
+    2. 换行落在「判断线索词 | 病名」之间：上一段以 `_CUE_TOKENS` 收尾（允许夹
+       完成体/语气词/宾语人称/量词尾缀，见 `_ends_with_cue`），且下一段在换行处
+       到术语之间只有白名单引导串（`_LEAD_CUE_RE`）；
+    3. 换行落在病名后的定语「的」之后（`你满足抑郁症的` / `诊断标准`），且病名
+       之前确实有线索词。
+    第 2/3 类都要求「上一段确实带线索词」，而不是任意结尾，避免把人称/上下文
     借给下一行的独立句子（第三轮 H-1 的误拦根因）。
     """
     text = ""
@@ -425,14 +472,23 @@ def _cross_line_join_allowed(segments: list[dict], start: int, stop: int) -> boo
 
     for boundary in boundaries:
         previous = text[:boundary]
-        if not any(previous.endswith(cue) for cue in _CUE_TOKENS):
-            continue
-        following = text[boundary:]
+        if _ends_with_cue(previous):
+            following = text[boundary:]
+            for term in _TERM_TOKENS:
+                offset = following.lower().find(term.lower())
+                if offset == -1:
+                    continue
+                if _LEAD_CUE_RE.match(following[:offset]):
+                    return True
+
+        # 3. 病名在上一段末尾、换行落在定语「的」之后（「你满足抑郁症的 | 诊断标准」）：
+        #    只有病名之前确实出现线索词时才拼接，避免把「我研究抑郁症的 | 成因」
+        #    这类定语结构拼成诊断结论。
         for term in _TERM_TOKENS:
-            offset = following.lower().find(term.lower())
-            if offset == -1 or offset > 2:
+            if not previous.endswith(term + "的"):
                 continue
-            if _LEAD_CUE_RE.match(following[:offset]):
+            head = previous[: -len(term) - 1]
+            if any(cue in head[-8:] for cue in _CUE_TOKENS):
                 return True
     return False
 
@@ -451,12 +507,16 @@ def _mark_cross_line_hits(segments: list[dict]) -> None:
     1. `_joinable`：上一行不是完整句（避免跨句借上下文）；
     2. `_cross_line_join_allowed`：换行处确实切断了词表术语，或正好切在
        「判断线索词 | 病名」之间（避免把人称/上下文借给下一行的独立句子）；
-    3. 窗口总长受 `_CROSS_LINE_MAX_CHARS` 限制，且窗口内每个 segment 单独判定都未命中。
+    3. 窗口总长受 `_CROSS_LINE_MAX_CHARS` 限制；窗口内的后续行若已单独命中则不再
+       跨越（起点行例外，用于把「病名 + 的」后面的定语一并替换掉）。
     """
     total = len(segments)
     index = 0
     while index < total:
-        if segments[index].get("replace_cat"):
+        # 已命中的行也可以是拼接窗口的起点：像「你满足抑郁症的 | 诊断标准」这种
+        # 结构，首行单行判定即命中，后续行只是被判定的定语，需要一起替换，
+        # 否则会留下「[安全话术]\n诊断标准」这种残句。
+        if segments[index].get("replace_cat") and not _joinable(segments[index]):
             index += 1
             continue
         # 可拼接的连续片段区间 [index, run_end)
@@ -474,7 +534,8 @@ def _mark_cross_line_hits(segments: list[dict]) -> None:
 
         matched: tuple[int, str] | None = None
         for stop in range(index + 2, run_end + 1):
-            if any(seg.get("replace_cat") for seg in segments[index:stop]):
+            # 不跨越「已经替换过的后续行」；起点行允许已命中（见上面的说明）。
+            if any(seg.get("replace_cat") for seg in segments[index + 1 : stop]):
                 break
             if not _cross_line_join_allowed(segments, index, stop):
                 continue
@@ -505,7 +566,9 @@ def _mark_cross_line_hits(segments: list[dict]) -> None:
         while stop < total and _is_single_char_fragment(segments[stop]):
             stop += 1
         for seg in segments[start:stop]:
-            seg["replace_cat"] = category
+            # 已有的类别不覆盖：已命中的行按原类别替换，新增行沿用本次类别
+            if not seg.get("replace_cat"):
+                seg["replace_cat"] = category
         index = stop
 
 

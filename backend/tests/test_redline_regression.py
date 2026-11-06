@@ -73,6 +73,34 @@ def test_crisis_boundary_uses_raw_text_not_normalized(text, adjacent, expected):
     assert result.level == expected, f"{text!r} 期望 {expected}，实际 {result.level}"
 
 
+# ---------- 合规侧同一条约定：换行是硬边界，不能先抹掉再判邻接 ----------
+# 每项：(原文, `_squash`（去空白/换行）后相邻的片段, 期望类别)。
+COMPLIANCE_RAW_BOUNDARY_CASES = [
+    # 抹掉换行后，「睡不好」会与下一行的「抑郁症患者」拼成假诊断
+    ("你最近是不是睡不好\n抑郁症患者常有这种表现", "睡不好抑郁症", None),
+    # 抹掉换行后，问句里的「你…是」会被借给下一行的「抑郁症是什么」
+    ("你最近还好吗？\n抑郁症是什么", "吗?抑郁症", None),
+    # 线索词带完成体、换行切在线索词与病名之间：按原文语义仍是诊断
+    ("你已经确诊了\n抑郁症", "确诊了抑郁症", "diagnosis"),
+    # 量词定语跨行：一名 | 抑郁症患者
+    ("你是一名\n抑郁症患者", "一名抑郁症", "diagnosis"),
+    # 定语「的」跨行：抑郁症的 | 诊断标准
+    ("你满足抑郁症的\n诊断标准", "抑郁症的诊断", "diagnosis"),
+]
+
+
+@pytest.mark.parametrize(("text", "adjacent", "expected"), COMPLIANCE_RAW_BOUNDARY_CASES)
+def test_compliance_boundary_uses_raw_text_not_squashed(text, adjacent, expected):
+    """`_squash` 会让换行两侧「相邻」；判定必须按原文语义，而不是按抹掉换行后的邻接。"""
+    assert adjacent in compliance._squash(text), "用例前提不成立：去空白后并不相邻"
+    assert compliance.detect(text) == expected
+    safe, hits = compliance.sanitize(text)
+    if expected is None:
+        assert safe == text and hits == []
+    else:
+        assert hits == [expected] and safe == compliance.SAFE_TEXT[expected]
+
+
 # ---------- 危机求助句式必须触发高危告警 ----------
 HELP_SEEKING = [text for text, level in CRISIS_CASES[:6]]
 
