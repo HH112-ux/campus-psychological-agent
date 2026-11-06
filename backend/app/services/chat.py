@@ -171,7 +171,9 @@ async def _build_messages(turn: Turn) -> list[dict]:
     # 策略层：注入本会话最近一轮情绪分析结果（F3），无记录则用中性占位
     latest_emotion = await emotion_svc.latest_session_emotion(turn.session["_id"])
     # E3 路由：记录本会话最近一次情绪标签（供启发式档位分流判断）
-    turn.latest_emotion = (latest_emotion or {}).get("emotion")
+    # latest_session_emotion 返回 {"type", "intensity", "evidence", "risk_level"}，
+    # 情绪标签在 "type"；曾误取 "emotion" 导致该值恒为 None、重情绪分流永不生效
+    turn.latest_emotion = (latest_emotion or {}).get("type")
     # 记忆层（V6）：跨会话长期记忆中与当前话题相关的条目（无关则返回空，克制注入）
     memo_lines = await long_memory.build_injection(turn.user["_id"], turn.content)
     return [

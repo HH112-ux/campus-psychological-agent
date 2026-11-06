@@ -254,3 +254,64 @@ def test_fallback_provider_still_wraps_light_tier(monkeypatch):
     monkeypatch.setattr(get_settings(), "qwen_api_key", "sk-test")
     provider = router.provider_for_tier(router.TIER_LIGHT)
     assert isinstance(provider, FallbackProvider)
+
+
+# ---------- _build_messages → 情绪路由（chat.py 取错键的回归用例）----------
+def _patch_build_deps(monkeypatch, chat, latest):
+    async def _fake_window(session_id):
+        return []
+
+    async def _fake_injection(user_id, content):
+        return []
+
+    async def _fake_latest(session_id):
+        return latest
+
+    monkeypatch.setattr(chat.memory, "load_window", _fake_window)
+    monkeypatch.setattr(chat.long_memory, "build_injection", _fake_injection)
+    monkeypatch.setattr(chat.emotion_svc, "latest_session_emotion", _fake_latest)
+    monkeypatch.setattr(
+        chat, "build_system_prompt", lambda latest_emotion=None, memories=None: ""
+    )
+
+
+def test_build_messages_reads_emotion_type_for_routing(monkeypatch):
+    """latest_session_emotion 的标签在 "type"；取 "emotion" 会让分流恒走轻量档。"""
+    import app.services.chat as chat
+
+    _enable_routing(monkeypatch)
+    _patch_build_deps(
+        monkeypatch,
+        chat,
+        {"type": "depressed", "intensity": 3, "evidence": "", "risk_level": "none"},
+    )
+    turn = chat.Turn(
+        user={"_id": "u"},
+        session={"_id": "s"},
+        content="嗯",
+        user_message_id="mid",
+        crisis=CrisisResult(),
+    )
+    asyncio.run(chat._build_messages(turn))
+
+    assert turn.latest_emotion == "depressed"
+    assert router.select_tier("嗯", "none", turn.latest_emotion) == router.TIER_CHAT
+
+
+def test_build_messages_without_emotion_record_stays_none(monkeypatch):
+    """无历史情绪记录时不误判为负面情绪。"""
+    import app.services.chat as chat
+
+    _enable_routing(monkeypatch)
+    _patch_build_deps(monkeypatch, chat, None)
+    turn = chat.Turn(
+        user={"_id": "u"},
+        session={"_id": "s"},
+        content="嗯",
+        user_message_id="mid",
+        crisis=CrisisResult(),
+    )
+    asyncio.run(chat._build_messages(turn))
+
+    assert turn.latest_emotion is None
+    assert router.select_tier("嗯", "none", turn.latest_emotion) == router.TIER_LIGHT
