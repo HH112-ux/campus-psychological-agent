@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass, field
 
@@ -38,21 +39,36 @@ _cache: dict = {"ts": 0.0, "l1": list(LEVEL1_PHRASES), "l2": list(LEVEL2_PHRASES
 # 否定/夸张语境剥离（只用于匹配，不改变原始文本）：
 # - 否定：「我不想死」「我没想自杀」不构成危机表达；
 # - 寒暄/夸张：「想死你了」「热得要死了」「累死我了」是口语修辞。
-# 这是误报收窄的主要手段：先剥离安全语境，再做词表匹配。
-_SAFE_CONTEXT_PATTERNS: tuple[str, ...] = (
-    "不想死", "不想自杀", "没想自杀", "不会自杀", "不想轻生", "不自杀", "没想死",
-    "想死你了", "想死你", "想死你们", "想死我了", "想死您了",
-    "得要死了", "得要死", "得要命",
-    "笑死", "累死", "热死", "冷死", "吓死", "困死", "饿死", "气死", "忙死", "烦死",
+#
+# 安全边界（第二轮复审 B-3 的教训）：**只剥离完整形态，绝不用裸前缀**。
+# 上一轮写了裸词「想死你」并在归一化文本（标点已被去掉）上做子串替换，
+# 「我想死，你能帮帮我吗」→「我想死你能帮帮我吗」被整段吞掉，真实求助判成 none。
+# 现在：
+# 1) 寒暄只认「想死+你/您/你们/我/我们+了」这一完整语气形式，缺「了」不剥离；
+# 2) 剥离在**保留标点的原文**上做，归一化之前完成，标点（逗号/句号/换行）
+#    天然阻断「想死」与「你」的拼接；
+# 3) 夸张只认「X 死+X+了」与「得要死/得要命」，不会碰「我要死了」这类一级表达。
+_NEGATION_STRIP_RE = re.compile(
+    r"不想死|不想自杀|没想自杀|不会自杀|不想轻生|不自杀|没想死"
+)
+_GREETING_STRIP_RE = re.compile(r"想死(?:你|您|你们|我|我们)了")
+_EXAGGERATION_STRIP_RE = re.compile(
+    r"得要死了?|得要命"
+    r"|(?:笑|累|热|冷|吓|困|饿|气|忙|烦|尴尬|无聊)死(?:我|你|他|她|人|啦|啊|呀)*了?"
 )
 
 
-def strip_safe_context(norm_text: str) -> str:
-    """剥离否定与夸张语境后再匹配，降低日常表达的误报。"""
-    for pattern in _SAFE_CONTEXT_PATTERNS:
-        if pattern in norm_text:
-            norm_text = norm_text.replace(pattern, "")
-    return norm_text
+def strip_safe_context(text: str) -> str:
+    """剥离否定与夸张语境后再匹配，降低日常表达的误报。
+
+    入参可以是原文（推荐，`detect_risk`/`contains_crisis_terms` 走这条），
+    也可以是已归一化文本（`evaluate` 的纯函数入口，便于测试）。由于寒暄只认
+    带「了」的完整形态，即使标点已被去掉，「我想死你能帮帮我吗」也不会命中
+    「想死你了」，因此不会吞掉真实表达。
+    """
+    for pattern in (_NEGATION_STRIP_RE, _GREETING_STRIP_RE, _EXAGGERATION_STRIP_RE):
+        text = pattern.sub("", text)
+    return text
 
 
 def _dedupe_overlapping(hits: list[str]) -> list[str]:
@@ -115,9 +131,13 @@ class CrisisResult:
 
 
 async def detect_risk(text: str, session: dict) -> CrisisResult:
-    """对单条用户消息做本地词库检测（含 DB 热更新词库加载），并结合会话累计分判定。"""
+    """对单条用户消息做本地词库检测（含 DB 热更新词库加载），并结合会话累计分判定。
+
+    顺序固定为「先剥离、后归一化」：剥离依赖标点/换行提供的天然边界，
+    归一化会抹掉这些边界、把相邻短句拼成新词（「我想死，你能…」→「我想死你能…」）。
+    """
     l1, l2 = await _load_lexicon()
-    return evaluate(normalize(text), session, l1, l2)
+    return evaluate(normalize(strip_safe_context(text)), session, l1, l2)
 
 
 async def contains_crisis_terms(text: str) -> list[str]:
@@ -128,7 +148,9 @@ async def contains_crisis_terms(text: str) -> list[str]:
     if not text:
         return []
     l1, l2 = await _load_lexicon()
-    norm = strip_safe_context(normalize(text))
+    # 与 detect_risk 完全同源：原文剥离 → 归一化，避免长期记忆因剥离顺序
+    # 不同而放行真实危机内容（B-3 的连带影响）。
+    norm = normalize(strip_safe_context(text))
     return sorted({p for p in (*l1, *l2) if p in norm})
 
 
