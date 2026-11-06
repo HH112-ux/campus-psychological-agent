@@ -6,6 +6,7 @@
 - docs/code-review-recheck-round3-2026-11-06.md
 - docs/code-review-recheck-round4-2026-11-06.md
 - docs/code-review-recheck-round5-2026-11-06.md
+- docs/code-review-recheck-round6-2026-11-06.md
 - 各轮整改中自己构造的正反用例
 
 用途：
@@ -111,6 +112,17 @@ CRISIS_CASES: list[tuple[str, str]] = [
     ("不想活了", "high"),
     ("不想活下去", "high"),
     ("寻死", "high"),
+    # —— 第六轮复审 B-1：完整词碰撞只看整词，词后接正常续句不改变结论 ——
+    ("我不想活动只想躺着", "none"),
+    ("我不想活动也不想说话", "none"),
+    ("我不想活跃只想安静", "none"),
+    ("我不想活躍，只想休息", "none"),
+    ("我今天不想活蹦乱跳", "none"),
+    ("不想活蹦乱跳了", "none"),
+    ("我不想活跳跳", "none"),
+    ("寻死觅活但我没事", "none"),
+    # 豁免只作用于那一次命中的完整词，后文真危机不得被一起放掉
+    ("我不想活动，但我真的不想活了", "high"),
     # —— 第三轮复审 B-1：否定词紧邻危机词才豁免（白名单）——
     ("我没想过要自杀", "none"),
     ("我从来没想过自杀", "none"),
@@ -165,6 +177,11 @@ MEMORY_CASES: list[tuple[str, bool]] = [
     ("我不想活动", False),
     ("我不想动弹", False),
     ("我不想走动", False),
+    # —— 第六轮复审 B-1：记忆兜底与危机判定共用同一份完整词规则 ——
+    ("我不想活动只想躺着", False),
+    ("寻死觅活但我没事", False),
+    ("我不想活躍，只想休息", False),
+    ("我不想活动，但我真的不想活了", True),
 ]
 
 # ---------- 输出侧合规：(文本, 期望类别 diagnosis/medication/efficacy/None) ----------

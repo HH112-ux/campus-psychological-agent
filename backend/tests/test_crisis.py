@@ -141,6 +141,70 @@ def test_overlapping_l2_terms_counted_once():
     assert r.l2_matches == ["没人在乎我"]
 
 
+# ---------- 第六轮复审 B-1：完整词碰撞只看整词，不看词后接什么 ----------
+# 每项：白名单完整词 → 该词在原文里的写法（简体 + 繁体/异体）。
+# 新增 `_COLLISION_WORDS` 词条必须在这里补一行，下面的守护测试会直接失败。
+COLLISION_FORMS: dict[str, tuple[str, ...]] = {
+    "不想活动": ("不想活动", "不想活動"),
+    "不想活跃": ("不想活跃", "不想活躍"),
+    "不想活蹦乱跳": ("不想活蹦乱跳", "不想活蹦亂跳"),
+    "不想活跳跳": ("不想活跳跳",),  # 「活跳跳」是「活蹦乱跳」的简省说法，繁简同形
+    "寻死觅活": ("寻死觅活", "尋死覓活"),
+}
+COLLISION_WORDS = tuple(w for words in crisis._COLLISION_WORDS.values() for w in words)
+
+
+def test_collision_forms_cover_every_whitelisted_word():
+    """新增白名单词而不补写法/繁简映射时，本测试失败，防止繁体覆盖被漏掉。"""
+    assert set(COLLISION_FORMS) == set(COLLISION_WORDS)
+    for word, forms in COLLISION_FORMS.items():
+        assert forms[0] == word
+        for form in forms:
+            assert form.translate(crisis._COLLISION_T2S) == word, f"{form!r} 未归并到 {word!r}"
+
+
+@pytest.mark.parametrize("word", COLLISION_WORDS)
+@pytest.mark.parametrize("tail", ["只想躺着", "也不想说话", "但我没事", "了"])
+def test_complete_collision_word_is_not_crisis(word, tail):
+    """完整词后面接任何正常续句都不影响结论（第六轮 8 条误报的根因）。"""
+    assert detect(word + tail).level == "none", f"完整词误报：{word + tail!r}"
+
+
+@pytest.mark.parametrize("word", COLLISION_WORDS)
+def test_traditional_collision_word_is_not_crisis(word):
+    for form in COLLISION_FORMS[word]:
+        assert detect(form + "，只想休息").level == "none", f"繁体完整词误报：{form!r}"
+
+
+# 断句字符集：完整词跨度内夹了这些字符就不是同一个词，必须回落 high
+CLAUSE_BREAK_CHARS = [
+    "。", "！", "？", "；", "，", "、", "：", "…", "—",
+    "〜", "～", "·", "・", "「", "」", "（", "）", "“", "”",
+    "/", "|", "\u3000", "\u00a0", "\u200b", "\u200c", "\u200d", "\ufeff", " ",
+]
+
+
+@pytest.mark.parametrize("sep", CLAUSE_BREAK_CHARS)
+def test_collision_span_across_separator_is_not_exempt(sep):
+    assert detect(f"我不想活{sep}动").level == "high", f"{sep!r} 被当成了同一个词"
+
+
+def test_collision_exemption_does_not_swallow_later_crisis():
+    """豁免只作用于那一次命中的完整词，后文真危机按自己的命中判定。"""
+    assert detect("我不想活动，但我真的不想活了").level == "high"
+
+
+def test_real_crisis_continuation_not_exempted():
+    """守住第五轮能力：带标点的「不想活 + 后文」仍是真危机，不得退回整词放行。"""
+    for text in (
+        "我真的不想活，走不动了",
+        "不想活，走路都没力气",
+        "不想活。动不动就想哭",
+        "我不想活，动都不想动",
+    ):
+        assert detect(text).level == "high", f"真实求助被误放：{text!r}"
+
+
 # ---------- 收窄后真实危机仍必须命中 ----------
 CRISIS_STILL_CAUGHT = [
     ("我想死", "high"),
