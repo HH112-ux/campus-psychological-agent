@@ -44,12 +44,16 @@ _DISORDER_RE = re.compile(f"({_DISORDERS})", re.IGNORECASE)
 # 裸病名：只有出现在判断/推断/归类语境时才构成诊断结论
 _BARE_RE = re.compile(r"(抑郁|焦虑)")
 
-# 强判断/确诊动词：直接下结论
+# 强判断/确诊动词：直接下结论（「患(?!者)」排除「抑郁症患者」这类科普主语）
 _DIAG_VERB_RE = re.compile(
-    r"就是|属于|患有|患了|患上了?|得了|确诊(?:为|是)?|诊断(?:为|是)?|符合|典型"
+    r"就是|属于|患有|患了|患上了?|患(?!者)|得了|确诊(?:为|是)?|诊断(?:为|是)?|符合|典型"
 )
 # 分度/倾向词（轻中度、疑似…）
 _SEVERITY_RE = re.compile(r"轻度|中度|重度|轻中度|疑似|偏重|倾向(?:于)?")
+# 病程/时长：裸病名后接时长，等同于「你已经病了多久」的结论式判断
+_DURATION_RE = re.compile(
+    r"(?:很久|好久|好几年|几年|多年|半年|几个月|一段时间|很长时间|太久|好一阵)"
+)
 # 推测词
 _INFER_RE = re.compile(r"可能|也许|大概|似乎|好像|听起来|看起来|像是|像|疑似")
 # 人称代词
@@ -67,8 +71,8 @@ _DRUGS = (
     # 通用名
     "舍曲林|氟西汀|帕罗西汀|氟伏沙明|艾司西酞普兰|西酞普兰|文拉法辛|度洛西汀|"
     "米氮平|曲唑酮|丁螺环酮|劳拉西泮|阿普唑仑|氯硝西泮|地西泮|奥氮平|喹硫平|"
-    "丙戊酸钠|碳酸锂|唑吡坦|右佐匹克隆|阿米替林|多塞平|氯米帕明|舍曲林片|"
-    "氟哌啶醇|坦度螺酮|奥沙西泮|"
+    "丙戊酸钠|碳酸锂|唑吡坦|右佐匹克隆|佐匹克隆|阿米替林|多塞平|氯米帕明|舍曲林片|"
+    "氟哌啶醇|坦度螺酮|奥沙西泮|艾司唑仑|氯氮平|安非他酮|阿立哌唑|鲁拉西酮|"
     # 常见商品名（患者/模型更常说品牌名）
     "百忧解|左洛复|来士普|赛乐特|怡诺思|欣百达|瑞美隆|思诺思|黛力新|"
     "舒乐安定|佳静安定|安定片|阿普唑仑片|米安色林|曲舍林|"
@@ -119,13 +123,48 @@ _CROSS_LINE_MAX_CHARS = 48
 _HOLD_BACK = 48
 
 
+# 繁体/异体字 → 简体：NFKC 只做兼容分解，不处理繁简，模型输出繁体时病名/药名会漏。
+# 只覆盖规则词表里出现过的字，避免引入完整繁简转换依赖（离线部署）。
+_T2S = str.maketrans(
+    {
+        "點": "点", "鬱": "郁", "慮": "虑", "靜": "静", "藥": "药", "醫": "医",
+        "療": "疗", "癒": "愈", "復": "复", "剋": "克", "侖": "仑", "錠": "锭",
+        "劑": "剂", "礙": "碍", "強": "强", "雙": "双", "衝": "冲", "顯": "显",
+        "邊": "边", "開": "开", "體": "体", "聯": "联", "們": "们", "這": "这",
+        "說": "说", "會": "会", "與": "与", "為": "为", "麼": "么", "個": "个",
+        "還": "还", "樣": "样", "後": "后", "裡": "里", "覺": "觉",
+        "斷": "断", "減": "减", "種": "种", "當": "当", "發": "发",
+    }
+)
+
+
 def _squash(text: str) -> str:
-    """NFKC（全角→半角）+ 去掉所有空白，消除换行/空格/全角造成的断词。"""
-    return re.sub(r"\s+", "", unicodedata.normalize("NFKC", text))
+    """NFKC（全角→半角）+ 繁简归并 + 去掉所有空白，消除换行/空格/全角/繁体断词。"""
+    return re.sub(r"\s+", "", unicodedata.normalize("NFKC", text).translate(_T2S))
 
 
 def _before(text: str, index: int, size: int = 14) -> str:
     return text[max(0, index - size) : index]
+
+
+# 直接指向用户的人称：与第三方主语同时出现时，仍按「对用户下结论」处理
+_USER_RE = re.compile(r"你|您")
+# 第三方/转述主语：「我有个朋友得了抑郁症」「医生说他有抑郁症」不是对用户的诊断
+_THIRD_PARTY_RE = re.compile(
+    r"我(?:有个|有一个|的一个|的)?(?:朋友|同学|室友|闺蜜|同事|表姐|表哥|表妹|表弟|"
+    r"弟弟|妹妹|哥哥|姐姐|家人|亲戚)"
+    r"|朋友|同学|室友|闺蜜|同事|表姐|表哥|表妹|表弟|家人|亲戚"
+    r"|医生说|咨询师说|老师说|老师提到|他|她"
+)
+# 科普主语：「抑郁症患者常有这种表现」是在讲群体，不是在给用户下结论
+_GENERIC_SUBJECT_RE = re.compile(r"患者|的人|人群|病友|群体")
+# 科普/泛指语境（「有些人可能会得抑郁症」），用于豁免「推测词 + 明确病名」判定
+_GENERIC_PRE_RE = re.compile(r"有些人|有人|有的人|很多人|人们|大家")
+
+
+def _third_party(pre: str) -> bool:
+    """第三方/转述语境：有第三方主语且没有直接指向用户（你/您）。"""
+    return bool(_THIRD_PARTY_RE.search(pre)) and not _USER_RE.search(pre)
 
 
 def _diagnosis(text: str) -> bool:
@@ -133,6 +172,9 @@ def _diagnosis(text: str) -> bool:
     # 1) 明确病名：需要判断/分度/推断/归类语境，单纯科普「抑郁症很常见」放行
     for match in _DISORDER_RE.finditer(text):
         pre = _before(text, match.start())
+        post = text[match.end() : match.end() + 4]
+        if _GENERIC_SUBJECT_RE.match(post) or _third_party(pre):
+            continue
         if _NEGATED_DIAGNOSIS_RE.search(pre):
             continue
         if _DIAG_VERB_RE.search(pre) or _SEVERITY_RE.search(pre) or _CLASSIFY_RE.search(pre):
@@ -165,6 +207,9 @@ def _diagnosis(text: str) -> bool:
             return True
         # 「你有焦虑」「你是抑郁」：判断/存在动词紧邻裸病名
         if re.search(r"(?:是|有)[^，。！？]{0,2}$", pre):
+            return True
+        # 「你抑郁很久了吧」「听起来你已经抑郁很久了」：时长即病程结论
+        if _DURATION_RE.match(post):
             return True
     return False
 

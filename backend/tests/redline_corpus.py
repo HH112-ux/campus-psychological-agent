@@ -159,6 +159,12 @@ COMPLIANCE_CASES: list[tuple[str, str | None]] = [
     ("你可能是抑 郁症", "diagnosis"),
     ("你\n抑郁\n了", "diagnosis"),
     ("你 有 抑 郁 症。", "diagnosis"),
+    # 诊断结论：第三轮复审（时长/完成体/繁体）
+    ("听起来你已经抑郁很久了", "diagnosis"),
+    ("你抑郁很久了吧", "diagnosis"),
+    ("你患焦虑症了", "diagnosis"),
+    ("你可能焦慮很久了", "diagnosis"),
+    ("你患了抑鬱症", "diagnosis"),
     # 药物 / 用药指导
     ("建议服用 SSRI 类药物", "medication"),
     ("建议服用SNRI类药物", "medication"),
@@ -172,6 +178,12 @@ COMPLIANCE_CASES: list[tuple[str, str | None]] = [
     ("可以服用褪黑素改善睡眠。", "medication"),
     ("建议吃舍曲林", "medication"),
     ("用点奥氮平", "medication"),
+    # 药物：第三轮复审补充（含繁体写法）
+    ("可以试试佐匹克隆", "medication"),
+    ("吃點艾司唑仑", "medication"),
+    ("建议服用氯氮平", "medication"),
+    ("建议服用安非他酮", "medication"),
+    ("建議服用舍曲林", "medication"),
     ("觉得好些了就可以停药。", "medication"),
     ("你可以自己减量试试。", "medication"),
     ("先停掉舍曲林观察几天。", "medication"),
