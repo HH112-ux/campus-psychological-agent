@@ -1,5 +1,5 @@
 <!-- components/crisis-card/crisis-card.wxml -->
-<view class="crisis-card crisis-card--{{level}}">
+<view class="crisis-card crisis-card--{{level}} inline-card">
   <view class="cc-head">
     <view class="cc-badge">{{level === 'high' ? '紧急求助' : '温柔提醒'}}</view>
     <view wx:if="{{closable}}" class="cc-close" bindtap="onDismiss">×</view>

@@ -1,5 +1,7 @@
 // components/crisis-card/crisis-card.js
 Component({
+  // 外部类只能挂在组件根节点；正好用于控制卡片的外边距（页面样式隔离下仍生效）
+  externalClasses: ['inline-card'],
   properties: {
     level: { type: String, value: 'high' }, // high | mid
     resources: { type: Array, value: [] },

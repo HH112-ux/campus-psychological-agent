@@ -15,7 +15,7 @@
         <crisis-card
           wx:if="{{item.card === 'mid'}}"
           id="{{item.key}}"
-          class="inline-card"
+          inline-card="inline-card"
           level="mid"
           resources="{{item.resources}}"
           closable="{{true}}"
