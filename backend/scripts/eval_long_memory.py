@@ -25,10 +25,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.config import get_settings  # noqa: E402
+from app.core.llm_json import extract_json  # noqa: E402
 from app.llm.zhipu import ZhipuProvider  # noqa: E402
 from app.services.long_memory import (  # noqa: E402
     _EXTRACT_SYSTEM_INSTRUCTION,
-    _extract_json,
     parse_memory_json,
 )
 
@@ -80,7 +80,7 @@ async def main() -> int:
                 temperature=0.2,
                 max_tokens=300,
             )
-            parse_ok = _extract_json(raw_out) is not None
+            parse_ok = extract_json(raw_out) is not None
             extracted = parse_memory_json(raw_out)
         except Exception as exc:  # noqa: BLE001
             raw_out = f"<调用异常: {exc}>"
