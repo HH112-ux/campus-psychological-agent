@@ -103,6 +103,8 @@ class Settings(BaseSettings):
     emotion_analysis_enabled: bool = True
     # P5 降级开关：流式可关（关后对话统一走非流式 JSON 路径，弱网/平台异常时兜底）
     stream_enabled: bool = True
+    # SSE 心跳间隔：需小于小程序端 idle 超时（10s），否则首包慢会被误判为断线
+    sse_heartbeat_seconds: float = 5.0
 
     # 监控告警（M5 ③ / M4 值班人通知）：企业微信群机器人 webhook
     # 未配置 alert_webhook_url 时仅记 warning 日志（dev 默认）；异常永不阻断主链路

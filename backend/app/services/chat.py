@@ -225,11 +225,16 @@ class _StreamUnavailable(Exception):
     """流式首块前失败且重试无效；调用侧回退为降级话术。"""
 
 
+class _StreamTruncated(Exception):
+    """已产出部分内容后中断；保留已下发内容，但必须标记为不完整。"""
+
+
 async def _stream_deltas(turn: Turn) -> AsyncIterator[str]:
     """真流式：模型增量到达即产出，不再等整段生成完。
 
     - 首块前失败（连接/超时/空响应）重试 1 次；
-    - 已产出内容后失败则保留已下发部分、按成功结束（避免用户看到半句后重来）。
+    - 已产出内容后失败：抛 _StreamTruncated，由调用侧保留已下发内容并在
+      done 帧标记，不再静默当作正常结束。
     """
     messages = await _build_messages(turn)
     prompt_chars = sum(len(m["content"]) for m in messages)
@@ -249,7 +254,8 @@ async def _stream_deltas(turn: Turn) -> AsyncIterator[str]:
         except Exception:  # noqa: BLE001 —— 网络/模型异常
             if produced:
                 cost.record_call(tier, prompt_chars, emitted_chars)
-                return
+                logger.warning("流式生成中途中断，保留已生成内容（%s 字）", emitted_chars)
+                raise _StreamTruncated from None
             continue  # 首块都没拿到：重试一次
         if produced:
             cost.record_call(tier, prompt_chars, emitted_chars)
@@ -295,72 +301,103 @@ async def reply_nonstream(turn: Turn) -> dict:
 
 
 # ---------- 流式（SSE 事件） ----------
+# 持有后台任务强引用，避免事件循环只保留弱引用导致收尾任务被 GC
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _spawn(coro) -> None:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+
 async def stream_events(turn: Turn) -> AsyncIterator[tuple[str, dict]]:
-    yield "meta", {"user_message_id": turn.user_message_id}
-
-    # high：crisis 先于任何 delta，且不调大模型
-    if turn.crisis.level == "high":
-        yield "crisis", turn.crisis_payload
-        yield "delta", {"content": HIGH_CRISIS_REPLY}
-        message_id = await _finalize(turn, HIGH_CRISIS_REPLY, False)
-        yield "done", {"message_id": message_id, "degraded": False}
-        return
-
-    # none / mid：真流式生成（增量到达即下发，不等整段生成完）
-    guard = compliance.OutputGuard()
     emitted: list[str] = []
     degraded = False
+    truncated = False
+    finalized = False
     try:
-        async for piece in _stream_deltas(turn):
-            safe = guard.feed(piece)
-            if safe:
-                emitted.append(safe)
-                yield "delta", {"content": safe}
-    except _StreamUnavailable:
-        degraded = True
+        yield "meta", {"user_message_id": turn.user_message_id}
 
-    tail = guard.flush()
-    if tail:
-        emitted.append(tail)
-        yield "delta", {"content": tail}
-    if degraded:
-        emitted.append(DEGRADED_REPLY)
-        yield "delta", {"content": DEGRADED_REPLY}
-    if guard.hits:
-        logger.warning(
-            "助手回复命中合规规则，已替换：%s", ",".join(sorted(set(guard.hits)))
-        )
-    assistant_text = "".join(emitted)
-    message_id = await _finalize(turn, assistant_text, degraded)
+        # high：crisis 先于任何 delta，且不调大模型
+        if turn.crisis.level == "high":
+            yield "crisis", turn.crisis_payload
+            emitted.append(HIGH_CRISIS_REPLY)
+            yield "delta", {"content": HIGH_CRISIS_REPLY}
+            message_id = await _finalize(turn, HIGH_CRISIS_REPLY, False)
+            finalized = True
+            yield "done", {"message_id": message_id, "degraded": False, "truncated": False}
+            return
 
-    # V6：后台异步抽取长期记忆（不阻塞流；high 危机路径内部跳过）
-    _schedule_memory_extraction(turn)
+        # none / mid：真流式生成（增量到达即下发，不等整段生成完）
+        guard = compliance.OutputGuard()
+        try:
+            async for piece in _stream_deltas(turn):
+                safe = guard.feed(piece)
+                if safe:
+                    emitted.append(safe)
+                    yield "delta", {"content": safe}
+        except _StreamUnavailable:
+            degraded = True
+        except _StreamTruncated:
+            # 已生成内容保留并下发（含被合规守卫扣住的尾部），但明确标记不完整
+            truncated = True
+            degraded = True
+            await alerting.notify_llm_degraded("stream_truncated")
 
-    # mid：流结束后插入求助卡片
-    if turn.crisis.level == "mid" and turn.crisis_payload:
-        yield "crisis", turn.crisis_payload
+        tail = guard.flush()
+        if tail:
+            emitted.append(tail)
+            yield "delta", {"content": tail}
+        if not truncated and degraded:
+            emitted.append(DEGRADED_REPLY)
+            yield "delta", {"content": DEGRADED_REPLY}
+        if guard.hits:
+            logger.warning(
+                "助手回复命中合规规则，已替换：%s", ",".join(sorted(set(guard.hits)))
+            )
+        assistant_text = "".join(emitted)
+        message_id = await _finalize(turn, assistant_text, degraded)
+        finalized = True
 
-    # 情绪分析（P3）：done 之前下发 emotion 事件；失败/超时则协议允许缺失；
-    # P5 降级开关关闭时整段跳过（不调模型、不写记录、不发事件）
-    emotion = None
-    if get_settings().emotion_analysis_enabled:
-        emotion = await emotion_svc.analyze_turn(
-            turn.user["_id"],
-            turn.session["_id"],
-            parse_oid(turn.user_message_id),
-            parse_oid(message_id),
-            turn.content,
-        )
-    if emotion:
-        yield "emotion", emotion
-        # P4 危机双保险：模型 risk_level=high 时追加 crisis 事件（异步兜底）
-        if emotion.get("risk_level") == "high":
-            resources = (await get_resources())["resources"]
-            yield "crisis", {
-                "level": "high",
-                "show_card": True,
-                "resources": resources,
-                "trigger": "model",
-            }
+        # V6：后台异步抽取长期记忆（不阻塞流；high 危机路径内部跳过）
+        _schedule_memory_extraction(turn)
 
-    yield "done", {"message_id": message_id, "degraded": degraded}
+        # mid：流结束后插入求助卡片
+        if turn.crisis.level == "mid" and turn.crisis_payload:
+            yield "crisis", turn.crisis_payload
+
+        # 情绪分析（P3）：done 之前下发 emotion 事件；失败/超时则协议允许缺失；
+        # P5 降级开关关闭时整段跳过（不调模型、不写记录、不发事件）
+        emotion = None
+        if get_settings().emotion_analysis_enabled:
+            emotion = await emotion_svc.analyze_turn(
+                turn.user["_id"],
+                turn.session["_id"],
+                parse_oid(turn.user_message_id),
+                parse_oid(message_id),
+                turn.content,
+            )
+        if emotion:
+            yield "emotion", emotion
+            # P4 危机双保险：模型 risk_level=high 时追加 crisis 事件（异步兜底）
+            if emotion.get("risk_level") == "high":
+                resources = (await get_resources())["resources"]
+                yield "crisis", {
+                    "level": "high",
+                    "show_card": True,
+                    "resources": resources,
+                    "trigger": "model",
+                }
+
+        yield "done", {"message_id": message_id, "degraded": degraded, "truncated": truncated}
+    finally:
+        # 客户端断连 / 服务取消时生成器被关闭：把已经生成的部分落库，
+        # 避免出现「用户消息已入库、assistant 回复与轮次缺失」。
+        # 断连后当前任务已被取消，故不在此 await，改由后台任务完成收尾。
+        if not finalized:
+            text = "".join(emitted)
+            if not text:
+                text = HIGH_CRISIS_REPLY if turn.crisis.level == "high" else DEGRADED_REPLY
+            _spawn(_finalize(turn, text, True))
+

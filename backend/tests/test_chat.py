@@ -123,3 +123,106 @@ def test_dislike_requires_reason(client, db, fake_llm):
         headers=auth(token),
     )
     assert r.status_code == 400 and r.json()["code"] == 5001
+
+
+# ---------- SSE 健壮性 ----------
+def test_stream_midway_failure_keeps_partial_and_marks_truncated(client, db, monkeypatch):
+    """已产出内容后模型中断：保留已生成内容，并在 done 帧标记 truncated。
+
+    旧实现直接 return，done.degraded 仍为 false，用户看到半句却按正常结束收尾。
+    """
+
+    async def broken_stream(self, messages, temperature=0.7, max_tokens=1024):
+        yield "我在听，"
+        raise RuntimeError("连接中断")
+
+    monkeypatch.setattr(chat.ZhipuProvider, "stream", broken_stream)
+    token = login(client)
+    sid = create_session(client, token)
+    body = _send(client, token, sid, "你好呀", stream=True).text
+
+    assert "我在听，" in body
+    assert '"truncated": true' in body
+    assert '"degraded": true' in body
+    detail = client.get(f"/api/v1/sessions/{sid}", headers=auth(token)).json()["data"]
+    assert len(detail["messages"]) == 2  # user + 部分 assistant 回复均已落库
+
+
+def test_stream_emits_heartbeat_while_waiting(client, db, monkeypatch):
+    """首包慢于前端 idle 超时时必须下发 ping，避免被误判断线。"""
+    import asyncio
+
+    from app.config import get_settings
+
+    async def slow_stream(self, messages, temperature=0.7, max_tokens=1024):
+        await asyncio.sleep(0.05)
+        yield "我在听。"
+
+    monkeypatch.setattr(chat.ZhipuProvider, "stream", slow_stream)
+    monkeypatch.setattr(get_settings(), "sse_heartbeat_seconds", 0.01)
+    token = login(client)
+    sid = create_session(client, token)
+    body = _send(client, token, sid, "你好呀", stream=True).text
+
+    assert "event: ping" in body
+    assert "event: done" in body
+
+
+def test_stream_internal_failure_sends_error_frame(client, db, monkeypatch):
+    """服务内部异常必须以 error 帧明确告知，而不是静默结束。"""
+
+    def broken_stream_events(turn):
+        async def _gen():
+            yield "meta", {"user_message_id": "x"}
+            raise RuntimeError("boom")
+
+        return _gen()
+
+    monkeypatch.setattr(chat, "stream_events", broken_stream_events)
+    token = login(client)
+    sid = create_session(client, token)
+    body = _send(client, token, sid, "你好呀", stream=True).text
+
+    assert "event: error" in body
+    assert '"code": 3002' in body
+
+
+def test_disconnect_still_persists_generated_content(client, db, monkeypatch):
+    """客户端断连（生成器被关闭）时仍要把已生成内容落库。"""
+    import asyncio
+
+    from bson import ObjectId
+
+    from app.core.crypto import decrypt
+    from app.db.indexes import COLL_MESSAGES
+    from app.db.mongo import mongo
+    from app.services.crisis import CrisisResult
+
+    async def one_piece_stream(self, messages, temperature=0.7, max_tokens=1024):
+        yield "第一句话。"
+
+    monkeypatch.setattr(chat.ZhipuProvider, "stream", one_piece_stream)
+
+    turn = chat.Turn(
+        user={"_id": ObjectId()},
+        session={"_id": ObjectId()},
+        content="你好",
+        user_message_id=str(ObjectId()),
+        crisis=CrisisResult(),
+    )
+
+    async def _run():
+        agen = chat.stream_events(turn)
+        await agen.__anext__()  # meta
+        await agen.__anext__()  # 首个 delta
+        await agen.aclose()  # 模拟客户端断连
+        await asyncio.gather(*list(chat._background_tasks))
+
+    client.portal.call(_run)
+
+    doc = client.portal.call(
+        mongo.db[COLL_MESSAGES].find_one,
+        {"session_id": turn.session["_id"], "role": "assistant"},
+    )
+    assert doc is not None, "断连后 assistant 回复应已落库"
+    assert decrypt(doc["content"]) == "第一句话。"

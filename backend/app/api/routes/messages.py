@@ -1,7 +1,9 @@
 """消息接口：发送消息（流式/非流式）、点赞点踩（对齐 API 文档第 6/9 节）。"""
 from __future__ import annotations
 
+import asyncio
 import json
+import time
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
@@ -22,9 +24,51 @@ from app.services import sessions as sessions_svc
 
 router = APIRouter(prefix="/api/v1", tags=["messages"])
 
+# 持有中继任务强引用（与 chat._background_tasks 同理）
+_relay_tasks: set[asyncio.Task] = set()
+
 
 def _sse_frame(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+async def _with_heartbeat(events, interval: float):
+    """把业务事件与心跳帧合并输出。
+
+    模型首包可能慢于小程序端 10s idle 超时（服务端读超时 30s），若无任何下行，
+    前端会把手机会正常的慢响应当成断线并 abort。这里按固定间隔下发 ping，
+    小程序端收到任意分片都会重置 idle 计时（utils/sse.js）。ping 事件未被业务
+    分支识别，等同忽略。
+
+    生成放在独立任务里：消费者（HTTP 连接）断开时只停止读取，生成任务继续跑完
+    并落库，避免断连丢回复。
+    """
+    queue: asyncio.Queue = asyncio.Queue()
+
+    async def _produce() -> None:
+        try:
+            async for item in events:
+                await queue.put(("event", item))
+        except Exception as exc:  # noqa: BLE001 —— 交给消费侧统一出 error 帧
+            await queue.put(("error", exc))
+        finally:
+            await queue.put(("end", None))
+
+    producer = asyncio.create_task(_produce())
+    _relay_tasks.add(producer)
+    producer.add_done_callback(_relay_tasks.discard)
+
+    while True:
+        try:
+            kind, payload = await asyncio.wait_for(queue.get(), timeout=interval)
+        except TimeoutError:
+            yield "ping", {"ts": int(time.time())}
+            continue
+        if kind == "end":
+            return
+        if kind == "error":
+            raise payload
+        yield payload
 
 
 @router.post("/sessions/{session_id}/messages")
@@ -41,7 +85,9 @@ async def send_message(
 
     async def event_generator():
         try:
-            async for event, data in chat.stream_events(turn):
+            async for event, data in _with_heartbeat(
+                chat.stream_events(turn), get_settings().sse_heartbeat_seconds
+            ):
                 yield _sse_frame(event, data)
         except Exception:  # noqa: BLE001
             yield _sse_frame(
