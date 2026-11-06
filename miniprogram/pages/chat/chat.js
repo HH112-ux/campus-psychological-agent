@@ -7,13 +7,14 @@ const COUNT_HINT_AT = MAX_LEN - 200 // 输入到 1800 字以上才提示，不�
 const MAX_RECORD_SECONDS = 60 // 单段录音时长上限（与后端体积上限呼应）
 
 // 只在接近上限时出现的字数提示：默认不渲染，避免每时每刻的压迫感
+// 边界口径：1999「还能写 1 字」可发送；2000「已写满 2000 字」可发送；2001「超出 1 字」禁用发送
 function countHint(v) {
   const len = (v || '').length
   if (len <= COUNT_HINT_AT) return { showCount: false, countText: '', over: false }
   const left = MAX_LEN - len
   return {
     showCount: true,
-    countText: left < 0 ? `超出 ${-left} 字` : `还能写 ${left} 字`,
+    countText: left < 0 ? `超出 ${-left} 字` : left === 0 ? `已写满 ${MAX_LEN} 字` : `还能写 ${left} 字`,
     over: left < 0,
   }
 }
