@@ -120,6 +120,74 @@ def test_compliance_stream_corpus(pieces, expected):
     assert compliance.SAFE_TEXT[expected] in out
 
 
+# ---------- 输出侧合规：多行局部替换（爆炸半径） ----------
+def test_multiline_only_hit_sentence_replaced():
+    """多行回复中只有一句违规时，其余正常句子与换行原样保留。"""
+    text = (
+        "先做三次深呼吸。\n"
+        "你可以试试每天散步十分钟。\n"
+        "你就是抑郁症。\n"
+        "如果持续两周，可以找老师聊聊。"
+    )
+    safe, hits = compliance.sanitize(text)
+
+    assert hits == ["diagnosis"]
+    assert safe == (
+        "先做三次深呼吸。\n"
+        "你可以试试每天散步十分钟。\n"
+        f"{compliance.SAFE_TEXT['diagnosis']}\n"
+        "如果持续两周，可以找老师聊聊。"
+    )
+
+
+def test_multiline_cross_newline_word_still_blocked():
+    """跨换行断词的违规句仍被拦下，且只替换参与命中的那几行。"""
+    text = "你今天怎么样？\n你有抑\n郁症。我在听。\n要聊聊吗？"
+    safe, hits = compliance.sanitize(text)
+
+    assert hits == ["diagnosis"]
+    assert safe.startswith("你今天怎么样？\n")
+    assert "你有抑" not in safe and "郁症" not in safe
+    assert compliance.SAFE_TEXT["diagnosis"] in safe
+    assert "我在听。" in safe
+    assert safe.endswith("\n要聊聊吗？")
+
+
+def test_multiline_consecutive_violations_all_blocked():
+    """同一段连续多句违规时不漏拦，三类话术都替换、正常收尾保留。"""
+    text = "你就是抑郁症。\n建议服用舍曲林。\n坚持吃药就会好起来。\n我在听。"
+    safe, hits = compliance.sanitize(text)
+
+    assert hits == ["diagnosis", "medication", "efficacy"]
+    for category in hits:
+        assert compliance.SAFE_TEXT[category] in safe
+    assert "抑郁症" not in safe
+    assert "舍曲林" not in safe
+    assert "好起来" not in safe
+    assert safe.endswith("\n我在听。")
+
+
+def test_multiline_normal_text_unchanged():
+    """无违规的多行文本（含空行）必须逐字保留。"""
+    text = "先做三次深呼吸。\n你可以试试每天散步十分钟。\n\n如果持续两周，可以找老师聊聊。"
+    assert compliance.sanitize(text) == (text, [])
+
+
+def test_multiline_complete_sentence_not_joined():
+    """上一行已是完整句时不跨行拼接，避免把下一行科普句误判成诊断结论。"""
+    text = "你最近是不是压力很大？\n抑郁症需要专业医生诊断，别自己吓自己。"
+    assert compliance.sanitize(text) == (text, [])
+
+
+def test_multiline_context_across_line_still_blocked():
+    """诊断语境被换行拆到两行时（无句末标点收尾）仍按同一句判定。"""
+    text = "你的情况\n可能是抑郁症，建议尽快就医。"
+    safe, hits = compliance.sanitize(text)
+
+    assert hits == ["diagnosis"]
+    assert safe == compliance.SAFE_TEXT["diagnosis"]
+
+
 @pytest.mark.parametrize(("text", "expected"), COMPLIANCE_CASES)
 def test_compliance_never_escapes_when_streamed_char_by_char(text, expected):
     """逐字喂入仍必须命中，证明规则最大匹配跨度 < 保留窗，不会被切点拆开。"""

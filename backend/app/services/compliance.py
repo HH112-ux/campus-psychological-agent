@@ -103,12 +103,17 @@ _EFFICACY_RESULT_RE = re.compile(
 )
 
 # 分句但保留分隔符，便于按句替换。
-# 换行不再作为句子边界：模型可能把词写在两行（「你有抑\n郁症」），
-# 拆行会让两半都逃过检测。
+# 换行不作为句子边界：模型可能把词写在两行（「你有抑\n郁症」），
+# 拆行会让两半都逃过检测；sanitize 会在检测副本上跨行拼接，
+# 命中后只替换参与命中的那几行（见 `_split_segments` / `_mark_cross_line_hits`）。
 _SENTENCE_RE = re.compile(r"(?<=[。！？!?])")
 
 # 流式切分点：只在句末标点后切（含换行同理）
 _TERMINATOR_RE = re.compile(r"[。！？!?]")
+# 句末标点集合（判断「上一行是否已经是完整句」，决定能否跨行拼接检测）
+_TERMINATORS = "。！？!?"
+# 跨行拼接的最大字符数：只用于把被换行拆开的词拼回来，不做长距离上下文串联
+_CROSS_LINE_MAX_CHARS = 48
 # 无标点时的保留窗口：必须大于任一规则的最大匹配跨度，
 # 否则一个违规句可能被切在「已下发」与「保留区」两侧（上一轮 200 字强制切分即此缺陷）。
 _HOLD_BACK = 48
@@ -195,29 +200,135 @@ def detect(sentence: str) -> str | None:
     return None
 
 
+def _split_segments(text: str) -> list[dict]:
+    """把回复切成「可替换的最小单元」：先按换行，再按句末标点。
+
+    每个 segment 记录 `newline_before`，渲染时据此还原原始换行，
+    保证「只替换命中句」不会把整段多行文本压成一段。
+    """
+    segments: list[dict] = []
+    for line_index, line in enumerate(text.split("\n")):
+        first_in_line = True
+        for piece in _SENTENCE_RE.split(line):
+            if not piece:
+                continue
+            segments.append(
+                {"text": piece, "newline_before": line_index > 0 and first_in_line}
+            )
+            first_in_line = False
+        if first_in_line:
+            # 空行：保留一个纯换行单元，避免多段之间被压扁
+            segments.append(
+                {"text": "", "newline_before": line_index > 0, "raw": True}
+            )
+    return segments
+
+
+def _joinable(previous: dict) -> bool:
+    """上一行没有句末标点时才认为「同一句被换行拆开」，允许跨行拼接检测。
+
+    若上一行已是完整句（以 `。！？!?` 收尾），拼接会把两句话的上下文串起来，
+    容易把下一行的科普句误判成对用户的诊断结论，因此不拼接。
+    """
+    text = previous["text"]
+    return bool(text) and text[-1] not in _TERMINATORS
+
+
+def _mark_cross_line_hits(segments: list[dict]) -> None:
+    """跨行断词二次判定：只给参与命中的连续 segment 打标，不做整段替换。
+
+    单行检测已能覆盖「你 患 上 了 抑 郁 症」这类空格断词；这里只处理
+    换行造成的断词（「你有抑\\n郁症」「你的情况\\n可能是抑郁症」）。拼接仅在
+    `_joinable` 成立（上一行不是完整句）时进行，窗口总长受
+    `_CROSS_LINE_MAX_CHARS` 限制，且窗口内每个 segment 单独判定都未命中。
+    """
+    total = len(segments)
+    index = 0
+    while index < total:
+        if segments[index].get("replace_cat"):
+            index += 1
+            continue
+        # 可拼接的连续片段区间 [index, run_end)
+        run_end = index + 1
+        size = len(segments[index]["text"])
+        while run_end < total and _joinable(segments[run_end - 1]):
+            next_size = len(segments[run_end]["text"])
+            if size + next_size > _CROSS_LINE_MAX_CHARS:
+                break
+            size += next_size
+            run_end += 1
+        if run_end - index < 2:
+            index += 1
+            continue
+
+        matched: tuple[int, str] | None = None
+        for stop in range(index + 2, run_end + 1):
+            if any(seg.get("replace_cat") for seg in segments[index:stop]):
+                break
+            category = detect("".join(seg["text"] for seg in segments[index:stop]))
+            if category:
+                matched = (stop, category)
+                break
+        if matched is None:
+            index += 1
+            continue
+
+        stop, category = matched
+        start = index
+        # 收缩到「真正命中的最小窗口」：避免把同一句里正常的前半句一起吞掉
+        # （「我今天有点累\n你可能是抑郁症」里，命中点从第二行才开始）。
+        shrunk = True
+        while shrunk:
+            shrunk = False
+            for candidate in range(start + 1, stop):
+                if detect("".join(seg["text"] for seg in segments[candidate:stop])):
+                    start = candidate
+                    shrunk = True
+                    break
+        for seg in segments[start:stop]:
+            seg["replace_cat"] = category
+        index = stop
+
+
 def sanitize(
     text: str, inserted: set[str] | None = None
 ) -> tuple[str, list[str]]:
     """按句过滤整段回复：违规句替换为安全话术，返回 (安全文本, 命中类别列表)。
 
+    替换粒度是「句」而不是「段」：多行回复里只有一句违规时，其余句子与
+    换行原样保留；跨换行的断词句只替换参与命中的那几行。
+
     `inserted` 由调用方传入可在多次调用间共享（流式守卫用它避免同类安全话术重复插入）。
     """
     if not text:
         return text, []
+    segments = _split_segments(text)
+    for seg in segments:
+        if not seg.get("raw"):
+            seg["replace_cat"] = detect(seg["text"])
+    _mark_cross_line_hits(segments)
+
     hits: list[str] = []
     seen = inserted if inserted is not None else set()
     out: list[str] = []
-    for part in _SENTENCE_RE.split(text):
-        category = detect(part)
+    prev_replaced = False
+    for seg in segments:
+        separator = "\n" if seg["newline_before"] else ""
+        category = seg.get("replace_cat")
         if category is None:
-            out.append(part)
+            out.append(separator + seg["text"])
+            prev_replaced = False
             continue
         if category not in hits:
             hits.append(category)
+        # 与上一个被替换句相邻时丢弃换行，避免安全话术之间出现空行
+        if not prev_replaced and separator and out:
+            out.append(separator)
         # 同类违规话术在同一条回复内只插入一次，避免安全提示刷屏
         if category not in seen:
             seen.add(category)
             out.append(SAFE_TEXT[category])
+        prev_replaced = True
     return "".join(out), hits
 
 
