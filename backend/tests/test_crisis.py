@@ -176,17 +176,57 @@ def test_traditional_collision_word_is_not_crisis(word):
         assert detect(form + "，只想休息").level == "none", f"繁体完整词误报：{form!r}"
 
 
-# 断句字符集：完整词跨度内夹了这些字符就不是同一个词，必须回落 high
-CLAUSE_BREAK_CHARS = [
+# 词跨度断句集：标点/换行/零宽字符夹在词中间就不是同一个词，必须回落 high
+WORD_SPAN_BREAK_CHARS = [
     "。", "！", "？", "；", "，", "、", "：", "…", "—",
     "〜", "～", "·", "・", "「", "」", "（", "）", "“", "”",
-    "/", "|", "\u3000", "\u00a0", "\u200b", "\u200c", "\u200d", "\ufeff", " ",
+    "/", "|", "\n", "\u200b", "\u200c", "\u200d", "\ufeff",
 ]
 
 
-@pytest.mark.parametrize("sep", CLAUSE_BREAK_CHARS)
-def test_collision_span_across_separator_is_not_exempt(sep):
+@pytest.mark.parametrize("sep", WORD_SPAN_BREAK_CHARS)
+def test_word_span_separator_breaks_collocation(sep):
     assert detect(f"我不想活{sep}动").level == "high", f"{sep!r} 被当成了同一个词"
+
+
+@pytest.mark.parametrize("sep", [" ", "\t", "\u3000", "\u00a0"])
+def test_whitespace_inside_word_does_not_break_collocation(sep):
+    """空白只是排版，不构成语义边界：完整词被排版写开，仍算完整出现。"""
+    assert detect(f"我不想活{sep}动").level == "none", f"{sep!r} 误把完整词拆开"
+
+
+# 语义邻接（否定/寒暄/夸张）只看标点与换行：空白与零宽字符透明
+@pytest.mark.parametrize(
+    "text",
+    [
+        "我不 想死",
+        "我不 想自杀",
+        "我没有 想死",
+        "我没 想过要自杀",
+        "我 没 想 过 自 杀",
+        "我 不 想 死",
+        "我不\u3000想死",
+        "我不\u200b想死",
+        "我想死 你了",
+        "我想死\u200b你了",
+        "热得 要死了",
+        "热得\u200b要死了",
+    ],
+)
+def test_semantic_adjacency_ignores_whitespace_and_zero_width(text):
+    assert detect(text).level == "none", f"排版字符被当成了语义边界：{text!r}"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "我不，想死",
+        "我不。想死",
+        "我想死，你了不了解我",
+    ],
+)
+def test_semantic_adjacency_still_broken_by_punctuation(text):
+    assert detect(text).level == "high", f"标点应当构成语义边界：{text!r}"
 
 
 def test_collision_exemption_does_not_swallow_later_crisis():

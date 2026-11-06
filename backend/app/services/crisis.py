@@ -68,15 +68,23 @@ _NEG_TOKEN_RE = re.compile(r"不|没")
 _GREETING_SUFFIX_RE = re.compile(r"(?:你|您|你们|我|我们)了(?!解|结|却|然|断|不起)")
 # 夸张：「热得要死了」里的「要死了」由「得」引出
 _EXAGGERATION_LEAD = "得"
-# 分句/断行边界：邻接判断遇到这些字符，说明前后不是一个词/一句话，不得互相借用。
-# 只用于**原文**（`raw_text`），归一化文本里这些字符已经被删掉了。
-# 覆盖：中英文句读、破折号/省略号、间隔号与波浪号、各类引号括号书名号、
-# 斜杠与反斜杠、所有空白（含全角空格与不换行空格）、零宽字符。
-_CLAUSE_BREAK_RE = re.compile(
-    r"[。！？!?；;，,、：:…—–‧·・〜～「」『』（）()【】\[\]{}〈〉《》"
-    r"“”‘’\"'/|\\"
-    r"\s\u200b\u200c\u200d\ufeff]"
+# ---------- 断句口径（两套，勿混用） ----------
+# 原则：**标点表示语义边界；空白与零宽字符只表示排版断行，不代表语义边界。**
+# 由此拆成两套，分别服务两类完全不同的问题：
+# - `_SEMANTIC_BREAK_RE`：语义邻接判断（否定词距离 / 寒暄完整性 / 夸张形态）。
+#   空白与零宽字符透明——「我不 想死」「我不\u200b想死」「我想死 你了」「热得 要死了」
+#   仍按同一句处理；只有句读、换行、破折号、引号括号等真正表示语义断开的字符才算边界。
+# - `_WORD_SPAN_BREAK_RE`：白名单完整词「在原文里是否连续出现」。
+#   标点与换行必然切断；零宽字符不可见、正常中文输入不会产生，夹在词中间只能是刻意
+#   插入，无法确认是自然输入的同一个词，按断点保守处理（「我不想活\u200b动」→ high）。
+#   空白只是排版空隙（「我不想活 动」= 排版写开的「不想活动」），不算切断整词。
+# 共同底线：两套判断都读**原文**，不读归一化文本。
+_PUNCT_BREAK_PATTERN = (
+    r"。！？!?；;，,、：:…—–‧·・〜～「」『』（）()【】\[\]{}〈〉《》"
+    r"“”‘’\"'/|\\\n\r"
 )
+_SEMANTIC_BREAK_RE = re.compile(f"[{_PUNCT_BREAK_PATTERN}]")
+_WORD_SPAN_BREAK_RE = re.compile(f"[{_PUNCT_BREAK_PATTERN}\u200b\u200c\u200d\ufeff]")
 # 词内碰撞：命中词只是某个常见词的前缀，不是危机表达。这类不算「句式豁免」，
 # 而是子串匹配的边界问题，必须按**完整词**整体匹配：
 # 「不想活动 / 不想活跃 / 不想活蹦乱跳」不是「不想活」，「寻死觅活」是成语而非求助。
@@ -113,17 +121,18 @@ def _normalize_with_offsets(raw_text: str) -> tuple[str, list[int]]:
 
 
 def _raw_before(raw_text: str, index: int, limit: int) -> str:
-    """取原文中 `index` 之前、同一分句内的片段（遇标点/换行即停）。
+    """取原文中 `index` 之前、同一句内的片段（遇语义边界即停）。
 
-    返回值保留标点以外的原始写法，调用方先 `normalize` 再匹配；`limit` 按
-    **内容字符**计数（空格不计入），与 `_NEG_WINDOW` 的距离口径一致。
+    只按 `_SEMANTIC_BREAK_RE`（标点/换行）截断，空白与零宽字符透明：空格只是排版，
+    不该把「我不 想死」的否定词和危机词拆到两段。`limit` 按**内容字符**计数
+    （空格不计入），与 `_NEG_WINDOW` 的距离口径一致。
     """
     buf: list[str] = []
     count = 0
     i = index - 1
     while i >= 0 and count < limit:
         ch = raw_text[i]
-        if _CLAUSE_BREAK_RE.match(ch):
+        if _SEMANTIC_BREAK_RE.match(ch):
             break
         buf.append(ch)
         if KEEP_RE.match(ch.lower()):
@@ -133,17 +142,17 @@ def _raw_before(raw_text: str, index: int, limit: int) -> str:
 
 
 def _raw_after(raw_text: str, index: int, limit: int) -> str:
-    """取原文中 `index` 之后、同一分句内的片段（遇标点/换行即停）。
+    """取原文中 `index` 之后、同一句内的片段（遇语义边界即停）。
 
-    跨标点/换行返回空串——这正是「后一句的『走』不能给前一句的『不想活』做豁免」的
-    实现方式；调用方按需 `normalize` 后匹配。
+    与 `_raw_before` 同一口径：标点/换行截断，空白与零宽字符透明。跨标点/换行返回
+    空串——这正是「后一句的『走』不能给前一句的『不想活』做豁免」的实现方式。
     """
     buf: list[str] = []
     count = 0
     i = index
     while i < len(raw_text) and count < limit:
         ch = raw_text[i]
-        if _CLAUSE_BREAK_RE.match(ch):
+        if _SEMANTIC_BREAK_RE.match(ch):
             break
         buf.append(ch)
         if KEEP_RE.match(ch.lower()):
@@ -160,7 +169,8 @@ def _is_collocation(
     完整词边界由两步校验，缺一不可：
     1. 整体匹配：归一化文本里命中位置必须完整包含白名单词（`不想活下` ≠ `不想活动`）；
        比对前先做等长繁简归并，繁体「不想活躍」同样视为完整词；
-    2. 原文边界：该词在原文里的跨度内不能夹标点/换行/空白，跨过去就不是同一个词了。
+    2. 原文连续：该词在原文里的跨度内不能夹标点/换行/零宽字符（`_WORD_SPAN_BREAK_RE`）；
+       空白只是排版空隙，不算切断——「我不想活 动」仍视为完整词「不想活动」。
 
     只看「词本身是否完整」，**不看词后接什么**：完整词之后的「只想躺着 / 也不想说话 /
     但我没事」都是正常续句，改变不了「这是个完整词」这一事实。第六轮复审的 8 条误报
@@ -172,7 +182,7 @@ def _is_collocation(
             continue
         raw_word_start = offsets[start]
         raw_word_end = offsets[start + len(word) - 1] + 1
-        if _CLAUSE_BREAK_RE.search(raw_text[raw_word_start:raw_word_end]):
+        if _WORD_SPAN_BREAK_RE.search(raw_text[raw_word_start:raw_word_end]):
             continue
         return True
     return False
