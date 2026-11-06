@@ -187,6 +187,10 @@ def _diagnosis(text: str) -> bool:
             return True
         if _INFER_RE.search(pre) and re.search(r"像|听起来|看起来|似乎", pre):
             return True
+        # 推测词 + 明确病名（无第三方/泛指主语）：「可能是抑郁症」只有在换行把
+        # 主语隔开时才没有「你」，但仍是推测式诊断，必须拦。
+        if _INFER_RE.search(pre) and not _GENERIC_PRE_RE.search(pre):
+            return True
 
     # 2) 裸病名：必须带结论性语境才算诊断；「有点/有些」等共情修饰放行
     for match in _BARE_RE.finditer(text):
@@ -194,9 +198,16 @@ def _diagnosis(text: str) -> bool:
             continue  # 明确病名，已在上面的分支处理
         pre = _before(text, match.start(), 12)
         post = text[match.end() : match.end() + 3]
+        if _third_party(pre) or _GENERIC_SUBJECT_RE.match(post):
+            continue
         if _NEGATED_DIAGNOSIS_RE.search(pre):
             continue
-        if post.startswith(("情绪", "感受", "心情", "状态")):
+        if post.startswith(
+            (
+                "情绪", "感受", "心情", "状态",
+                "的情绪", "的感受", "的心情", "的状态", "的感觉",
+            )
+        ):
             continue
         if _DIAG_VERB_RE.search(pre) or _SEVERITY_RE.search(pre) or _CLASSIFY_RE.search(pre):
             return True

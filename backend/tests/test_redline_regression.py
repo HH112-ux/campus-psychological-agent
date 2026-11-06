@@ -180,12 +180,12 @@ def test_multiline_complete_sentence_not_joined():
 
 
 def test_multiline_context_across_line_still_blocked():
-    """诊断语境被换行拆到两行时（无句末标点收尾）仍按同一句判定。"""
+    """诊断语境被换行拆到两行时仍被拦；只替换真正命中的那一句。"""
     text = "你的情况\n可能是抑郁症，建议尽快就医。"
     safe, hits = compliance.sanitize(text)
 
     assert hits == ["diagnosis"]
-    assert safe == compliance.SAFE_TEXT["diagnosis"]
+    assert safe == f"你的情况\n{compliance.SAFE_TEXT['diagnosis']}"
 
 
 @pytest.mark.parametrize(("text", "expected"), COMPLIANCE_CASES)
