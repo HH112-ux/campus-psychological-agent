@@ -35,7 +35,7 @@ from app.db.mongo import mongo
 from app.db.oid import parse_oid
 from app.llm.router import select_chat_provider
 from app.llm.zhipu import ZhipuProvider  # noqa: F401 —— 保留模块名以便测试打桩
-from app.services import alerting, content_security, long_memory, memory
+from app.services import alerting, compliance, content_security, long_memory, memory
 from app.services import emotion as emotion_svc
 from app.services.crisis import (
     CrisisResult,
@@ -260,6 +260,10 @@ async def reply_nonstream(turn: Turn) -> dict:
         assistant_text, degraded = HIGH_CRISIS_REPLY, False
     else:
         assistant_text, degraded = await _generate_nonstream(turn)
+        # H：输出侧合规过滤（诊断结论 / 药物推荐 / 疗效宣称 → 安全话术）
+        assistant_text, compliance_hits = compliance.sanitize(assistant_text)
+        if compliance_hits:
+            logger.warning("助手回复命中合规规则，已替换：%s", ",".join(compliance_hits))
 
     message_id = await _finalize(turn, assistant_text, degraded)
     # V6：后台异步抽取长期记忆（不阻塞返回；high 危机路径内部跳过）
@@ -299,9 +303,23 @@ async def stream_events(turn: Turn) -> AsyncIterator[tuple[str, dict]]:
 
     # none / mid：流式生成
     chunks, degraded = await _collect_stream(turn)
+    # H：逐块过合规守卫（按句缓冲，跨 chunk 的违规句也能完整识别后再替换）
+    guard = compliance.OutputGuard()
+    emitted: list[str] = []
     for piece in chunks:
-        yield "delta", {"content": piece}
-    assistant_text = "".join(chunks)
+        safe = guard.feed(piece)
+        if safe:
+            emitted.append(safe)
+            yield "delta", {"content": safe}
+    tail = guard.flush()
+    if tail:
+        emitted.append(tail)
+        yield "delta", {"content": tail}
+    if guard.hits:
+        logger.warning(
+            "助手回复命中合规规则，已替换：%s", ",".join(sorted(set(guard.hits)))
+        )
+    assistant_text = "".join(emitted)
     message_id = await _finalize(turn, assistant_text, degraded)
 
     # V6：后台异步抽取长期记忆（不阻塞流；high 危机路径内部跳过）
