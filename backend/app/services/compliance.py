@@ -347,13 +347,29 @@ _TERM_TOKENS: tuple[str, ...] = tuple(
 )
 
 
-def _term_straddles(segments: list[dict], start: int, stop: int) -> bool:
-    """窗口内的换行是否切断了词表里的某个术语（切断了才允许跨行判定）。
+# 判断/推测线索词：换行可能正好落在「线索词 | 病名」之间（「你得了\n抑郁症」
+# 「你可能\n是抑郁症」）。只有上一段**以线索词收尾**时才允许继续往下一行拼，
+# 因此「你最近是不是睡不好\n抑郁症患者常有这种表现」这类普通叙述不会被拼接。
+_CUE_TOKENS: tuple[str, ...] = (
+    "患上了", "患有", "患了", "患上", "得了",
+    "确诊为", "确诊是", "诊断为", "诊断是", "确诊", "诊断",
+    "符合", "属于", "就是", "可能是", "好像", "可能", "也许", "大概",
+    "疑似", "是",
+)
+# 线索词后到术语之间允许隔着的引导字（「可能\n是抑郁症」里的「是」）
+_LEAD_CUE_RE = re.compile(r"^(?:是|为|属于|就是|得了|患了|患上|患有|有)?$")
 
-    两种算「断词」：
-    1. 换行落在术语内部（`你有抑` / `郁症`）；
-    2. 换行正好在术语末尾，且下一行以语气词开头（`你 抑郁` / `了`），
-       此时断的是「词 + 语气」而不是两句话。
+
+def _cross_line_join_allowed(segments: list[dict], start: int, stop: int) -> bool:
+    """窗口内的换行是否属于「把一句话切断」，从而允许跨行判定。
+
+    只认两类换行，其余一律视为独立句子、不拼接：
+    1. 换行落在词表术语内部（`你有抑` / `郁症`）；或正好在术语末尾且下一行以
+       语气词开头（`你 抑郁` / `了`）——断的是「词 + 语气」；
+    2. 换行落在「判断线索词 | 病名」之间：上一段以 `_CUE_TOKENS` 收尾，且下一段
+       紧贴换行处（中间最多一个引导字）就是词表术语。
+    第 2 类要求「上一段结尾本身就是线索词」，而不是任意结尾，避免把人称/上下文
+    借给下一行的独立句子（第三轮 H-1 的误拦根因）。
     """
     text = ""
     boundaries: list[int] = []
@@ -365,6 +381,7 @@ def _term_straddles(segments: list[dict], start: int, stop: int) -> bool:
     if not text or not boundaries:
         return False
     lowered = text.lower()
+
     for term in _TERM_TOKENS:
         needle = term.lower()
         index = lowered.find(needle)
@@ -376,6 +393,18 @@ def _term_straddles(segments: list[dict], start: int, stop: int) -> bool:
                 if boundary == end and boundary < len(text) and text[boundary] in _PARTICLES:
                     return True
             index = lowered.find(needle, index + 1)
+
+    for boundary in boundaries:
+        previous = text[:boundary]
+        if not any(previous.endswith(cue) for cue in _CUE_TOKENS):
+            continue
+        following = text[boundary:]
+        for term in _TERM_TOKENS:
+            offset = following.lower().find(term.lower())
+            if offset == -1 or offset > 2:
+                continue
+            if _LEAD_CUE_RE.match(following[:offset]):
+                return True
     return False
 
 
@@ -391,8 +420,8 @@ def _mark_cross_line_hits(segments: list[dict]) -> None:
     单行检测已能覆盖「你 患 上 了 抑 郁 症」这类空格断词；这里只处理
     换行造成的断词（「你有抑\\n郁症」）。拼接需要同时满足：
     1. `_joinable`：上一行不是完整句（避免跨句借上下文）；
-    2. `_term_straddles`：换行处确实切断了词表里的术语（避免把人称/判断词
-       借给下一行的独立句子）；
+    2. `_cross_line_join_allowed`：换行处确实切断了词表术语，或正好切在
+       「判断线索词 | 病名」之间（避免把人称/上下文借给下一行的独立句子）；
     3. 窗口总长受 `_CROSS_LINE_MAX_CHARS` 限制，且窗口内每个 segment 单独判定都未命中。
     """
     total = len(segments)
@@ -418,7 +447,7 @@ def _mark_cross_line_hits(segments: list[dict]) -> None:
         for stop in range(index + 2, run_end + 1):
             if any(seg.get("replace_cat") for seg in segments[index:stop]):
                 break
-            if not _term_straddles(segments, index, stop):
+            if not _cross_line_join_allowed(segments, index, stop):
                 continue
             category = detect("".join(seg["text"] for seg in segments[index:stop]))
             if category:
