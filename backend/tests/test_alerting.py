@@ -153,15 +153,15 @@ def test_model_risk_sends_lexicon_miss_signal(client, db, alert_env):
 def test_llm_degraded_triggers_alert(monkeypatch, alert_env):
     """非流式 LLM 重试仍失败 → 降级话术 + 告警。"""
 
-    class _FailProvider:
-        async def generate(self, *args, **kwargs):
-            raise RuntimeError("模型超时")
+    async def _boom_generate(self, *args, **kwargs):
+        raise RuntimeError("模型超时")
 
     async def _fake_build(turn):
         return []
 
     monkeypatch.setattr(chat_svc, "_build_messages", _fake_build)
-    monkeypatch.setattr(chat_svc, "ZhipuProvider", _FailProvider)
+    # provider 现由 app.llm 工厂构造，patch 类方法（而非模块名）才能全局生效
+    monkeypatch.setattr(chat_svc.ZhipuProvider, "generate", _boom_generate)
 
     turn = chat_svc.Turn(
         user={"_id": ObjectId()},
