@@ -3,7 +3,20 @@ const api = require('../../utils/api')
 const { openSse } = require('../../utils/sse')
 
 const MAX_LEN = 2000
+const COUNT_HINT_AT = MAX_LEN - 200 // 输入到 1800 字以上才提示，不常驻显示
 const MAX_RECORD_SECONDS = 60 // 单段录音时长上限（与后端体积上限呼应）
+
+// 只在接近上限时出现的字数提示：默认不渲染，避免每时每刻的压迫感
+function countHint(v) {
+  const len = (v || '').length
+  if (len <= COUNT_HINT_AT) return { showCount: false, countText: '', over: false }
+  const left = MAX_LEN - len
+  return {
+    showCount: true,
+    countText: left < 0 ? `超出 ${-left} 字` : `还能写 ${left} 字`,
+    over: left < 0,
+  }
+}
 
 // 情绪角标展示映射（P3：对话页本轮识别）
 const EMOTION_META = {
@@ -33,7 +46,9 @@ Page({
     scrollTo: '',
     seq: 0,
     chunkSupported: true,
-    maxLen: MAX_LEN,
+    showCount: false,
+    countText: '',
+    over: false,
     canSend: false,
     recording: false, // V5：正在录音
     recordSeconds: 0, // 录音已进行秒数
@@ -171,6 +186,7 @@ Page({
         this.setData({
           inputValue: merged,
           canSend: merged.length <= MAX_LEN && !this.data.sending && this.data.ready,
+          ...countHint(merged),
         })
         wx.showToast({ title: '已转写，确认后点发送', icon: 'none' })
       })
@@ -250,6 +266,7 @@ Page({
     this.setData({
       inputValue: v,
       canSend: v.trim().length > 0 && v.length <= MAX_LEN && !this.data.sending && this.data.ready,
+      ...countHint(v),
     })
   },
 
@@ -278,6 +295,7 @@ Page({
       canSend: false,
       sending: true,
       typing: true,
+      ...countHint(''),
       messages: [
         ...this.data.messages,
         { key: userKey, role: 'user', content },

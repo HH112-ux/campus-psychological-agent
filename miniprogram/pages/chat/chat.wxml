@@ -68,8 +68,8 @@
         show-confirm-bar="{{false}}"
         disable-default-padding
       />
-      <view class="composer-foot">
-        <text class="word-count {{inputValue.length > maxLen ? 'word-count--over' : ''}}">{{inputValue.length}}/{{maxLen}}</text>
+      <view wx:if="{{showCount}}" class="composer-foot">
+        <text class="word-count {{over ? 'word-count--over' : ''}}">{{countText}}</text>
       </view>
     </view>
     <view

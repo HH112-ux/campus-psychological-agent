@@ -185,7 +185,7 @@ Page({
         duration_seconds: card.duration_seconds,
       })
       .then(() => {
-        wx.showToast({ title: auto ? '完成一次练习，很棒' : '已记录完成', icon: 'success' })
+        wx.showToast({ title: auto ? '做完了，现在感觉怎么样' : '已记录完成', icon: 'success' })
         this.closeCard()
         this.load()
       })

@@ -7,8 +7,8 @@ const DISCLAIMER =
 
 Page({
   data: {
-    nickname: '同学',
-    avatarChar: '同',
+    nickname: '你', // 默认称呼落在「你」，不使用「同学」这类客服腔
+    avatarChar: '屿',
     consented: false,
     version: '',
     resources: [], // 求助热线（公开接口，无需登录）
@@ -36,8 +36,8 @@ Page({
       .then(() => api.get('/api/v1/users/me'))
       .then((me) => {
         this.setData({
-          nickname: me.nickname || '同学',
-          avatarChar: (me.nickname || '同').slice(0, 1),
+          nickname: me.nickname || '你',
+          avatarChar: me.nickname ? me.nickname.slice(0, 1) : '屿',
           consented: !!me.consented,
         })
       })

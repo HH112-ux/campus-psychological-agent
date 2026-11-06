@@ -10,7 +10,31 @@ const MOODS = [
   { key: 'irritable', label: '烦躁' },
 ]
 
-const DAILY_QUOTE = '情绪没有好坏，它们都只是来送信的。'
+// 每日一句：本地维护一组合规文案（不诊断、不治疗承诺、不鸡血），按日期轮换，不发网络请求
+const DAILY_QUOTES = [
+  '情绪没有好坏，它们都只是来送信的。',
+  '慢慢来，事情一件一件做。',
+  '累了可以停一下，这不叫放弃。',
+  '今天的你，已经撑过很多事了。',
+  '睡不着的时候，先让呼吸慢下来。',
+  '不必马上变好，先好好待着就行。',
+  '把担心写下来，它会轻一点。',
+  '你不需要每时每刻都很努力。',
+  '难过有它的时间，急不来。',
+  '先照顾好这十分钟，剩下的一会儿再说。',
+  '和人说说，或者先和这里说说。',
+  '允许今天普通一点。',
+  '心里的天气，也会慢慢换的。',
+  '来都来了，坐一会儿再走。',
+]
+
+// 按年内第几天取模轮换，同一天内稳定不变
+function todayQuote() {
+  const now = new Date()
+  const yearStart = new Date(now.getFullYear(), 0, 0)
+  const dayOfYear = Math.floor((now - yearStart) / 86400000)
+  return DAILY_QUOTES[dayOfYear % DAILY_QUOTES.length]
+}
 
 const MOOD_META = {
   calm: { text: '平静' },
@@ -29,17 +53,22 @@ function decorateCheckin(c) {
 Page({
   data: {
     greeting: '',
-    dailyQuote: DAILY_QUOTE,
+    dailyQuote: todayQuote(),
     memoryGreeting: '',
     streak: 0,
     moods: MOODS,
     selected: '',
     note: '',
+    showNoteCount: false,
+    noteLeft: 200,
     submitting: false,
     todayCheckin: null, // {mood, intensity, note, date} 或 null
   },
 
   onShow() {
+    // 跨零点回到前台时刷新每日一句（同一天内取值稳定）
+    const quote = todayQuote()
+    if (quote !== this.data.dailyQuote) this.setData({ dailyQuote: quote })
     api
       .ensureLogin()
       .then(() => {
@@ -105,13 +134,13 @@ Page({
       })
   },
 
-  // 按时段三档问候（上午 / 下午 / 深夜）
+  // 按时段三档问候（上午 / 下午 / 深夜）；不叫「同学」，直接说话
   timeGreeting() {
     const h = new Date().getHours()
-    if (h >= 5 && h < 12) return '早上好，同学'
-    if (h >= 12 && h < 18) return '下午好，同学'
-    if (h >= 18 && h < 23) return '晚上好，同学'
-    return '夜深了，同学'
+    if (h >= 5 && h < 12) return '早，今天也来了'
+    if (h >= 12 && h < 18) return '下午好，今天也来了'
+    if (h >= 18 && h < 23) return '晚上好，今天也来了'
+    return '夜深了，还没睡呀'
   },
 
   selectMood(e) {
@@ -120,7 +149,10 @@ Page({
   },
 
   onNoteInput(e) {
-    this.setData({ note: e.detail.value })
+    const v = e.detail.value
+    const left = 200 - v.length
+    // 只在剩余 40 字以内提示，避免输入时一直盯着计数
+    this.setData({ note: v, showNoteCount: left <= 40, noteLeft: left })
   },
 
   submitCheckin() {
@@ -144,6 +176,8 @@ Page({
           streak: d.streak,
           selected: '',
           note: '',
+          showNoteCount: false,
+          noteLeft: 200,
           submitting: false,
         })
         wx.showToast({ title: d.updated ? '已更新今天的记录' : '已记录', icon: 'success' })

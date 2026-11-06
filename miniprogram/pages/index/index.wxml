@@ -2,7 +2,7 @@
 <view class="page">
   <view class="hero">
     <view class="hero-title">{{greeting}}</view>
-    <view class="hero-sub">小屿一直在这里，随时听你说</view>
+    <view class="hero-sub">想说点什么的时候，我都在</view>
   </view>
 
   <!-- 每日一句 -->
@@ -30,7 +30,7 @@
       <view class="done-main">
         <view class="done-line">
           {{todayCheckin.moodText}} · 强度 {{todayCheckin.intensity}}/10
-          <text wx:if="{{streak}}" class="streak-badge">🔥 连续 {{streak}} 天</text>
+          <text wx:if="{{streak}}" class="streak-badge">🔥 连续记录 {{streak}} 天</text>
         </view>
         <view wx:if="{{todayCheckin.note}}" class="done-note">备注：{{todayCheckin.note}}</view>
       </view>
@@ -54,13 +54,13 @@
         <textarea
           class="note-input"
           value="{{note}}"
-          placeholder="写下原因会更好（可选，限 200 字）"
+          placeholder="写下来会更好，也可以不写"
           placeholder-class="note-ph"
           maxlength="200"
           auto-height
           bindinput="onNoteInput"
         />
-        <view class="note-count">{{note.length}}/200</view>
+        <view wx:if="{{showNoteCount}}" class="note-count">{{noteLeft > 0 ? '还能写 ' + noteLeft + ' 字' : '已写满 200 字'}}</view>
       </view>
 
       <view class="submit-btn {{!selected ? 'submit-btn--disabled' : ''}}" bindtap="submitCheckin">
