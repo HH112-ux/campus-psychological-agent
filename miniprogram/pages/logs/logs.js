@@ -137,6 +137,11 @@ Page({
     this.loadRecords(false)
   },
 
+  // 空状态下一步入口：去首页完成今日打卡
+  goCheckin() {
+    wx.switchTab({ url: '/pages/index/index' })
+  },
+
   onFilterTap(e) {
     const key = e.currentTarget.dataset.key
     if (key === this.data.filter) return

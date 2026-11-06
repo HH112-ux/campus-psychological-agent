@@ -28,8 +28,8 @@
   </block>
 
   <view wx:else class="empty">
-    <view class="empty-icon">🏝</view>
     <view class="empty-title">还没有长期记忆</view>
-    <view class="empty-sub">和我多聊聊吧——你提到的重要人和事，我会温柔地记住。</view>
+    <view class="empty-sub">聊得多了，这里会留下你提到过的人和事</view>
+    <view class="empty-action" bindtap="goChat">去聊聊</view>
   </view>
 </view>

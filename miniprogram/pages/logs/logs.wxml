@@ -65,8 +65,8 @@
     </view>
 
     <view wx:if="{{!loading && !items.length}}" class="empty">
-      <view class="empty-emoji">🌱</view>
-      <view class="empty-text">和我说说今天，日志会自动长出来</view>
+      <view class="empty-text">还没有记录。从今天的一次打卡开始吧</view>
+      <view class="empty-action" bindtap="goCheckin">去打卡</view>
     </view>
 
     <view wx:if="{{loading}}" class="loading">加载中…</view>

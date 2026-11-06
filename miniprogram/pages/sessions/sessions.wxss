@@ -96,19 +96,25 @@
   background: var(--danger-tint);
 }
 
+/* 空状态：一句具体引导 + 一个可点击的下一步入口，不用 emoji 插画 */
 .empty {
   margin-top: 120rpx;
   text-align: center;
 }
-.empty-emoji {
-  font-size: 72rpx;
-}
 .empty-text {
-  margin-top: 20rpx;
   font-size: var(--fs-body-s);
   color: var(--text-3);
   padding: 0 60rpx;
   line-height: 1.7;
+}
+.empty-action {
+  display: inline-block;
+  margin-top: 24rpx;
+  padding: 14rpx 48rpx;
+  font-size: var(--fs-body-s);
+  color: #fff;
+  background: var(--brand);
+  border-radius: 999rpx;
 }
 
 .privacy {

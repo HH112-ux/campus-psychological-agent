@@ -29,8 +29,8 @@
   </view>
 
   <view class="empty" wx:if="{{loaded && !items.length && !loading}}">
-    <view class="empty-emoji">🌱</view>
-    <view class="empty-text">还没有对话，从上方“开始一段新对话”说起吧</view>
+    <view class="empty-text">还没有对话。把此刻想说的话，讲给小屿听吧</view>
+    <view class="empty-action" bindtap="newChat">开始一段新对话</view>
   </view>
 
   <view class="privacy">对话内容仅用于为你提供陪伴，危机信息会按安全规则处理。</view>

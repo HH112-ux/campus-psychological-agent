@@ -20,6 +20,11 @@ Page({
     this.load()
   },
 
+  // 空状态下一步入口：去对话页聊聊
+  goChat() {
+    wx.reLaunch({ url: '/pages/chat/chat' })
+  },
+
   load() {
     this.setData({ loading: true })
     api
