@@ -63,6 +63,13 @@ _NEG_TOKEN_RE = re.compile(r"不|没")
 _GREETING_SUFFIX_RE = re.compile(r"(?:你|您|你们|我|我们)了(?!解|结|却|然|断|不起)")
 # 夸张：「热得要死了」里的「要死了」由「得」引出
 _EXAGGERATION_LEAD = "得"
+# 词内碰撞：命中词只是常见词的前缀，不是危机表达。这类不算「句式豁免」，
+# 而是子串匹配的边界问题，按后继字符判定，避免误删词库里的真实危机词：
+# 「不想活动 / 不想活跃」不是「不想活」，「寻死觅活」是成语而非求助。
+_COLLISION_SUFFIX: dict[str, str] = {
+    "不想活": "动跃躍蹦跳跑走",
+    "寻死": "觅",
+}
 
 
 def _is_exempt(norm: str, start: int, end: int, phrase: str) -> bool:
@@ -77,6 +84,8 @@ def _is_exempt(norm: str, start: int, end: int, phrase: str) -> bool:
         return True
     if phrase == "要死了" and before.endswith(_EXAGGERATION_LEAD):
         return True
+    if after and after[0] in _COLLISION_SUFFIX.get(phrase, ""):
+        return True          # 词内碰撞（不想活动 / 寻死觅活）
     return False
 
 
