@@ -4,7 +4,7 @@ from __future__ import annotations
 from bson import ObjectId
 
 from app.config import get_settings
-from app.core.crypto import decrypt
+from app.core.crypto import decrypt, decrypt_optional_text
 from app.core.exceptions import (
     CODE_NOT_FOUND,
     CODE_RESOURCE_FORBIDDEN,
@@ -109,7 +109,13 @@ def _serialize_message(m: dict) -> dict:
         "created_at": to_iso(m.get("created_at")) if m.get("created_at") else None,
     }
     if m.get("role") == "assistant":
-        item["emotion"] = m.get("emotion")  # P1 为 None，P3 填充
+        emotion = m.get("emotion")
+        if isinstance(emotion, dict):
+            emotion = {
+                **emotion,
+                "evidence": decrypt_optional_text(emotion.get("evidence")),
+            }
+        item["emotion"] = emotion  # P1 为 None，P3 填充
         item["feedback"] = m.get("feedback")
         item["degraded"] = m.get("degraded", False)
     return item

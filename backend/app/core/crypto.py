@@ -101,6 +101,25 @@ def decrypt(stored: str | dict | None) -> str:
     return str(stored)
 
 
+def is_encrypted(value: object) -> bool:
+    """判断落库值是否为本模块产出的密文结构（用于迁移脚本幂等判断）。"""
+    return isinstance(value, dict) and bool(value.get(ENC_KEY))
+
+
+def encrypt_optional_text(value: str | None) -> str | dict | None:
+    """可选文本加密：None/空串原样返回，避免把空值写成密文结构。"""
+    if not value:
+        return value
+    return encrypt(value)
+
+
+def decrypt_optional_text(value: str | dict | None) -> str | None:
+    """可选文本解密：保留 None 语义，不把缺失值变成空串。"""
+    if value is None:
+        return None
+    return decrypt(value)
+
+
 def redact(content: str, max_len: int = 0) -> str:
     """日志脱敏：只返回长度或截断摘要，不记录原文。
 

@@ -7,12 +7,13 @@
 """
 from __future__ import annotations
 
-import re
 import time
 from dataclasses import dataclass, field
 
 from bson import ObjectId
 
+from app.core.crypto import encrypt_optional_text
+from app.core.text import normalize
 from app.core.timeutil import now_cst, to_iso
 from app.db.indexes import (
     COLL_CRISIS_LEXICON,
@@ -30,17 +31,9 @@ from app.services.crisis_data import (
     LEVEL2_SCORE_PER_HIT,
 )
 
-# 保留：小写字母、数字、CJK 统一汉字；其余（空格/标点/符号/emoji）一律剔除
-_KEEP_RE = re.compile(r"[a-z0-9\u4e00-\u9fff]")
-
 # 词库缓存：{ts, l1, l2}
 _CACHE_TTL_SECONDS = 60.0
 _cache: dict = {"ts": 0.0, "l1": list(LEVEL1_PHRASES), "l2": list(LEVEL2_PHRASES)}
-
-
-def normalize(text: str) -> str:
-    """归一化：小写 + 剔除空白与所有标点符号，使“不 想.活了”等同“不想活了”。"""
-    return "".join(ch for ch in text.lower() if _KEEP_RE.match(ch))
 
 
 def refresh_lexicon_cache() -> None:
@@ -117,7 +110,7 @@ async def record_risk_event(
     matched: list[str],
     trigger: str = "lexicon",
 ) -> None:
-    """写 risk_events（仅命中词，不写对话原文），留存 ≥12 个月供审计。
+    """写 risk_events（命中词加密存储，读取/导出时解密），留存 ≥12 个月供审计。
 
     trigger："lexicon"（本地词库命中）或 "model"（模型 risk_level 异步兜底）。
     """
@@ -129,7 +122,7 @@ async def record_risk_event(
             "session_id": session_id,
             "level": level,
             "trigger": trigger,
-            "matched": matched,
+            "matched": [encrypt_optional_text(x) for x in matched],
             "created_at": now_cst(),
         }
     )

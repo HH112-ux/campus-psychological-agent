@@ -11,10 +11,17 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from app.core.crypto import decrypt
+from app.core.crypto import decrypt, decrypt_optional_text
 from app.core.timeutil import now_cst
 from app.db.indexes import COLL_MESSAGES, COLL_SESSIONS
 from app.db.mongo import mongo
+
+
+def _decrypt_emotion(emotion: dict | None) -> dict | None:
+    """复盘导出时解密情绪摘录。"""
+    if not isinstance(emotion, dict):
+        return emotion
+    return {**emotion, "evidence": decrypt_optional_text(emotion.get("evidence"))}
 
 
 async def collect_bad_cases(since: datetime | None = None) -> list[dict]:
@@ -53,7 +60,7 @@ async def collect_bad_cases(since: datetime | None = None) -> list[dict]:
                 "reason": feedback.get("reason"),
                 "user_message": decrypt(user_msg.get("content")) if user_msg else None,
                 "assistant_reply": decrypt(msg.get("content")),
-                "emotion": msg.get("emotion"),
+                "emotion": _decrypt_emotion(msg.get("emotion")),
                 "degraded": bool(msg.get("degraded", False)),
             }
         )

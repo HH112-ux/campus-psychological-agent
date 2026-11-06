@@ -6,17 +6,18 @@
 from __future__ import annotations
 
 import os
+import secrets
 from datetime import datetime, timedelta
 
 import pymongo
 import pytest
 from bson import ObjectId
-from helpers import auth, create_session, login
 
 from app.config import get_settings
 from app.core.timeutil import CST, date_str, now_cst
-from app.db.indexes import COLL_CHECKINS, COLL_EMOTION_RECORDS, COLL_USERS
+from app.db.indexes import COLL_CHECKINS, COLL_EMOTION_RECORDS, COLL_MESSAGES, COLL_USERS
 from app.services import chat, emotion
+from tests.helpers import auth, create_session, login
 
 EMOTION_JSON = (
     '{"emotion":"anxious","intensity":7,"evidence":"越学越慌，睡不着",'
@@ -181,6 +182,43 @@ def test_checkin_mood_validation(client, db):
 
 
 # ---------- 情绪分析落库 ----------
+def test_sensitive_fields_encrypted_at_rest(client, db, fake_llm, monkeypatch):
+    """B1：evidence / note 落库为密文，API 读取仍返回明文。"""
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    from app.core import crypto
+
+    monkeypatch.setattr(crypto, "_aesgcm", AESGCM(secrets.token_bytes(32)))
+    monkeypatch.setattr(crypto, "_disabled", False)
+    sync_db = pymongo.MongoClient(os.environ["MONGODB_URI"])[os.environ["MONGODB_DB"]]
+
+    token = login(client, mock_openid="encrypt_at_rest")
+    sid = create_session(client, token)
+    _send(client, token, sid, "最近有点焦虑，越学越慌睡不着")
+
+    assistant = sync_db[COLL_MESSAGES].find_one(
+        {"session_id": ObjectId(sid), "role": "assistant"}
+    )
+    assert crypto.is_encrypted(assistant["emotion"]["evidence"])
+    record = sync_db[COLL_EMOTION_RECORDS].find_one({"source": "message"})
+    assert crypto.is_encrypted(record["evidence"])
+    detail = client.get(f"/api/v1/sessions/{sid}", headers=auth(token)).json()["data"]
+    assistant_view = [m for m in detail["messages"] if m["role"] == "assistant"][0]
+    assert assistant_view["emotion"]["evidence"] == "越学越慌，睡不着"
+    records = client.get("/api/v1/emotion/records", headers=auth(token)).json()["data"]
+    assert records["items"][0]["evidence"] == "越学越慌，睡不着"
+
+    client.post(
+        "/api/v1/emotion/checkins",
+        json={"mood": "anxious", "note": "明天出分，有点坐不住"},
+        headers=auth(token),
+    )
+    raw_checkin = sync_db[COLL_CHECKINS].find_one({})
+    assert crypto.is_encrypted(raw_checkin["note"])
+    today = client.get("/api/v1/emotion/checkins/today", headers=auth(token)).json()["data"]
+    assert today["note"] == "明天出分，有点坐不住"
+
+
 def test_emotion_record_written_after_message(client, db, fake_llm):
     token = login(client)
     sid = create_session(client, token)

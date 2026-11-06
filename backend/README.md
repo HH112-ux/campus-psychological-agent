@@ -49,6 +49,19 @@ python3.12 -m venv .venv
 .venv/bin/uvicorn app.main:app --reload --port 8000
 ```
 
+> **历史数据加密迁移（B1）**：`emotion_records.evidence`、`messages.emotion.evidence`、
+> `checkins.note`、`risk_events.matched` 已改为与对话正文一致的 AES-256-GCM 存储。
+> 已有数据升级后先 dry-run 再执行（幂等，可重复跑；必须配置 `DATA_ENCRYPTION_KEY`）：
+>
+> ```bash
+> .venv/bin/python3.12 -m scripts.migrate_encrypt_sensitive_fields --dry-run
+> .venv/bin/python3.12 -m scripts.migrate_encrypt_sensitive_fields
+> ```
+>
+> **MongoDB 访问**：生产 compose 已开启 `--auth`，且不再向宿主机发布 `27017`；
+> `api` 容器通过 `MONGODB_URI`（带凭据，host 用 `mongo`）访问。需要本机调试时用
+> `docker compose exec mongo mongosh -u "$MONGO_ROOT_USERNAME" -p`，不要恢复端口映射。
+
 > V1 双周复盘：`.venv/bin/python scripts/export_bad_cases.py --days 14 --out /tmp/bad-cases.json`
 > 导出点踩 bad-case（含解密对话内容，产物已 gitignore，**严禁入库**），
 > 按 `docs/bad-case-review-template.md` 归类复盘。
@@ -84,7 +97,7 @@ curl http://localhost:8000/health
 # {"code":0,"message":"ok","data":{"status":"ok","service":"xinyu-backend",
 #  "version":"0.1.0","env":"dev","db":"connected"}}
 
-.venv/bin/python3.12 -m pytest -q     # 46 项全绿（危机红线 + 认证/会话/消息 + P0）
+.venv/bin/python3.12 -m pytest -q     # 189 项全绿（1 skip：真 Redis 集成，按需 REDIS_TEST_URL）
 .venv/bin/ruff check .               # 静态检查无 error
 .venv/bin/python3.12 -m scripts.test_llm # 智谱最简调用（需配置 ZHIPU_API_KEY，未配置时打印 SKIP）
 ```

@@ -15,7 +15,7 @@ import logging
 from bson import ObjectId
 
 from app.config import get_settings
-from app.core.crypto import decrypt
+from app.core.crypto import decrypt, decrypt_optional_text
 from app.core.timeutil import now_cst, to_iso
 from app.db.indexes import (
     COLL_CARE_MESSAGES,
@@ -30,11 +30,22 @@ from app.db.indexes import (
 )
 from app.db.mongo import mongo
 from app.db.oid import parse_oid
+from app.db.user_data_registry import (
+    OWNER_VIA_SESSIONS,
+    USER_DATA_COLLECTIONS,
+)
 
 logger = logging.getLogger(__name__)
 
 # 当前隐私政策版本
 PRIVACY_POLICY_VERSION = "1.0"
+
+
+def _decrypt_emotion(emotion: dict | None) -> dict | None:
+    """导出时解密消息上的情绪摘录，保持用户可见明文。"""
+    if not isinstance(emotion, dict):
+        return emotion
+    return {**emotion, "evidence": decrypt_optional_text(emotion.get("evidence"))}
 
 
 async def record_consent(user_id: ObjectId, policy_version: str | None = None) -> dict:
@@ -94,7 +105,7 @@ async def export_user_data(user_id: ObjectId) -> dict:
                 "session_id": str(m.get("session_id", "")),
                 "role": m.get("role", ""),
                 "content": decrypt(m.get("content")),
-                "emotion": m.get("emotion"),
+                "emotion": _decrypt_emotion(m.get("emotion")),
                 "risk_level": m.get("risk_level", "none"),
                 "feedback": m.get("feedback"),
                 "degraded": m.get("degraded", False),
@@ -107,7 +118,7 @@ async def export_user_data(user_id: ObjectId) -> dict:
         emotions.append({
             "emotion": e.get("emotion"),
             "intensity": e.get("intensity"),
-            "evidence": e.get("evidence"),
+            "evidence": decrypt_optional_text(e.get("evidence")),
             "risk_level": e.get("risk_level"),
             "strategy_hint": e.get("strategy_hint"),
             "created_at": to_iso(e.get("created_at")) if e.get("created_at") else None,
@@ -119,7 +130,7 @@ async def export_user_data(user_id: ObjectId) -> dict:
         checkins.append({
             "date": c.get("date"),
             "mood": c.get("mood"),
-            "note": c.get("note"),
+            "note": decrypt_optional_text(c.get("note")),
             "created_at": to_iso(c.get("created_at")) if c.get("created_at") else None,
         })
 
@@ -129,7 +140,7 @@ async def export_user_data(user_id: ObjectId) -> dict:
         risk_events.append({
             "level": r.get("level"),
             "trigger": r.get("trigger"),
-            "matched": r.get("matched", []),
+            "matched": [decrypt_optional_text(x) for x in r.get("matched", [])],
             "created_at": to_iso(r.get("created_at")) if r.get("created_at") else None,
         })
 
@@ -242,19 +253,18 @@ async def purge_expired_data() -> int:
     count = 0
     async for user in cursor:
         uid = user["_id"]
-        # 先获取 session_ids（用于消息关联删除），再逐集合删除
+        # 先取 session_ids（消息随会话归属），再按登记表逐集合删除
         session_ids = [
             s["_id"] async for s in mongo.db[COLL_SESSIONS].find({"user_id": uid}, {"_id": 1})
         ]
-        if session_ids:
-            await mongo.db[COLL_MESSAGES].delete_many({"session_id": {"$in": session_ids}})
-        await mongo.db[COLL_SESSIONS].delete_many({"user_id": uid})
-        await mongo.db[COLL_EMOTION_RECORDS].delete_many({"user_id": uid})
-        await mongo.db[COLL_CHECKINS].delete_many({"user_id": uid})
-        await mongo.db[COLL_RISK_EVENTS].delete_many({"user_id": uid})
-        await mongo.db[COLL_CARE_MESSAGES].delete_many({"user_id": uid})
-        await mongo.db[COLL_PRACTICE_LOGS].delete_many({"user_id": uid})
-        await mongo.db[COLL_MEMORIES].delete_many({"user_id": uid})
+        for entry in USER_DATA_COLLECTIONS:
+            if entry.owner == OWNER_VIA_SESSIONS:
+                if session_ids:
+                    await mongo.db[entry.name].delete_many(
+                        {"session_id": {"$in": session_ids}}
+                    )
+            else:
+                await mongo.db[entry.name].delete_many({"user_id": uid})
         await mongo.db[COLL_USERS].delete_one({"_id": uid})
         count += 1
         logger.info("物理删除用户 %s 全部数据", uid)

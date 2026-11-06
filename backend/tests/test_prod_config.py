@@ -16,6 +16,7 @@ def _prod_kwargs(**overrides):
         wx_content_check_enabled=True,
         jwt_secret="p" * 32,
         data_encryption_key="k" * 32,
+        mongodb_uri="mongodb://xinyu:strong-pass@mongo:27017/xinyu?authSource=admin",
         zhipu_api_key="zhipu-key",
         asr_provider="http",
         asr_endpoint_url="https://asr.example.cn/asr",
@@ -55,6 +56,12 @@ def test_prod_weak_jwt_secret_rejected():
 def test_prod_missing_encryption_key_rejected():
     with pytest.raises(ValidationError, match="DATA_ENCRYPTION_KEY"):
         Settings(**_prod_kwargs(data_encryption_key=""))
+
+
+def test_prod_mongo_without_credentials_rejected():
+    """B1：生产禁止无认证 Mongo 连接串。"""
+    with pytest.raises(ValidationError, match="MONGODB_URI"):
+        Settings(**_prod_kwargs(mongodb_uri="mongodb://mongo:27017/xinyu"))
 
 
 def test_prod_missing_zhipu_key_rejected():

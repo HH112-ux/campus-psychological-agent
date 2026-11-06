@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 
 from bson import ObjectId
 
+from app.core.crypto import decrypt_optional_text, encrypt_optional_text
 from app.core.timeutil import date_str, now_cst, to_iso
 from app.db.indexes import COLL_CHECKINS, COLL_EMOTION_RECORDS
 from app.db.mongo import mongo
@@ -36,7 +37,7 @@ def _serialize(doc: dict) -> dict:
         "date": doc["date"],
         "mood": doc["mood"],
         "intensity": doc["intensity"],
-        "note": doc.get("note"),
+        "note": decrypt_optional_text(doc.get("note")),
         "created_at": to_iso(doc.get("created_at")) if doc.get("created_at") else None,
     }
 
@@ -48,7 +49,11 @@ async def upsert_checkin(user_id: ObjectId, mood: str, note: str | None) -> dict
     result = await mongo.db[COLL_CHECKINS].update_one(
         {"user_id": user_id, "date": today},
         {
-            "$set": {"mood": mood, "intensity": MOOD_INTENSITY[mood], "note": note},
+            "$set": {
+                "mood": mood,
+                "intensity": MOOD_INTENSITY[mood],
+                "note": encrypt_optional_text(note),
+            },
             "$setOnInsert": {"created_at": now},
         },
         upsert=True,
@@ -120,5 +125,7 @@ async def memory_greeting(user_id: ObjectId) -> str | None:
     if emo is None:
         return None
     return _greeting_from(
-        emo.get("emotion", "other"), emo.get("intensity", 3), emo.get("evidence")
+        emo.get("emotion", "other"),
+        emo.get("intensity", 3),
+        decrypt_optional_text(emo.get("evidence")),
     )

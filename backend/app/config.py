@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from urllib.parse import urlsplit
 
-from pydantic import model_validator
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -53,8 +54,13 @@ class Settings(BaseSettings):
     memory_window_rounds: int = 20  # 窗口记忆：近 20 轮（约 40 条消息）
     session_messages_max_return: int = 200  # 会话详情最多返回最近 200 条
 
-    # 应用层限流后端（M5/G4）：memory=单机内存（dev/默认）；redis=多实例共享计数（生产）
-    ratelimit_backend: str = "memory"
+    # 跨实例共享状态后端（M5/G4）：memory=单机内存（dev/默认）；redis=多实例共享（生产）
+    # 同时驱动限流（ratelimit）、告警冷却与失败率计数（counter），故名 shared_state_backend；
+    # 旧名 RATELIMIT_BACKEND 仍可作为环境变量读取（别名兼容，勿在新配置中使用）
+    shared_state_backend: str = Field(
+        default="memory",
+        validation_alias=AliasChoices("shared_state_backend", "ratelimit_backend"),
+    )
     redis_url: str = "redis://localhost:6379/0"
 
     # 数据留存与清除（M3，见 docs/improvement-roadmap.md）
@@ -69,6 +75,21 @@ class Settings(BaseSettings):
     zhipu_base_url: str = "https://open.bigmodel.cn/api/paas/v4"
     model_chat: str = "glm-4-air"  # 主对话档
     model_light: str = "glm-4-flash"  # 轻量档（情绪分析）
+
+    # E2 多模型容灾：通义千问备用供应商（OpenAI 兼容接口）
+    # qwen_enabled=true 且 qwen_api_key 非空时启用；主 provider 异常自动切备用
+    qwen_enabled: bool = False
+    qwen_api_key: str = ""
+    qwen_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    qwen_model_chat: str = "qwen-plus"  # 备用主档（与 glm-4-air 同等级）
+    qwen_model_light: str = "qwen-turbo"  # 备用轻量档（与 glm-4-flash 同等级）
+
+    # E3 模型路由与成本基线（默认关闭路由，保持现有行为不变）
+    # 启发式分流：短句 + 无危机 + 非负面情绪 → 轻量档；其余走主档（零额外 LLM 调用）
+    cost_routing_enabled: bool = False
+    cost_routing_light_max_chars: int = 30  # 超过此长度视为复杂疏导，走主档
+    # 成本基线：按档位累计调用次数与字符数，输出结构化日志（进程内估算，不做看板）
+    cost_tracking_enabled: bool = True
 
     # 限流与降级
     user_message_hourly_limit: int = 30
@@ -122,7 +143,9 @@ class Settings(BaseSettings):
     long_memory_inject_max_items: int = 5
     long_memory_inject_max_chars: int = 200
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore", populate_by_name=True
+    )
 
     @model_validator(mode="after")
     def _validate_prod_config(self) -> Settings:
@@ -143,6 +166,11 @@ class Settings(BaseSettings):
             problems.append("JWT_SECRET 必须更换为 ≥32 位随机串（不得使用默认值）")
         if not self.data_encryption_key:
             problems.append("DATA_ENCRYPTION_KEY 必须配置（对话内容 AES-256-GCM 应用层加密）")
+        mongo_uri = urlsplit(self.mongodb_uri)
+        if not mongo_uri.username or not mongo_uri.password:
+            problems.append(
+                "MONGODB_URI 必须包含用户名/密码（生产禁止无认证连接，见 docker-compose.yml）"
+            )
         if not self.zhipu_api_key:
             problems.append("ZHIPU_API_KEY 必须配置（对话主链路依赖）")
         if self.asr_enabled:

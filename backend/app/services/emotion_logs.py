@@ -12,6 +12,7 @@ from datetime import UTC, datetime, timedelta
 
 from bson import ObjectId
 
+from app.core.crypto import decrypt_optional_text
 from app.core.timeutil import CST, to_iso
 from app.db.indexes import COLL_CHECKINS, COLL_EMOTION_RECORDS, COLL_MESSAGES, COLL_SESSIONS
 from app.db.mongo import mongo
@@ -105,7 +106,7 @@ def _serialize_record(doc: dict, session_meta: dict) -> dict:
         "session_id": meta.get("session_id"),
         "emotion": doc.get("emotion"),
         "intensity": doc.get("intensity"),
-        "evidence": doc.get("evidence"),
+        "evidence": decrypt_optional_text(doc.get("evidence")),
         "risk_level": doc.get("risk_level", "none"),
         "session_title": meta.get("title"),
         "created_at": to_iso(doc.get("created_at")) if doc.get("created_at") else None,
@@ -122,7 +123,7 @@ def _serialize_checkin(doc: dict) -> dict:
         "mood": doc.get("mood"),  # 原始打卡档位，供"当日备注编辑"回传
         "intensity": doc.get("intensity"),
         "evidence": None,
-        "note": doc.get("note"),
+        "note": decrypt_optional_text(doc.get("note")),
         "risk_level": "none",
         "session_title": None,
         "created_at": to_iso(doc.get("created_at")) if doc.get("created_at") else None,

@@ -93,3 +93,20 @@ def test_redact():
     assert crypto.redact("你好世界", max_len=2) == "(4字) 你好…"
     # 默认只返回长度
     assert crypto.redact("一段很长的心理对话内容") == "(11字)"
+
+
+def test_optional_text_helpers():
+    """敏感可选字段：空值保持原样，非空加密并可识别/解密（B1）。"""
+    _reset_crypto()
+    key = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("ascii")
+    os.environ["DATA_ENCRYPTION_KEY"] = key
+    from app.config import get_settings
+    get_settings().__dict__["data_encryption_key"] = key
+
+    assert crypto.encrypt_optional_text(None) is None
+    assert crypto.encrypt_optional_text("") == ""
+    stored = crypto.encrypt_optional_text("明天出分，有点坐不住")
+    assert crypto.is_encrypted(stored)
+    assert not crypto.is_encrypted("明文")
+    assert crypto.decrypt_optional_text(stored) == "明天出分，有点坐不住"
+    assert crypto.decrypt_optional_text(None) is None

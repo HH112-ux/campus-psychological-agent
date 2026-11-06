@@ -5,11 +5,25 @@ services:
     image: mongo:7
     container_name: xinyu-mongo
     restart: unless-stopped
-    ports:
-      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?请在 .env 配置 MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?请在 .env 配置 MONGO_ROOT_PASSWORD}
+    # 不向宿主机发布 27017：仅 compose 网络内可访问（容器间用 mongo:27017）。
+    # 需要本机调试时用 docker compose exec mongo mongosh 进入，勿恢复端口映射。
+    expose:
+      - "27017"
     volumes:
       - mongo-data:/data/db
-    command: ["mongod", "--bind_ip_all"]
+    command: ["mongod", "--bind_ip_all", "--auth"]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mongosh --quiet --username \"$$MONGO_INITDB_ROOT_USERNAME\" --password \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval 'db.adminCommand({ping:1}).ok' | grep -q 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   nginx:
     image: nginx:1.27-alpine
@@ -31,7 +45,8 @@ services:
     restart: unless-stopped
     env_file: .env
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
     expose:
       - "8000"
     profiles: ["prod"]

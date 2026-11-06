@@ -15,23 +15,25 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import re
 from collections.abc import Sequence
 
 from bson import ObjectId
 
 from app.config import get_settings
-from app.core.crypto import decrypt
+from app.core.crypto import decrypt, encrypt_optional_text
+from app.core.llm_json import extract_json
+from app.core.metrics import FailRateCounter
 from app.core.timeutil import now_cst
 from app.db.indexes import COLL_EMOTION_RECORDS, COLL_MESSAGES
 from app.db.mongo import mongo
-from app.llm.zhipu import ZhipuProvider
+from app.llm import get_light_provider
+from app.llm.zhipu import ZhipuProvider  # noqa: F401 —— 保留模块名以便测试打桩
 from app.models.emotion import EmotionAnalysis
 from app.services.crisis import handle_model_risk
 
 logger = logging.getLogger(__name__)
+
 
 # 轻量模型分析参数（temperature 0.2 固定，保证可复现）
 EMOTION_TEMPERATURE = 0.2
@@ -73,38 +75,13 @@ def _resolve_emotion(raw: str) -> str | None:
             return resolved
     return None
 
-# 失败率监控（进程内计数；P4 起接入正式监控指标）
-_fail_count = 0
-_total_count = 0
-
-
-def _extract_json(raw: str) -> dict | None:
-    """从模型输出中提取 JSON 对象（容忍 markdown 代码块与前后杂质）。"""
-    text = raw.strip()
-    # 去掉 ```json ... ``` 围栏
-    m = re.search(r"```(?:json)?\s*(.*?)```", text, flags=re.S)
-    if m:
-        text = m.group(1).strip()
-    # 直接整体解析
-    try:
-        obj = json.loads(text)
-        return obj if isinstance(obj, dict) else None
-    except json.JSONDecodeError:
-        pass
-    # 截取第一个 { 到最后一个 } 再解析
-    start, end = text.find("{"), text.rfind("}")
-    if start >= 0 and end > start:
-        try:
-            obj = json.loads(text[start : end + 1])
-            return obj if isinstance(obj, dict) else None
-        except json.JSONDecodeError:
-            return None
-    return None
+# 失败率监控：跨实例共享计数（M5；原为进程内 _fail_count/_total_count）
+_analysis_fail_rate = FailRateCounter("emotion_analysis")
 
 
 def parse_emotion_json(raw: str) -> EmotionAnalysis | None:
     """严格解析 + 轻量归一化；任何字段非法即返回 None（按缺失处理）。"""
-    obj = _extract_json(raw)
+    obj = extract_json(raw)
     if not obj:
         return None
 
@@ -195,26 +172,6 @@ async def _build_analysis_messages(
     return messages
 
 
-def _record_failure() -> None:
-    global _fail_count, _total_count
-    _total_count += 1
-    _fail_count += 1
-    if _total_count >= 20 and _fail_count / _total_count > 0.05:
-        logger.warning(
-            "情绪分析失败率 %.0f%%（%d/%d），触发告警阈值（>5%%）",
-            _fail_count / _total_count * 100,
-            _fail_count,
-            _total_count,
-        )
-        _fail_count = 0
-        _total_count = 0
-
-
-def _record_success() -> None:
-    global _total_count
-    _total_count += 1
-
-
 async def analyze_turn(
     user_id: ObjectId,
     session_id: ObjectId,
@@ -231,7 +188,7 @@ async def analyze_turn(
     messages = await _build_analysis_messages(
         session_id, current_content, skip_ids=[user_message_id, assistant_message_id]
     )
-    provider = ZhipuProvider(model=settings.model_light)
+    provider = get_light_provider()
     try:
         raw = await asyncio.wait_for(
             provider.generate(
@@ -242,16 +199,16 @@ async def analyze_turn(
             timeout=settings.emotion_analysis_timeout_seconds,
         )
     except Exception:  # noqa: BLE001 —— 超时/网络/模型异常统一按失败处理
-        _record_failure()
+        await _analysis_fail_rate.failure()
         logger.info("情绪分析失败（调用异常），跳过本轮记录 session=%s", session_id)
         return None
 
     analysis = parse_emotion_json(raw)
     if analysis is None:
-        _record_failure()
+        await _analysis_fail_rate.failure()
         logger.info("情绪分析失败（JSON 解析/字段越界），跳过本轮记录 session=%s", session_id)
         return None
-    _record_success()
+    await _analysis_fail_rate.success()
 
     emotion = {
         "type": analysis.emotion,
@@ -259,13 +216,18 @@ async def analyze_turn(
         "evidence": analysis.evidence,
         "risk_level": analysis.risk_level,  # P4：返回 risk_level 供 chat 链路做异步兜底
     }
+    # evidence 是用户原话摘录，与对话正文同等敏感：落库前加密，读取路径解密
+    stored_emotion = {
+        **emotion,
+        "evidence": encrypt_optional_text(analysis.evidence),
+    }
     # 1) 回填 assistant 消息（会话详情可读，供前后端抽查一致）
     if mongo.db is not None:
         await mongo.db[COLL_MESSAGES].update_one(
             {"_id": assistant_message_id},
-            {"$set": {"emotion": emotion}},
+            {"$set": {"emotion": stored_emotion}},
         )
-        # 2) 写 emotion_records（仅记录结构化结果，不存对话原文）
+        # 2) 写 emotion_records（evidence 为加密摘录，导出/日志页读取时解密）
         await mongo.db[COLL_EMOTION_RECORDS].insert_one(
             {
                 "user_id": user_id,
@@ -273,7 +235,7 @@ async def analyze_turn(
                 "ref_id": user_message_id,
                 "emotion": analysis.emotion,
                 "intensity": analysis.intensity,
-                "evidence": analysis.evidence,
+                "evidence": stored_emotion["evidence"],
                 "risk_level": analysis.risk_level,
                 "strategy_hint": analysis.strategy_hint,
                 "created_at": now_cst(),
