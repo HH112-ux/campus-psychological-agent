@@ -2,6 +2,8 @@
 
 - 词库从 crisis_lexicon 集合加载（60s TTL 缓存，支持热更新），DB 为空时用内置兜底；
 - 归一化后做子串匹配，覆盖“去标点/空格、字间加符号、少量拼音谐音”等基础变体；
+- 命中即按危机处理；只有否定词紧邻危机词、或命中词本身是完整寒暄/夸张形态时才豁免
+  （白名单式，见 `_is_exempt`），不做「先删疑似安全片段再看剩下」的黑名单剥离；
 - 一级命中即 high；二级按命中词计分并累计到会话，≥4 分升 high，否则 mid；
 - 触发均写 risk_events（仅记录命中词，不记录对话原文）。
 """
@@ -36,39 +38,59 @@ from app.services.crisis_data import (
 _CACHE_TTL_SECONDS = 60.0
 _cache: dict = {"ts": 0.0, "l1": list(LEVEL1_PHRASES), "l2": list(LEVEL2_PHRASES)}
 
-# 否定/夸张语境剥离（只用于匹配，不改变原始文本）：
-# - 否定：「我不想死」「我没想自杀」不构成危机表达；
-# - 寒暄/夸张：「想死你了」「热得要死了」「累死我了」是口语修辞。
+# ---------- 安全语境豁免（白名单） ----------
+# 判定方向：**默认命中即危机**，只有在危机词紧邻位置出现明确的否定/限定词，或
+# 命中词本身是完整的寒暄/夸张形态时，才豁免这一次命中。
 #
-# 安全边界（第二轮复审 B-3 的教训）：**只剥离完整形态，绝不用裸前缀**。
-# 上一轮写了裸词「想死你」并在归一化文本（标点已被去掉）上做子串替换，
-# 「我想死，你能帮帮我吗」→「我想死你能帮帮我吗」被整段吞掉，真实求助判成 none。
-# 现在：
-# 1) 寒暄只认「想死+你/您/你们/我/我们+了」这一完整语气形式，缺「了」不剥离；
-# 2) 剥离在**保留标点的原文**上做，归一化之前完成，标点（逗号/句号/换行）
-#    天然阻断「想死」与「你」的拼接；
-# 3) 夸张只认「X 死+X+了」与「得要死/得要命」，不会碰「我要死了」这类一级表达。
-_NEGATION_STRIP_RE = re.compile(
-    r"不想死|不想自杀|没想自杀|不会自杀|不想轻生|不自杀|没想死"
+# 为什么不再做「剥离」：第二轮之前是「先把疑似安全的前缀整段删掉，再看剩下」，
+# 豁免面是一份黑名单，句式一变（「我想死，你了解吗」）就漏；第三代还出现了一条
+# 链路剥离、另一条不剥离的口径分裂。白名单式不删除任何文本，只对「这一次出现」
+# 做是否豁免的判断，危机判定与 `contains_crisis_terms` 共用同一个函数。
+#
+# 距离阈值 `_NEG_WINDOW = 5` 的依据：
+# - 否定词必须在危机词前 5 个字以内，且与危机词之间最多只允许 3 个助词/程度词
+#   （「没想过要自杀」= 没 + 想过要 3 个；「从来没想过自杀」= 没 + 想过 2 个）；
+# - 5 字能覆盖常见的否定表达，又不足以跨过一个分句：归一化会删掉标点，
+#   窗口再放宽就会把「不，我想死」的「不」借给后面的「想死」，把真实求助判成否定。
+_NEG_WINDOW = 5
+_NEG_PREFIX_RE = re.compile(
+    r"(?:不|没|没有|别|勿|并非|不是|不会|并不|从未|从没|未曾)"
+    r"(?:太|是|再|会|想|要|敢|曾|过|有|去|打算|准备|觉得|那么|怎么){0,3}$"
 )
-_GREETING_STRIP_RE = re.compile(r"想死(?:你|您|你们|我|我们)了")
-_EXAGGERATION_STRIP_RE = re.compile(
-    r"得要死了?|得要命"
-    r"|(?:笑|累|热|冷|吓|困|饿|气|忙|烦|尴尬|无聊)死(?:我|你|他|她|人|啦|啊|呀)*了?"
-)
+_NEG_TOKEN_RE = re.compile(r"不|没")
+# 寒暄：「想死你了 / 想死您了 / 想死我了」，必须带「了」收尾才算完整语气形式；
+# 且「了」不能是「了解/了结/了却」这类词的开头（「我想死，你了解吗」是真求助）。
+_GREETING_SUFFIX_RE = re.compile(r"(?:你|您|你们|我|我们)了(?!解|结|却|然|断|不起)")
+# 夸张：「热得要死了」里的「要死了」由「得」引出
+_EXAGGERATION_LEAD = "得"
 
 
-def strip_safe_context(text: str) -> str:
-    """剥离否定与夸张语境后再匹配，降低日常表达的误报。
+def _is_exempt(norm: str, start: int, end: int, phrase: str) -> bool:
+    """判断某次命中是否属于「安全语境」（白名单，默认不豁免）。"""
+    before = norm[max(0, start - _NEG_WINDOW) : start]
+    after = norm[end : end + 4]
 
-    入参可以是原文（推荐，`detect_risk`/`contains_crisis_terms` 走这条），
-    也可以是已归一化文本（`evaluate` 的纯函数入口，便于测试）。由于寒暄只认
-    带「了」的完整形态，即使标点已被去掉，「我想死你能帮帮我吗」也不会命中
-    「想死你了」，因此不会吞掉真实表达。
-    """
-    for pattern in (_NEGATION_STRIP_RE, _GREETING_STRIP_RE, _EXAGGERATION_STRIP_RE):
-        text = pattern.sub("", text)
-    return text
+    if _NEG_PREFIX_RE.search(before) and len(_NEG_TOKEN_RE.findall(before)) < 2:
+        # 否定词紧邻危机词；双重否定（「不是不想死」）不豁免
+        return True
+    if phrase == "想死" and _GREETING_SUFFIX_RE.match(after):
+        return True
+    if phrase == "要死了" and before.endswith(_EXAGGERATION_LEAD):
+        return True
+    return False
+
+
+def _find_hits(norm: str, phrases: list[str]) -> list[str]:
+    """返回未被豁免的命中词（同一词任一出现未被豁免即算命中）。"""
+    hits: list[str] = []
+    for phrase in phrases:
+        start = norm.find(phrase)
+        while start != -1:
+            if not _is_exempt(norm, start, start + len(phrase), phrase):
+                hits.append(phrase)
+                break
+            start = norm.find(phrase, start + 1)
+    return hits
 
 
 def _dedupe_overlapping(hits: list[str]) -> list[str]:
@@ -133,37 +155,34 @@ class CrisisResult:
 async def detect_risk(text: str, session: dict) -> CrisisResult:
     """对单条用户消息做本地词库检测（含 DB 热更新词库加载），并结合会话累计分判定。
 
-    顺序固定为「先剥离、后归一化」：剥离依赖标点/换行提供的天然边界，
-    归一化会抹掉这些边界、把相邻短句拼成新词（「我想死，你能…」→「我想死你能…」）。
+    全链路只有一处「归一化 + 豁免」：`normalize` 之后直接进入 `evaluate`，
+    `evaluate` 内部不再做任何剥离，避免出现「一条链路判 high、另一条判 none」。
     """
     l1, l2 = await _load_lexicon()
-    return evaluate(normalize(strip_safe_context(text)), session, l1, l2)
+    return evaluate(normalize(text), session, l1, l2)
 
 
 async def contains_crisis_terms(text: str) -> list[str]:
     """确定性复核：返回文本命中的危机词（一级/二级同表），供长期记忆写入前兜底过滤。
 
     不依赖模型是否遵守提示词：只要抽取结果（或输入）里出现危机词，就整条丢弃。
+    与 `detect_risk` 同一口径：`normalize` + `_find_hits`（同一份豁免规则）。
     """
     if not text:
         return []
     l1, l2 = await _load_lexicon()
-    # 与 detect_risk 完全同源：原文剥离 → 归一化，避免长期记忆因剥离顺序
-    # 不同而放行真实危机内容（B-3 的连带影响）。
-    norm = normalize(strip_safe_context(text))
-    return sorted({p for p in (*l1, *l2) if p in norm})
+    return sorted(set(_find_hits(normalize(text), [*l1, *l2])))
 
 
 def evaluate(norm_text: str, session: dict, l1: list[str], l2: list[str]) -> CrisisResult:
     """纯同步判定：归一化文本 + 会话状态 + 两级词表 → 检测结果（不访问 DB，便于测试）。"""
     current_score = session.get("crisis_score", 0) or 0
-    norm_text = strip_safe_context(norm_text)
 
-    l1_hit = _dedupe_overlapping([p for p in l1 if p in norm_text])
+    l1_hit = _dedupe_overlapping(_find_hits(norm_text, l1))
     if l1_hit:
         return CrisisResult(level="high", l1_matches=l1_hit, new_score=current_score)
 
-    l2_hit = _dedupe_overlapping([p for p in l2 if p in norm_text])
+    l2_hit = _dedupe_overlapping(_find_hits(norm_text, l2))
     if l2_hit:
         added = LEVEL2_SCORE_PER_HIT * len(l2_hit)
         new_score = current_score + added
