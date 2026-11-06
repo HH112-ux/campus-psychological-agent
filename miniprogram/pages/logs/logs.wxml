@@ -47,12 +47,12 @@
   <!-- 时间线 -->
   <view class="timeline">
     <view class="tl-item" wx:for="{{items}}" wx:key="record_id" data-id="{{item.record_id}}" bindtap="onItemTap">
-      <view class="tl-badge" style="background: {{item.color}}1A; color: {{item.color}}">
-        {{item.emoji}}
+      <view class="tl-badge emo--{{item.colorClass}}">
+        <view class="emo-glyph emo-glyph--sm emo--{{item.colorClass}}"></view>
       </view>
       <view class="tl-main">
         <view class="tl-head">
-          <text class="tl-label" style="color: {{item.color}}">{{item.label}}</text>
+          <text class="tl-label emo--{{item.colorClass}}">{{item.label}}</text>
           <text class="tl-int">{{item.intensity}}/10</text>
           <text class="tl-time">{{item.timeText}}</text>
         </view>

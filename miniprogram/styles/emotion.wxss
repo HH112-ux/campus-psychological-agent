@@ -1,0 +1,104 @@
+/* styles/emotion.wxss —— 情绪视觉唯一来源
+   被 index.wxss / logs.wxss 通过 @import 共用；页面内不得再重复定义情绪色值。
+   表达只靠「描边粗细 + 内核填充 + 外环 + 内间隙」四个维度，
+   色值沿用 P0 已收敛的语义色，不新增任何 hex。
+   贴签下仍必须有文字标签（不用颜色单独区分情绪）。 */
+
+/* 打卡词汇 calm / ok / low / anxious / irritable
+   日志词汇 calm / ok / depressed / anxious / angry / other
+   low↔depressed、irritable↔angry 为同一情绪的两套后端词汇，合并在同一条规则里 */
+.emo--calm {
+  --emo-ink: #6fae7f;
+  --emo-bg: #f1f7f2;
+  --emo-ring: 0;
+  --emo-fill: 0.85;
+}
+
+.emo--ok {
+  --emo-ink: #6fae7f;
+  --emo-bg: #f1f7f2;
+  --emo-ring: 2rpx;
+  --emo-fill: 0.4;
+}
+
+.emo--depressed,
+.emo--low {
+  --emo-ink: #6b7fa8;
+  --emo-bg: #f0f2f6;
+  --emo-ring: 2rpx;
+  --emo-fill: 0.25;
+  --emo-gap: 6rpx; /* 内间隙：读作「下沉 / 空心」 */
+}
+
+.emo--anxious {
+  --emo-ink: #e06666;
+  --emo-bg: #fcf0f0;
+  --emo-ring: 2rpx;
+  --emo-fill: 0.55;
+  --emo-halo: 0.4;          /* 外扩一圈细环：读作「余波 / 不安」 */
+  --emo-halo-inset: -6rpx;
+}
+
+.emo--angry,
+.emo--irritable {
+  --emo-ink: #e0913e;
+  --emo-bg: #fcf4eb;
+  --emo-ring: 4rpx; /* 粗描边：读作「紧绷」 */
+  --emo-fill: 0.8;
+}
+
+/* 其他：直接消费中性文字色，避免与 --text-3 重复定义同一个 hex */
+.emo--other {
+  --emo-ink: var(--text-3);
+  --emo-bg: #f2f1f0;
+  --emo-ring: 2rpx;
+  --emo-fill: 0.5;
+}
+
+/* 色点本体：尺寸只有 3 档（默认 40 / --lg 44 / --sm 28） */
+.emo-glyph {
+  position: relative;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: var(--emo-size, 40rpx);
+  height: var(--emo-size, 40rpx);
+  border-radius: 50%;
+  background: var(--emo-bg);
+  border: var(--emo-ring, 2rpx) solid var(--emo-ink);
+  box-shadow: inset 0 0 0 var(--emo-gap, 0) var(--emo-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.emo-glyph--lg {
+  --emo-size: 44rpx;
+}
+
+.emo-glyph--sm {
+  --emo-size: 28rpx;
+}
+
+/* 内核：填充浓度表示情绪强度 */
+.emo-glyph::after {
+  content: '';
+  width: 38%;
+  height: 38%;
+  border-radius: 50%;
+  background: var(--emo-ink);
+  opacity: var(--emo-fill, 0.5);
+}
+
+/* 外环：仅焦虑档可见（其余档 --emo-halo 为 0） */
+.emo-glyph::before {
+  content: '';
+  position: absolute;
+  top: var(--emo-halo-inset, 0);
+  right: var(--emo-halo-inset, 0);
+  bottom: var(--emo-halo-inset, 0);
+  left: var(--emo-halo-inset, 0);
+  border: 1rpx solid var(--emo-ink);
+  border-radius: 50%;
+  opacity: var(--emo-halo, 0);
+  pointer-events: none;
+}

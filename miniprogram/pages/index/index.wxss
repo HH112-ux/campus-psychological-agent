@@ -1,3 +1,5 @@
+@import "../../styles/emotion.wxss";
+
 /* pages/index/index.wxss —— 首页样式（暖暮治愈主题） */
 .page {
   padding: 32rpx 32rpx 48rpx;
@@ -108,10 +110,6 @@
   transform: translateY(-6rpx);
 }
 
-.mood-emoji {
-  font-size: 48rpx;
-}
-
 .mood-label {
   margin-top: 8rpx;
   font-size: var(--fs-caption);
@@ -168,8 +166,7 @@
   padding: 24rpx;
 }
 
-.done-emoji {
-  font-size: 56rpx;
+.done-card .emo-glyph {
   margin-right: 20rpx;
 }
 

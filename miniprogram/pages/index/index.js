@@ -1,28 +1,29 @@
 // pages/index/index.js —— 首页：按时段问候 + 每日一句 + 记忆型问候 + 五档情绪打卡
 const api = require('../../utils/api')
 
+// 情绪五档：key 即后端打卡词汇（calm/ok/low/anxious/irritable），渲染于 styles/emotion.wxss
 const MOODS = [
-  { key: 'calm', emoji: '😌', label: '平静' },
-  { key: 'ok', emoji: '🙂', label: '还行' },
-  { key: 'low', emoji: '😔', label: '低落' },
-  { key: 'anxious', emoji: '😰', label: '焦虑' },
-  { key: 'irritable', emoji: '😠', label: '烦躁' },
+  { key: 'calm', label: '平静' },
+  { key: 'ok', label: '还行' },
+  { key: 'low', label: '低落' },
+  { key: 'anxious', label: '焦虑' },
+  { key: 'irritable', label: '烦躁' },
 ]
 
 const DAILY_QUOTE = '情绪没有好坏，它们都只是来送信的。'
 
 const MOOD_META = {
-  calm: { emoji: '😌', text: '平静' },
-  ok: { emoji: '🙂', text: '还行' },
-  low: { emoji: '😔', text: '低落' },
-  anxious: { emoji: '😰', text: '焦虑' },
-  irritable: { emoji: '😠', text: '烦躁' },
+  calm: { text: '平静' },
+  ok: { text: '还行' },
+  low: { text: '低落' },
+  anxious: { text: '焦虑' },
+  irritable: { text: '烦躁' },
 }
 
 function decorateCheckin(c) {
   if (!c) return null
-  const meta = MOOD_META[c.mood] || { emoji: '🙂', text: c.mood }
-  return { ...c, moodEmoji: meta.emoji, moodText: meta.text }
+  const meta = MOOD_META[c.mood] || { text: c.mood }
+  return { ...c, moodText: meta.text }
 }
 
 Page({

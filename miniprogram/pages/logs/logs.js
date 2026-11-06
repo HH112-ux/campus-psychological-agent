@@ -1,13 +1,14 @@
 // pages/logs/logs.js —— 情绪日志：7 天趋势 + 时间线（对话 + 打卡合并）
 const api = require('../../utils/api')
 
+// 情绪色与色点样式唯一来源在 styles/emotion.wxss 的 .emo--<cls> 类，JS 只输出语义 cls
 const EMOTION_META = {
-  anxious: { emoji: '😰', text: '焦虑', color: '#e06666' },
-  depressed: { emoji: '😔', text: '低落', color: '#6b7fa8' },
-  calm: { emoji: '🙂', text: '平静', color: '#6fae7f' },
-  ok: { emoji: '🙂', text: '还行', color: '#6fae7f' },
-  angry: { emoji: '😠', text: '烦躁', color: '#e0913e' },
-  other: { emoji: '🌿', text: '其他', color: '#7a736b' },
+  anxious: { text: '焦虑', cls: 'anxious' },
+  depressed: { text: '低落', cls: 'depressed' },
+  calm: { text: '平静', cls: 'calm' },
+  ok: { text: '还行', cls: 'ok' },
+  angry: { text: '烦躁', cls: 'angry' },
+  other: { text: '其他', cls: 'other' },
 }
 
 const FILTERS = [
@@ -113,9 +114,9 @@ Page({
     return api.get(query).then((d) => {
       const todayStr = new Date().toISOString().slice(0, 10)
       const decorated = (d.items || []).map((it) => {
-        const meta = EMOTION_META[it.emotion] || { emoji: '🌿', text: it.emotion, color: '#7a736b' }
+        const meta = EMOTION_META[it.emotion] || { text: it.emotion, cls: 'other' }
         const canEditNote = it.source === 'checkin' && (it.created_at || '').slice(0, 10) === todayStr
-        return { ...it, emoji: meta.emoji, label: meta.text, color: meta.color, timeText: this.fmtTime(it.created_at), canEditNote }
+        return { ...it, label: meta.text, colorClass: meta.cls, timeText: this.fmtTime(it.created_at), canEditNote }
       })
       this.setData({
         items: reset ? decorated : this.data.items.concat(decorated),

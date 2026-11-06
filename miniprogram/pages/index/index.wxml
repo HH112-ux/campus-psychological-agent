@@ -26,7 +26,7 @@
 
     <!-- 已打卡卡片 -->
     <view wx:if="{{todayCheckin}}" class="done-card">
-      <view class="done-emoji">{{todayCheckin.moodEmoji}}</view>
+      <view class="emo-glyph emo-glyph--lg emo--{{todayCheckin.mood}}"></view>
       <view class="done-main">
         <view class="done-line">
           {{todayCheckin.moodText}} · 强度 {{todayCheckin.intensity}}/10
@@ -45,7 +45,7 @@
           data-key="{{item.key}}"
           bindtap="selectMood"
         >
-          <view class="mood-emoji">{{item.emoji}}</view>
+          <view class="emo-glyph emo--{{item.key}}"></view>
           <view class="mood-label">{{item.label}}</view>
         </view>
       </view>
