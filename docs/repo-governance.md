@@ -80,7 +80,8 @@ campus-psychological-agent/
 │   │   └── main.py
 │   ├── scripts/        # 一次性/评估/压测脚本
 │   ├── tests/          # pytest
-│   └── requirements.txt
+│   ├── requirements.txt      # 生产依赖（镜像只装这份）
+│   └── requirements-dev.txt  # 测试与 lint（pytest / ruff），本地与 CI 安装
 ├── miniprogram/        # 微信小程序原生工程
 ├── docs/               # 工程规范与阶段留档（全部 .md）
 ├── campus-agent-dev-doc/   # 开发文档（.md 为准；HTML 预览包与 _shared/ 不入库）

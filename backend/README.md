@@ -22,7 +22,8 @@ backend/
 ├── scripts/               # init_db / seed_crisis / test_llm 等运维脚本
 ├── docker-compose.yml     # 部署编排（api/mongo/nginx）
 ├── .env.example           # 环境变量模板（复制为 .env 填写）
-└── requirements.txt
+├── requirements.txt       # 生产依赖（Docker 只装这一份）
+└── requirements-dev.txt   # 测试与 lint（pytest / ruff），本地与 CI 安装
 ```
 
 ## 本地启动
