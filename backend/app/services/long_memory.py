@@ -10,27 +10,32 @@
 - **允许用户查看 / 删除**（PIPL 行权，与 M3 删除机制共用：已在隐私导出与物理删除纳入）；
 - **注入克制**：按与当前消息的字符重合度选「相关记忆」，条数与总字数双上限，
   仅在与当前话题相关时带出，不做逐条罗列（避免喧宾夺主）；
-- 涉及自伤/自杀等危机信息一律不抽取为记忆（只做陪伴，不把危机内容长期留存）。
+- 涉及自伤/自杀等危机信息一律不抽取为记忆（只做陪伴，不把危机内容长期留存）：
+  调用侧对 mid/high 直接跳过，这里再用本地词库对输入与抽取结果各扫一遍做确定性兜底。
 """
 from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import logging
-import re
 from collections.abc import Iterable
 
 from bson import ObjectId
 
 from app.config import get_settings
 from app.core.crypto import decrypt, encrypt
+from app.core.llm_json import extract_json
+from app.core.metrics import FailRateCounter
+from app.core.text import normalize
 from app.core.timeutil import now_cst, to_iso
 from app.db.indexes import COLL_MEMORIES
 from app.db.mongo import mongo
-from app.llm.zhipu import ZhipuProvider
+from app.llm import get_light_provider
+from app.llm.zhipu import ZhipuProvider  # noqa: F401 —— 保留模块名以便测试打桩
+from app.services.crisis import contains_crisis_terms
 
 logger = logging.getLogger(__name__)
+
 
 # 记忆类别：人物 / 事件 / 偏好 / 情绪诱因
 MEMORY_KINDS = ("person", "event", "preference", "trigger")
@@ -54,9 +59,6 @@ _KIND_ALIASES = {
     "诱因": "trigger",
     "情绪诱因": "trigger",
 }
-
-# 归一化保留：小写字母、数字、CJK 统一汉字（其余标点/空白剔除）
-_KEEP_RE = re.compile(r"[a-z0-9\u4e00-\u9fff]")
 
 _EXTRACT_SYSTEM_INSTRUCTION = (
     "你是校园心理陪伴产品「心屿」的长期记忆抽取器。请从用户这句话里，"
@@ -89,35 +91,13 @@ _EXTRACT_SYSTEM_INSTRUCTION = (
     "③ 句中若有室友/家人/恋人/导师的持续状况，是否漏记 person？漏了 → 补一条。"
 )
 
-# 失败率监控（进程内计数；与情绪分析同口径）
-_fail_count = 0
-_total_count = 0
-
-
-def _extract_json(raw: str) -> dict | None:
-    """从模型输出中提取 JSON 对象（容忍 markdown 代码块与前后杂质）。"""
-    text = raw.strip()
-    m = re.search(r"```(?:json)?\s*(.*?)```", text, flags=re.S)
-    if m:
-        text = m.group(1).strip()
-    try:
-        obj = json.loads(text)
-        return obj if isinstance(obj, dict) else None
-    except json.JSONDecodeError:
-        pass
-    start, end = text.find("{"), text.rfind("}")
-    if start >= 0 and end > start:
-        try:
-            obj = json.loads(text[start : end + 1])
-            return obj if isinstance(obj, dict) else None
-        except json.JSONDecodeError:
-            return None
-    return None
+# 失败率监控：跨实例共享计数（M5；原为进程内 _fail_count/_total_count）
+_extract_fail_rate = FailRateCounter("long_memory_extract")
 
 
 def parse_memory_json(raw: str) -> list[dict]:
     """解析抽取输出：归一化类别、裁剪长度、批内去重、条数封顶；非法即丢弃。"""
-    obj = _extract_json(raw)
+    obj = extract_json(raw)
     if not obj:
         return []
     raw_items = obj.get("memories")
@@ -148,28 +128,7 @@ def parse_memory_json(raw: str) -> list[dict]:
 
 def _content_hash(kind: str, content: str) -> str:
     """去重键：类别 + 归一化正文的 SHA-256（避免同一事实反复入库）。"""
-    norm = "".join(ch.lower() for ch in content if _KEEP_RE.match(ch))
-    return hashlib.sha256(f"{kind}\x00{norm}".encode()).hexdigest()
-
-
-def _record_failure() -> None:
-    global _fail_count, _total_count
-    _total_count += 1
-    _fail_count += 1
-    if _total_count >= 20 and _fail_count / _total_count > 0.05:
-        logger.warning(
-            "长期记忆抽取失败率 %.0f%%（%d/%d），触发告警阈值（>5%%）",
-            _fail_count / _total_count * 100,
-            _fail_count,
-            _total_count,
-        )
-        _fail_count = 0
-        _total_count = 0
-
-
-def _record_success() -> None:
-    global _total_count
-    _total_count += 1
+    return hashlib.sha256(f"{kind}\x00{normalize(content)}".encode()).hexdigest()
 
 
 async def save_memories(
@@ -221,6 +180,24 @@ async def _enforce_cap(user_id: ObjectId) -> None:
         await mongo.db[COLL_MEMORIES].delete_many({"_id": {"$in": ids}})
 
 
+async def _drop_crisis_items(items: list[dict]) -> list[dict]:
+    """确定性兜底：对抽取结果再扫一遍本地危机词，命中即整条丢弃。
+
+    不依赖提示词让模型「自觉」：即使模型违反指令输出了危机内容，也进不了记忆库。
+    日志只记丢弃条数，不含原文。
+    """
+    kept: list[dict] = []
+    dropped = 0
+    for item in items:
+        if await contains_crisis_terms(item["content"]):
+            dropped += 1
+            continue
+        kept.append(item)
+    if dropped:
+        logger.warning("长期记忆抽取结果命中危机词，已丢弃 %d 条", dropped)
+    return kept
+
+
 async def extract_and_save(
     user_id: ObjectId, session_id: ObjectId, user_text: str
 ) -> int:
@@ -235,7 +212,12 @@ async def extract_and_save(
     if not text:
         return 0
 
-    provider = ZhipuProvider(model=settings.model_light)
+    # 确定性兜底①：输入本身命中危机词（mid/high 口径）直接跳过，不调模型
+    if await contains_crisis_terms(text):
+        logger.warning("长期记忆抽取跳过：用户消息命中危机词 session=%s", session_id)
+        return 0
+
+    provider = get_light_provider()
     try:
         raw = await asyncio.wait_for(
             provider.generate(
@@ -249,12 +231,14 @@ async def extract_and_save(
             timeout=settings.long_memory_extract_timeout_seconds,
         )
     except Exception:  # noqa: BLE001 —— 超时/网络/模型异常统一按失败处理
-        _record_failure()
+        await _extract_fail_rate.failure()
         logger.info("长期记忆抽取失败（调用异常），跳过本轮 session=%s", session_id)
         return 0
 
     items = parse_memory_json(raw)
-    _record_success()
+    await _extract_fail_rate.success()
+    # 确定性兜底②：抽取结果逐条复核，命中危机词即丢弃
+    items = await _drop_crisis_items(items)
     if not items:
         return 0
     try:
@@ -311,7 +295,7 @@ async def clear_memories(user_id: ObjectId) -> int:
 # ---------- 克制注入 ----------
 def _terms(text: str) -> set[str]:
     """归一化后取字符 2-gram 集合（CJK 无分词，2-gram 近似词重合度）。"""
-    norm = "".join(ch.lower() for ch in text if _KEEP_RE.match(ch))
+    norm = normalize(text)
     if not norm:
         return set()
     if len(norm) == 1:

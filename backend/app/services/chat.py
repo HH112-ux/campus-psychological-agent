@@ -18,12 +18,14 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
 from bson import ObjectId
 
 from app.config import get_settings
+from app.core import cost
 from app.core.crypto import encrypt
 from app.core.exceptions import CODE_CONTENT_INVALID, CODE_SESSION_ROUND_LIMIT, BizError
 from app.core.ratelimit import hit_message_rate
@@ -31,7 +33,8 @@ from app.core.timeutil import now_cst, to_iso
 from app.db.indexes import COLL_MESSAGES, COLL_SESSIONS
 from app.db.mongo import mongo
 from app.db.oid import parse_oid
-from app.llm.zhipu import ZhipuProvider
+from app.llm.router import select_chat_provider
+from app.llm.zhipu import ZhipuProvider  # noqa: F401 —— 保留模块名以便测试打桩
 from app.services import alerting, content_security, long_memory, memory
 from app.services import emotion as emotion_svc
 from app.services.crisis import (
@@ -41,6 +44,8 @@ from app.services.crisis import (
 )
 from app.services.crisis_data import HIGH_CRISIS_REPLY
 from app.services.prompts import build_system_prompt
+
+logger = logging.getLogger(__name__)
 
 # 大模型完全不可用时的预设共情话术（F2 降级兜底）
 DEGRADED_REPLY = "我还在，刚才走神了，你愿意再说一遍吗"
@@ -59,6 +64,7 @@ class Turn:
     crisis: CrisisResult
     crisis_payload: dict | None = None
     risk_level: str = "none"
+    latest_emotion: str | None = None  # E3 路由用：本会话最近一条情绪标签
 
 
 async def _insert_message(
@@ -164,6 +170,8 @@ async def _build_messages(turn: Turn) -> list[dict]:
     history = await memory.load_window(turn.session["_id"])
     # 策略层：注入本会话最近一轮情绪分析结果（F3），无记录则用中性占位
     latest_emotion = await emotion_svc.latest_session_emotion(turn.session["_id"])
+    # E3 路由：记录本会话最近一次情绪标签（供启发式档位分流判断）
+    turn.latest_emotion = (latest_emotion or {}).get("emotion")
     # 记忆层（V6）：跨会话长期记忆中与当前话题相关的条目（无关则返回空，克制注入）
     memo_lines = await long_memory.build_injection(turn.user["_id"], turn.content)
     return [
@@ -179,10 +187,10 @@ async def _build_messages(turn: Turn) -> list[dict]:
 def _schedule_memory_extraction(turn: Turn) -> None:
     """V6：回复送达后**异步**抽取长期记忆（后台任务，fail-safe，不阻塞回复）。
 
-    - 危机（high）路径不抽取——只做陪伴，不把危机内容长期留存；
+    - 危机（mid / high）路径一律不抽取——只做陪伴，不把危机内容长期留存；
     - 抽取在独立任务中执行，任何失败由 long_memory.extract_and_save 内部兜底。
     """
-    if not get_settings().long_memory_enabled or turn.crisis.level == "high":
+    if not get_settings().long_memory_enabled or turn.crisis.level in ("mid", "high"):
         return
     asyncio.create_task(
         long_memory.extract_and_save(turn.user["_id"], turn.session["_id"], turn.content)
@@ -192,14 +200,19 @@ def _schedule_memory_extraction(turn: Turn) -> None:
 async def _generate_nonstream(turn: Turn) -> tuple[str, bool]:
     """非流式生成，失败重试 1 次；仍失败返回降级话术。"""
     messages = await _build_messages(turn)
-    provider = ZhipuProvider()
+    prompt_chars = sum(len(m["content"]) for m in messages)
+    provider, tier = select_chat_provider(
+        turn.content, turn.crisis.level, turn.latest_emotion
+    )
     for _ in range(2):
         try:
             text = await provider.generate(
                 messages, temperature=CHAT_TEMPERATURE, max_tokens=CHAT_MAX_TOKENS
             )
             if text and text.strip():
-                return text.strip(), False
+                text = text.strip()
+                cost.record_call(tier, prompt_chars, len(text))
+                return text, False
         except Exception:  # noqa: BLE001
             continue
     await alerting.notify_llm_degraded("nonstream")
@@ -209,7 +222,10 @@ async def _generate_nonstream(turn: Turn) -> tuple[str, bool]:
 async def _collect_stream(turn: Turn) -> tuple[list[str], bool]:
     """流式生成并收集全部增量；无内容时重试 1 次，再失败降级；已收到部分则保留。"""
     messages = await _build_messages(turn)
-    provider = ZhipuProvider()
+    prompt_chars = sum(len(m["content"]) for m in messages)
+    provider, tier = select_chat_provider(
+        turn.content, turn.crisis.level, turn.latest_emotion
+    )
     chunks: list[str] = []
     try:
         async for delta in provider.stream(
@@ -219,6 +235,7 @@ async def _collect_stream(turn: Turn) -> tuple[list[str], bool]:
     except Exception:
         if chunks:
             # 已有部分内容：保留已收文本，按成功结束
+            cost.record_call(tier, prompt_chars, len("".join(chunks)))
             return chunks, False
         # 无任何内容：重试一次
         try:
@@ -233,6 +250,7 @@ async def _collect_stream(turn: Turn) -> tuple[list[str], bool]:
     if not full.strip():
         await alerting.notify_llm_degraded("stream_empty")
         return [DEGRADED_REPLY], True
+    cost.record_call(tier, prompt_chars, len(full))
     return chunks, False
 
 

@@ -85,6 +85,18 @@ async def detect_risk(text: str, session: dict) -> CrisisResult:
     return evaluate(normalize(text), session, l1, l2)
 
 
+async def contains_crisis_terms(text: str) -> list[str]:
+    """确定性复核：返回文本命中的危机词（一级/二级同表），供长期记忆写入前兜底过滤。
+
+    不依赖模型是否遵守提示词：只要抽取结果（或输入）里出现危机词，就整条丢弃。
+    """
+    if not text:
+        return []
+    l1, l2 = await _load_lexicon()
+    norm = normalize(text)
+    return sorted({p for p in (*l1, *l2) if p in norm})
+
+
 def evaluate(norm_text: str, session: dict, l1: list[str], l2: list[str]) -> CrisisResult:
     """纯同步判定：归一化文本 + 会话状态 + 两级词表 → 检测结果（不访问 DB，便于测试）。"""
     current_score = session.get("crisis_score", 0) or 0

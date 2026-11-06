@@ -68,17 +68,15 @@ def test_parse_empty_and_invalid():
 # ---------- 落库（加密 / 去重 / 上限） ----------
 
 
-def _uid(client, openid=None):
-    """取当前登录用户 _id；库内多用户时须传 openid 指定。
+def _uid(client, openid="mock_test_user"):
+    """取指定 openid 用户的 _id（默认 conftest 环境里的默认测试用户）。
 
-    注意 helpers.login 指定 openid 会改写全局 wx_mock_openid 且不还原，
-    因此默认登录用户的 openid 不可假设，直接取库内唯一用户。
+    不再用「取库内唯一用户」启发式：并发/残留用户下该启发式会取错身份；
+    改为显式 openid，行为确定（与用户隔离用例的显式断言口径一致）。
     """
 
     async def _fetch():
-        query = {"openid": openid} if openid else {}
-        doc = await mongo.db[COLL_USERS].find_one(query)
-        return doc["_id"]
+        return (await mongo.db[COLL_USERS].find_one({"openid": openid}))["_id"]
 
     return client.portal.call(_fetch)
 
@@ -322,6 +320,70 @@ def test_high_crisis_skips_extraction(client, db, monkeypatch):
         return await mongo.db[COLL_MEMORIES].count_documents({"user_id": uid})
 
     assert client.portal.call(_count) == 0
+
+
+def test_mid_crisis_skips_extraction(client, db, monkeypatch):
+    calls = {"extract": 0}
+
+    async def gen(self, messages, temperature=0.7, max_tokens=1024):
+        if "长期记忆抽取器" in messages[0]["content"]:
+            calls["extract"] += 1
+        return "我在听。"
+
+    monkeypatch.setattr(chat.ZhipuProvider, "generate", gen)
+    monkeypatch.setattr(get_settings(), "emotion_analysis_enabled", False)
+
+    token = login(client)
+    uid = _uid(client)
+    sid = create_session(client, token)
+
+    r = _send(client, token, sid, "最近总觉得活着没意思")
+    assert r.json()["data"]["risk_level"] == "mid"
+
+    client.portal.call(asyncio.sleep, 0.2)
+    assert calls["extract"] == 0  # mid 危机同样不进入长期记忆
+
+    async def _count():
+        return await mongo.db[COLL_MEMORIES].count_documents({"user_id": uid})
+
+    assert client.portal.call(_count) == 0
+
+
+def test_extract_skips_crisis_input(client, db, monkeypatch):
+    async def gen(self, messages, temperature=0.7, max_tokens=1024):
+        raise AssertionError("输入命中危机词时不应调用模型")
+
+    monkeypatch.setattr(long_memory.ZhipuProvider, "generate", gen)
+    login(client)
+    uid = _uid(client)
+
+    saved = client.portal.call(
+        long_memory.extract_and_save, uid, ObjectId(), "我最近活着没意思，室友也不理我"
+    )
+    assert saved == 0
+
+
+def test_extract_drops_crisis_items(client, db, monkeypatch):
+    async def gen(self, messages, temperature=0.7, max_tokens=1024):
+        return (
+            '{"memories": ['
+            '{"kind": "event", "content": "ta 最近总说活着没意思"},'
+            '{"kind": "preference", "content": "ta 喜欢睡前听轻音乐"}]}'
+        )
+
+    monkeypatch.setattr(long_memory.ZhipuProvider, "generate", gen)
+    login(client)
+    uid = _uid(client)
+
+    # 输入本身不含危机词，模型却违反提示词输出了危机条目 → 结果侧确定性过滤
+    saved = client.portal.call(
+        long_memory.extract_and_save, uid, ObjectId(), "我睡前听音乐会放松一些"
+    )
+    assert saved == 1
+    listed = client.portal.call(long_memory.list_memories, uid)
+    assert listed["total"] == 1
+    assert "活着没意思" not in listed["memories"][0]["content"]
+    assert listed["memories"][0]["content"] == "ta 喜欢睡前听轻音乐"
 
 
 # ---------- 隐私一致（导出 / 物理删除） ----------
