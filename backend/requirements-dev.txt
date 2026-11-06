@@ -1,0 +1,5 @@
+# 开发/测试依赖（仅本地与 CI 安装；生产镜像不安装本文件）
+-r requirements.txt
+
+pytest==9.1.1
+ruff==0.17.0

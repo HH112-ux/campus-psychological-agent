@@ -37,7 +37,8 @@ cp .env.example .env          # 填写 ZHIPU_API_KEY 等
 
 # 3. Python 虚拟环境（Python 3.12）
 python3.12 -m venv .venv
-.venv/bin/python3.12 -m pip install -r requirements.txt
+.venv/bin/python3.12 -m pip install -r requirements.txt -r requirements-dev.txt
+# 生产镜像只安装 requirements.txt；requirements-dev.txt 仅供本地/CI 测试与 lint
 
 # 4. 初始化数据库（集合 + 索引）
 .venv/bin/python3.12 -m scripts.init_db

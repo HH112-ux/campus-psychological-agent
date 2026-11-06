@@ -10,6 +10,5 @@ PyJWT==2.15.1
 cryptography==44.0.3
 python-multipart==0.0.32  # V5 语音转写：接收 multipart 音频上传
 
-# 测试与质量
-pytest==9.1.1
-ruff==0.17.0
+# 说明：pytest / ruff 等测试与质量工具见 requirements-dev.txt，
+# 生产镜像只安装本文件，避免把测试工具带进运行时。
