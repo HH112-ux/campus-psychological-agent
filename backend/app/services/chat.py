@@ -219,39 +219,42 @@ async def _generate_nonstream(turn: Turn) -> tuple[str, bool]:
     return DEGRADED_REPLY, True
 
 
-async def _collect_stream(turn: Turn) -> tuple[list[str], bool]:
-    """流式生成并收集全部增量；无内容时重试 1 次，再失败降级；已收到部分则保留。"""
+class _StreamUnavailable(Exception):
+    """流式首块前失败且重试无效；调用侧回退为降级话术。"""
+
+
+async def _stream_deltas(turn: Turn) -> AsyncIterator[str]:
+    """真流式：模型增量到达即产出，不再等整段生成完。
+
+    - 首块前失败（连接/超时/空响应）重试 1 次；
+    - 已产出内容后失败则保留已下发部分、按成功结束（避免用户看到半句后重来）。
+    """
     messages = await _build_messages(turn)
     prompt_chars = sum(len(m["content"]) for m in messages)
     provider, tier = select_chat_provider(
         turn.content, turn.crisis.level, turn.latest_emotion
     )
-    chunks: list[str] = []
-    try:
-        async for delta in provider.stream(
-            messages, temperature=CHAT_TEMPERATURE, max_tokens=CHAT_MAX_TOKENS
-        ):
-            chunks.append(delta)
-    except Exception:
-        if chunks:
-            # 已有部分内容：保留已收文本，按成功结束
-            cost.record_call(tier, prompt_chars, len("".join(chunks)))
-            return chunks, False
-        # 无任何内容：重试一次
+    emitted_chars = 0
+    for _ in range(2):
+        produced = 0
         try:
             async for delta in provider.stream(
                 messages, temperature=CHAT_TEMPERATURE, max_tokens=CHAT_MAX_TOKENS
             ):
-                chunks.append(delta)
-        except Exception:
-            await alerting.notify_llm_degraded("stream")
-            return [DEGRADED_REPLY], True
-    full = "".join(chunks)
-    if not full.strip():
-        await alerting.notify_llm_degraded("stream_empty")
-        return [DEGRADED_REPLY], True
-    cost.record_call(tier, prompt_chars, len(full))
-    return chunks, False
+                produced += 1
+                emitted_chars += len(delta)
+                yield delta
+        except Exception:  # noqa: BLE001 —— 网络/模型异常
+            if produced:
+                cost.record_call(tier, prompt_chars, emitted_chars)
+                return
+            continue  # 首块都没拿到：重试一次
+        if produced:
+            cost.record_call(tier, prompt_chars, emitted_chars)
+            return
+        # 空响应：按失败处理，重试一次
+    await alerting.notify_llm_degraded("stream")
+    raise _StreamUnavailable
 
 
 # ---------- 非流式 ----------
@@ -301,20 +304,26 @@ async def stream_events(turn: Turn) -> AsyncIterator[tuple[str, dict]]:
         yield "done", {"message_id": message_id, "degraded": False}
         return
 
-    # none / mid：流式生成
-    chunks, degraded = await _collect_stream(turn)
-    # H：逐块过合规守卫（按句缓冲，跨 chunk 的违规句也能完整识别后再替换）
+    # none / mid：真流式生成（增量到达即下发，不等整段生成完）
     guard = compliance.OutputGuard()
     emitted: list[str] = []
-    for piece in chunks:
-        safe = guard.feed(piece)
-        if safe:
-            emitted.append(safe)
-            yield "delta", {"content": safe}
+    degraded = False
+    try:
+        async for piece in _stream_deltas(turn):
+            safe = guard.feed(piece)
+            if safe:
+                emitted.append(safe)
+                yield "delta", {"content": safe}
+    except _StreamUnavailable:
+        degraded = True
+
     tail = guard.flush()
     if tail:
         emitted.append(tail)
         yield "delta", {"content": tail}
+    if degraded:
+        emitted.append(DEGRADED_REPLY)
+        yield "delta", {"content": DEGRADED_REPLY}
     if guard.hits:
         logger.warning(
             "助手回复命中合规规则，已替换：%s", ",".join(sorted(set(guard.hits)))
