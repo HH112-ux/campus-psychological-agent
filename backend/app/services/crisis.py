@@ -4,6 +4,11 @@
 - 归一化后做子串匹配，覆盖“去标点/空格、字间加符号、少量拼音谐音”等基础变体；
 - 命中即按危机处理；只有否定词紧邻危机词、或命中词本身是完整寒暄/夸张形态时才豁免
   （白名单式，见 `_is_exempt`），不做「先删疑似安全片段再看剩下」的黑名单剥离；
+- **归一化 vs 原文（红线约定，勿破）**：模式匹配跑 `normalize` 后的文本；但凡做
+  「前后文邻接 / 豁免 / 边界」判断，一律读**保留标点与换行的原文**（参数名统一带
+  `raw_text` / 前缀 `_raw`），归一化下标必须先经 `_normalize_with_offsets` 映射回
+  原文再判断。历史三次同形漏报（「想死你」吞句、寒暄前缀剥离、碰撞豁免）都是因为
+  在去标点文本上做邻接判断：标点一被删，前一句的否定词、后一句的「走/动」就被借走了；
 - 一级命中即 high；二级按命中词计分并累计到会话，≥4 分升 high，否则 mid；
 - 触发均写 risk_events（仅记录命中词，不记录对话原文）。
 """
@@ -16,7 +21,7 @@ from dataclasses import dataclass, field
 from bson import ObjectId
 
 from app.core.crypto import encrypt_optional_text
-from app.core.text import normalize
+from app.core.text import KEEP_RE, normalize
 from app.core.timeutil import now_cst, to_iso
 from app.db.indexes import (
     COLL_CRISIS_LEXICON,
@@ -63,42 +68,153 @@ _NEG_TOKEN_RE = re.compile(r"不|没")
 _GREETING_SUFFIX_RE = re.compile(r"(?:你|您|你们|我|我们)了(?!解|结|却|然|断|不起)")
 # 夸张：「热得要死了」里的「要死了」由「得」引出
 _EXAGGERATION_LEAD = "得"
-# 词内碰撞：命中词只是常见词的前缀，不是危机表达。这类不算「句式豁免」，
-# 而是子串匹配的边界问题，按后继字符判定，避免误删词库里的真实危机词：
+# 分句/断行边界：邻接判断遇到这些字符，说明前后不是一个词/一句话，不得互相借用。
+# 只用于**原文**（`raw_text`），归一化文本里这些字符已经被删掉了。
+_CLAUSE_BREAK_RE = re.compile(r"[。！？!?；;，,、：:…—\n\r]")
+# 词内碰撞：命中词只是某个常见词的前缀，不是危机表达。这类不算「句式豁免」，
+# 而是子串匹配的边界问题，必须按**完整词**整体匹配：
 # 「不想活动 / 不想活跃」不是「不想活」，「寻死觅活」是成语而非求助。
-_COLLISION_SUFFIX: dict[str, str] = {
-    "不想活": "动跃躍蹦跳跑走",
-    "寻死": "觅",
+# 注意：这里只收「确实以危机词开头」的词；「不想走动」「不想动弹」不含「不想活」，
+# 本来就不会命中，无需（也不能）靠单字后缀放行。
+_COLLISION_WORDS: dict[str, tuple[str, ...]] = {
+    "不想活": ("不想活动", "不想活跃"),
+    "寻死": ("寻死觅活",),
 }
+# 完整词之后允许出现的结构助词/语气词（「不想活动了」「寻死觅活地」）；
+# 出现别的实词说明词还在延长，不属于白名单里的完整词，不豁免。
+_COLLISION_TAIL = "了的着过地得吧呢啊呀哦哈啦"
 
 
-def _is_exempt(norm: str, start: int, end: int, phrase: str) -> bool:
-    """判断某次命中是否属于「安全语境」（白名单，默认不豁免）。"""
-    before = norm[max(0, start - _NEG_WINDOW) : start]
-    after = norm[end : end + 4]
+def _normalize_with_offsets(raw_text: str) -> tuple[str, list[int]]:
+    """归一化原文，并返回每个归一化字符对应的**原文字符下标**。
 
-    if _NEG_PREFIX_RE.search(before) and len(_NEG_TOKEN_RE.findall(before)) < 2:
-        # 否定词紧邻危机词；双重否定（「不是不想死」）不豁免
-        return True
-    if phrase == "想死" and _GREETING_SUFFIX_RE.match(after):
-        return True
-    if phrase == "要死了" and before.endswith(_EXAGGERATION_LEAD):
-        return True
-    if after and after[0] in _COLLISION_SUFFIX.get(phrase, ""):
-        return True          # 词内碰撞（不想活动 / 寻死觅活）
+    与 `app.core.text.normalize` 同一口径（小写 + 仅保留 `KEEP_RE` 字符），
+    额外保留位置映射。模式匹配跑返回的归一化文本，邻接判断一律用
+    `offsets` 把下标映射回 `raw_text` 后再做。
+    """
+    chars: list[str] = []
+    offsets: list[int] = []
+    for index, ch in enumerate(raw_text):
+        for low in ch.lower():
+            if KEEP_RE.match(low):
+                chars.append(low)
+                offsets.append(index)
+    return "".join(chars), offsets
+
+
+def _raw_before(raw_text: str, index: int, limit: int) -> str:
+    """取原文中 `index` 之前、同一分句内的片段（遇标点/换行即停）。
+
+    返回值保留标点以外的原始写法，调用方先 `normalize` 再匹配；`limit` 按
+    **内容字符**计数（空格不计入），与 `_NEG_WINDOW` 的距离口径一致。
+    """
+    buf: list[str] = []
+    count = 0
+    i = index - 1
+    while i >= 0 and count < limit:
+        ch = raw_text[i]
+        if _CLAUSE_BREAK_RE.match(ch):
+            break
+        buf.append(ch)
+        if KEEP_RE.match(ch.lower()):
+            count += 1
+        i -= 1
+    return "".join(reversed(buf))
+
+
+def _raw_after(raw_text: str, index: int, limit: int) -> str:
+    """取原文中 `index` 之后、同一分句内的片段（遇标点/换行即停）。
+
+    跨标点/换行返回空串——这正是「后一句的『走』不能给前一句的『不想活』做豁免」的
+    实现方式；调用方按需 `normalize` 后匹配。
+    """
+    buf: list[str] = []
+    count = 0
+    i = index
+    while i < len(raw_text) and count < limit:
+        ch = raw_text[i]
+        if _CLAUSE_BREAK_RE.match(ch):
+            break
+        buf.append(ch)
+        if KEEP_RE.match(ch.lower()):
+            count += 1
+        i += 1
+    return "".join(buf)
+
+
+def _is_collocation(
+    norm_text: str, raw_text: str, offsets: list[int], start: int, phrase: str
+) -> bool:
+    """命中词是否只是某个**完整词**的前缀（「不想活动」「寻死觅活」）。
+
+    完整词边界分三步校验，缺一不可：
+    1. 白名单：`_COLLISION_WORDS` 只收「确实以危机词开头」的常用词，不做单字放行；
+    2. 整体匹配：归一化文本里命中位置必须完整包含该词（`不想活下` 不等于 `不想活动`）；
+    3. 原文边界：
+       a. 该词在原文里的跨度内不能夹标点/换行（跨标点不是同一个词）；
+       b. 词后只能到句读/结尾，或跟一个结构助词/语气词（了/地/得…）；
+          若跟的是实词，说明词还在延长，不是白名单里的这个词。
+    """
+    for word in _COLLISION_WORDS.get(phrase, ()):
+        if norm_text[start : start + len(word)] != word:
+            continue
+        raw_word_start = offsets[start]
+        raw_word_end = offsets[start + len(word) - 1] + 1
+        if _CLAUSE_BREAK_RE.search(raw_text[raw_word_start:raw_word_end]):
+            continue
+        after_raw = normalize(_raw_after(raw_text, raw_word_end, 4))
+        if not after_raw or after_raw[0] in _COLLISION_TAIL:
+            return True
     return False
 
 
-def _find_hits(norm: str, phrases: list[str]) -> list[str]:
-    """返回未被豁免的命中词（同一词任一出现未被豁免即算命中）。"""
+def _is_exempt(
+    norm_text: str,
+    raw_text: str,
+    offsets: list[int],
+    start: int,
+    end: int,
+    phrase: str,
+) -> bool:
+    """判断某次命中是否属于「安全语境」（白名单，默认不豁免）。
+
+    红线约定：`start/end` 是归一化下标，只用于定位；**这里每一个判断都读
+    `raw_text`**，并且先用 `offsets` 映射回原文再取前后文，避免把标点两侧的
+    文字误当成紧邻（「不想活，走不动了」的逗号、「不，我想死」的逗号）。
+    """
+    raw_start = offsets[start]
+    raw_end = offsets[end - 1] + 1
+    before_raw = normalize(_raw_before(raw_text, raw_start, _NEG_WINDOW))
+    after_raw = normalize(_raw_after(raw_text, raw_end, 6))
+
+    if _NEG_PREFIX_RE.search(before_raw) and len(_NEG_TOKEN_RE.findall(before_raw)) < 2:
+        # 否定词与危机词必须在同一分句内紧邻；双重否定（「不是不想死」）不豁免
+        return True
+    if phrase == "想死" and _GREETING_SUFFIX_RE.match(after_raw):
+        return True
+    if phrase == "要死了" and before_raw.endswith(_EXAGGERATION_LEAD):
+        return True
+    if _is_collocation(norm_text, raw_text, offsets, start, phrase):
+        return True          # 完整词前缀（不想活动 / 寻死觅活）
+    return False
+
+
+def _find_hits(raw_text: str, phrases: list[str]) -> list[str]:
+    """返回未被豁免的命中词（同一词任一出现未被豁免即算命中）。
+
+    `raw_text` 必须是原文；归一化只在本函数内部发生，并把位置映射传给
+    `_is_exempt`，保证豁免判断用的是原文边界。
+    """
+    norm_text, offsets = _normalize_with_offsets(raw_text)
     hits: list[str] = []
     for phrase in phrases:
-        start = norm.find(phrase)
+        start = norm_text.find(phrase)
         while start != -1:
-            if not _is_exempt(norm, start, start + len(phrase), phrase):
+            end = start + len(phrase)
+            if not _is_exempt(norm_text, raw_text, offsets, start, end, phrase):
                 hits.append(phrase)
                 break
-            start = norm.find(phrase, start + 1)
+            start = norm_text.find(phrase, start + 1)
     return hits
 
 
@@ -164,34 +280,38 @@ class CrisisResult:
 async def detect_risk(text: str, session: dict) -> CrisisResult:
     """对单条用户消息做本地词库检测（含 DB 热更新词库加载），并结合会话累计分判定。
 
-    全链路只有一处「归一化 + 豁免」：`normalize` 之后直接进入 `evaluate`，
-    `evaluate` 内部不再做任何剥离，避免出现「一条链路判 high、另一条判 none」。
+    全链路只有一处「归一化 + 豁免」：原文进入 `evaluate`，内部统一归一化并保留
+    位置映射，豁免判断再用原文边界，避免出现「一条链路判 high、另一条判 none」。
     """
     l1, l2 = await _load_lexicon()
-    return evaluate(normalize(text), session, l1, l2)
+    return evaluate(text, session, l1, l2)
 
 
 async def contains_crisis_terms(text: str) -> list[str]:
     """确定性复核：返回文本命中的危机词（一级/二级同表），供长期记忆写入前兜底过滤。
 
     不依赖模型是否遵守提示词：只要抽取结果（或输入）里出现危机词，就整条丢弃。
-    与 `detect_risk` 同一口径：`normalize` + `_find_hits`（同一份豁免规则）。
+    与 `detect_risk` 同一口径：原文直接进 `_find_hits`（同一份豁免规则与边界判断）。
     """
     if not text:
         return []
     l1, l2 = await _load_lexicon()
-    return sorted(set(_find_hits(normalize(text), [*l1, *l2])))
+    return sorted(set(_find_hits(text, [*l1, *l2])))
 
 
-def evaluate(norm_text: str, session: dict, l1: list[str], l2: list[str]) -> CrisisResult:
-    """纯同步判定：归一化文本 + 会话状态 + 两级词表 → 检测结果（不访问 DB，便于测试）。"""
+def evaluate(raw_text: str, session: dict, l1: list[str], l2: list[str]) -> CrisisResult:
+    """纯同步判定：**原文** + 会话状态 + 两级词表 → 检测结果（不访问 DB，便于测试）。
+
+    参数必须传用户原文（保留标点/换行），不要传 `normalize` 的结果：
+    方法内部自己归一化并保留位置映射，否则豁免判断会失去标点边界。
+    """
     current_score = session.get("crisis_score", 0) or 0
 
-    l1_hit = _dedupe_overlapping(_find_hits(norm_text, l1))
+    l1_hit = _dedupe_overlapping(_find_hits(raw_text, l1))
     if l1_hit:
         return CrisisResult(level="high", l1_matches=l1_hit, new_score=current_score)
 
-    l2_hit = _dedupe_overlapping(_find_hits(norm_text, l2))
+    l2_hit = _dedupe_overlapping(_find_hits(raw_text, l2))
     if l2_hit:
         added = LEVEL2_SCORE_PER_HIT * len(l2_hit)
         new_score = current_score + added

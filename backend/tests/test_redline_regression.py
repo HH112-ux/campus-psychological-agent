@@ -42,6 +42,37 @@ def test_crisis_corpus(text, expected):
     assert result.level == expected, f"{text!r} 期望 {expected}，实际 {result.level}"
 
 
+# ---------- 边界判定必须读原文（保留标点），不能读归一化文本 ----------
+# 每项：(原文, 归一化后相邻的片段, 期望级别)。
+# 中间片段必须在 `normalize(原文)` 里真实相邻——否则这组用例就守不住约定。
+RAW_BOUNDARY_CASES = [
+    # 逗号吞掉后，后一句的「走」曾被当成「不想活」的完整词豁免依据
+    ("我真的不想活，走不动了", "不想活走", "high"),
+    # 句号吞掉后，「动不动」曾拼成「不想活动」
+    ("不想活。动不动就想哭", "不想活动", "high"),
+    # 逗号吞掉后，「动都不想动」曾拼成「不想活动」
+    ("我不想活，动都不想动", "不想活动", "high"),
+    # 逗号吞掉后，前一句的「不」曾被借给后一句的「我想死」
+    ("不，我想死", "不我想", "high"),
+    # 逗号吞掉后，前一句的「没有」曾被借给后一句的「想死」
+    ("我没有，想死", "没有想死", "high"),
+    # 逗号吞掉后，后一句的「你了不了解」曾被当成寒暄「想死你了」
+    ("我想死，你了不了解我", "想死你了", "high"),
+]
+
+
+@pytest.mark.parametrize(("text", "adjacent", "expected"), RAW_BOUNDARY_CASES)
+def test_crisis_boundary_uses_raw_text_not_normalized(text, adjacent, expected):
+    """同一字串在原文被标点分隔、归一化后相邻时，判定必须跟原文语义一致。
+
+    守住 `crisis.py` 的红线约定：模式匹配可以跑归一化文本，但
+    「前后文邻接 / 豁免 / 边界」判断必须读保留标点的原文。
+    """
+    assert adjacent in crisis.normalize(text), "用例前提不成立：归一化后并不相邻"
+    result = asyncio.run(crisis.detect_risk(text, {"crisis_score": 0}))
+    assert result.level == expected, f"{text!r} 期望 {expected}，实际 {result.level}"
+
+
 # ---------- 危机求助句式必须触发高危告警 ----------
 HELP_SEEKING = [text for text, level in CRISIS_CASES[:6]]
 

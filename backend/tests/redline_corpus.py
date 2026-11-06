@@ -4,6 +4,8 @@
 - docs/code-review-recheck-2026-11-06.md
 - docs/code-review-recheck-round2-2026-11-06.md
 - docs/code-review-recheck-round3-2026-11-06.md
+- docs/code-review-recheck-round4-2026-11-06.md
+- docs/code-review-recheck-round5-2026-11-06.md
 - 各轮整改中自己构造的正反用例
 
 用途：
@@ -93,6 +95,22 @@ CRISIS_CASES: list[tuple[str, str]] = [
     ("我想找到活下去的理由", "none"),
     ("我不想死", "none"),
     ("我没想自杀", "none"),
+    # —— 第五轮复审 B-1：碰撞豁免只作用于原文（保留标点），跨标点/换行不豁免 ——
+    ("我真的不想活，走不动了", "high"),
+    ("不想活，走路都没力气", "high"),
+    ("不想活。动不动就想哭", "high"),
+    ("我不想活，动都不想动", "high"),
+    ("我没有，想死", "high"),
+    ("我想死，你了不了解我", "high"),
+    # B-1 反向：完整词碰撞必须按整词匹配，不得「跟一个动字就放过」
+    ("我不想活动", "none"),
+    ("我今天不想活动，只想躺着", "none"),
+    ("我不想动弹", "none"),
+    ("我不想走动", "none"),
+    ("不想活动", "none"),
+    ("不想活了", "high"),
+    ("不想活下去", "high"),
+    ("寻死", "high"),
     # —— 第三轮复审 B-1：否定词紧邻危机词才豁免（白名单）——
     ("我没想过要自杀", "none"),
     ("我从来没想过自杀", "none"),
@@ -140,6 +158,13 @@ MEMORY_CASES: list[tuple[str, bool]] = [
     ("笑死我了", False),
     ("今天累到不想动了", False),
     ("室友小琳常半夜打电话", False),
+    # —— 第五轮复审 B-1：长期记忆兜底与危机判定共用同一份「原文边界」规则 ——
+    ("我真的不想活，走不动了", True),
+    ("不想活。动不动就想哭", True),
+    ("我想死，你了不了解我", True),
+    ("我不想活动", False),
+    ("我不想动弹", False),
+    ("我不想走动", False),
 ]
 
 # ---------- 输出侧合规：(文本, 期望类别 diagnosis/medication/efficacy/None) ----------

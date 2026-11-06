@@ -12,8 +12,9 @@ from app.services.crisis_data import LEVEL1_PHRASES, LEVEL2_PHRASES
 
 
 def detect(text: str, session: dict | None = None) -> crisis.CrisisResult:
+    # 必须传原文：豁免/边界判断要读标点，`normalize` 会删掉标点（见 crisis 模块约定）
     return evaluate(
-        normalize(text),
+        text,
         session or {"crisis_score": 0},
         LEVEL1_PHRASES,
         LEVEL2_PHRASES,
