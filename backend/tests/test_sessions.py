@@ -1,7 +1,7 @@
 """P1 会话管理测试：CRUD、并发上限、跨用户隔离（不暴露存在性）。"""
 from __future__ import annotations
 
-from helpers import auth, create_session, login
+from tests.helpers import auth, create_session, login
 
 
 def test_session_crud_flow(client, db):

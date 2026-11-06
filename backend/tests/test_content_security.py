@@ -9,11 +9,11 @@ import os
 import httpx
 import pymongo
 import pytest
-from helpers import auth, create_session, login
 
 from app.config import get_settings
 from app.db.indexes import COLL_MESSAGES
 from app.services import chat, content_security, wechat
+from tests.helpers import auth, create_session, login
 
 
 def _count_messages(filter_: dict) -> int:

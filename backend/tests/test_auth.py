@@ -1,7 +1,7 @@
 """P1 认证链路测试：mock 微信登录、JWT、refresh 旋转、me、鉴权。"""
 from __future__ import annotations
 
-from helpers import auth, login
+from tests.helpers import auth, login
 
 
 def test_wx_login_issues_tokens(client, db):

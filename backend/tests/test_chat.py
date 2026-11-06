@@ -5,9 +5,9 @@
 from __future__ import annotations
 
 import pytest
-from helpers import auth, create_session, login
 
 from app.services import chat
+from tests.helpers import auth, create_session, login
 
 
 @pytest.fixture()

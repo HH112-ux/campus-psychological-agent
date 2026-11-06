@@ -14,4 +14,6 @@ ignore = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = [".", "tests"]
+pythonpath = ["."]
+# -ra：结尾汇总 skip 原因（本地缺 MongoDB 时不至于只看到一片绿色）
+addopts = "-ra"
