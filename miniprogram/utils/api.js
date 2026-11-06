@@ -178,6 +178,8 @@ async function uploadFile({ url, filePath, name = 'file', formData = {}, timeout
 
 // ---------- 对外 ----------
 module.exports = {
+  // 并发活跃会话上限：前端唯一口径，与后端 config.session_concurrency_limit（=5，README/API 文档契约）对齐
+  SESSION_CONCURRENCY_LIMIT: 5,
   base,
   getAccessToken,
   getRefreshToken,

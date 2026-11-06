@@ -84,7 +84,7 @@ Page({
         if (err && err.code === 2003) {
           wx.showModal({
             title: '会话数量已达上限',
-            content: '最多保留 3 个进行中的对话，请先在列表删除一个旧会话。',
+            content: `最多保留 ${api.SESSION_CONCURRENCY_LIMIT} 个进行中的对话，请先在列表删除一个旧会话。`,
             showCancel: false,
             confirmText: '我知道了',
             success: () => wx.switchTab({ url: '/pages/index/index' }),
