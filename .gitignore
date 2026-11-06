@@ -31,6 +31,8 @@ project.private.config.json
 !.env.example
 *.pem
 *.key
+*.crt
+*.cer
 secrets/
 
 # ===== 编辑器 / 工具缓存 =====

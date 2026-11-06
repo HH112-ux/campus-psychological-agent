@@ -34,8 +34,16 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      # 证书容器内路径；对应文件缺失时 entrypoint 直接失败（不降级为 HTTP）
+      TLS_CERT_PATH: ${TLS_CERT_PATH:-/etc/nginx/certs/server.crt}
+      TLS_KEY_PATH: ${TLS_KEY_PATH:-/etc/nginx/certs/server.key}
+      TLS_SERVER_NAME: ${TLS_SERVER_NAME:-_}
+    entrypoint: ["/bin/sh", "/usr/local/bin/xinyu-entrypoint.sh"]
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # 模板在启动时渲染为 /etc/nginx/nginx.conf（占位符见 nginx.conf.template）
+      - ./nginx/nginx.conf.template:/etc/nginx/xinyu/nginx.conf.template:ro
+      - ./nginx/docker-entrypoint.sh:/usr/local/bin/xinyu-entrypoint.sh:ro
       - ./nginx/certs:/etc/nginx/certs:ro
     profiles: ["prod"]   # 本地开发默认不启动，上线时启用
 

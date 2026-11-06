@@ -90,6 +90,25 @@ WX_MOCK_OPENID=mock_dev_openid
 > 也可直接使用封装好的解释器 `~/bin/python3.12`（已内置上述变量）。
 > 统一用 `.venv/bin/python3.12` 调用，避免裸 `python` 命中系统其他版本。
 
+## 部署（docker-compose，HTTPS）
+
+生产用 `prod` profile 启动 api / mongo / nginx；nginx 同时监听 80 与 443，
+**80 只做 301 跳转到 HTTPS**（`/health` 例外，供编排探活），全链路不提供明文业务入口。
+
+```bash
+cd backend
+cp .env.example .env                       # 填写密钥、Mongo 凭据、TLS_SERVER_NAME
+mkdir -p nginx/certs                       # 放入 server.crt / server.key（严禁入库）
+docker compose --profile prod up -d --build
+```
+
+- 证书路径可用 `TLS_CERT_PATH` / `TLS_KEY_PATH` 覆盖，默认 `/etc/nginx/certs/server.crt|key`；
+  容器启动时由 `nginx/docker-entrypoint.sh` 渲染模板并执行 `nginx -t`；
+- 证书或私钥缺失、为空、与私钥不匹配时，nginx 容器**启动即失败**并打印
+  `[xinyu-nginx] 启动失败：…`，不会静默降级为明文 HTTP；
+- 备案域名就绪后把 `TLS_SERVER_NAME` 设为该域名，并在小程序后台配置 request 合法域名；
+- 证书过期前替换 `backend/nginx/certs/` 内文件后 `docker compose --profile prod restart nginx`。
+
 ## 验证
 
 ```bash
