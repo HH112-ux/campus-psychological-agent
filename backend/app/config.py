@@ -7,6 +7,8 @@ from urllib.parse import urlsplit
 from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.services.crisis_data import phone_problems
+
 
 class Settings(BaseSettings):
     """全局配置，字段与 .env.example 一一对应。"""
@@ -173,6 +175,8 @@ class Settings(BaseSettings):
             )
         if not self.zhipu_api_key:
             problems.append("ZHIPU_API_KEY 必须配置（对话主链路依赖）")
+        # 求助资源电话：不允许为空或明显非法（号码由校方提供，不做占位符识别）
+        problems.extend(phone_problems())
         if self.asr_enabled:
             if self.asr_provider == "mock":
                 problems.append("ASR_PROVIDER 不能为 mock（生产禁止假转写），请配置 http 网关")

@@ -69,6 +69,43 @@ def test_prod_missing_zhipu_key_rejected():
         Settings(**_prod_kwargs(zhipu_api_key=""))
 
 
+def test_prod_empty_crisis_phone_rejected(monkeypatch):
+    """G3：求助电话不允许为空（空值即无法转介）。"""
+    from app.services import crisis_data
+
+    monkeypatch.setattr(
+        crisis_data,
+        "FALLBACK_RESOURCES",
+        {"resources": [{"id": "campus-center", "name": "校心理咨询中心", "phone": ""}]},
+    )
+    with pytest.raises(ValidationError, match="电话为空"):
+        Settings(**_prod_kwargs())
+
+
+def test_prod_invalid_crisis_phone_rejected(monkeypatch):
+    """G3：含非数字字符或长度不符的电话视为非法配置。"""
+    from app.services import crisis_data
+
+    for bad in ("0757-ABC", "123", "0757-23456789转"):
+        monkeypatch.setattr(
+            crisis_data,
+            "FALLBACK_RESOURCES",
+            {"resources": [{"id": "campus-center", "name": "校心理咨询中心", "phone": bad}]},
+        )
+        with pytest.raises(ValidationError, match="电话格式非法"):
+            Settings(**_prod_kwargs())
+
+
+def test_campus_center_phone_is_real_number():
+    """G3：内置求助资源必须携带校方提供的真实号码，不得回退为占位符。"""
+    from app.services.crisis_data import FALLBACK_RESOURCES
+
+    campus = next(
+        r for r in FALLBACK_RESOURCES["resources"] if r["id"] == "campus-center"
+    )
+    assert campus["phone"] == "0757-23456789"
+
+
 def test_prod_mock_asr_provider_rejected():
     """V5：生产禁止 mock 转写（否则把用户语音都替换成固定文本）。"""
     with pytest.raises(ValidationError, match="ASR_PROVIDER"):

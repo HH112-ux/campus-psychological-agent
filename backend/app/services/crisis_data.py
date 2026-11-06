@@ -11,6 +11,8 @@ DB（crisis_lexicon / crisis_resources）为权威来源、支持热更新；当
 """
 from __future__ import annotations
 
+import re
+
 # 一级 · 强信号（归一化形态）
 LEVEL1_PHRASES: list[str] = [
     # —— 直接自杀/轻生表述 ——
@@ -58,10 +60,10 @@ HIGH_CRISIS_REPLY = (
     "也可以去找身边一个信任的人待在一起。你不用一个人扛着，我在这里。"
 )
 
-# 内置求助资源（与 API 文档示例一致；校中心电话待补）
+# 内置求助资源（与 API 文档示例一致；校中心电话为校方提供的真实号码）
 FALLBACK_RESOURCES: dict = {
-    "version": 1,
-    "updated_at": "2026-10-13T10:00:00+08:00",
+    "version": 2,
+    "updated_at": "2026-11-06T10:00:00+08:00",
     "resources": [
         {"id": "hotline-12356", "name": "全国心理援助热线", "phone": "12356",
          "hours": "24 小时", "note": "免费 · 匿名", "priority": 1},
@@ -69,7 +71,30 @@ FALLBACK_RESOURCES: dict = {
          "hours": "24 小时", "note": "学生倾诉专线", "priority": 2},
         {"id": "hotline-12355", "name": "12355 青少年服务热线", "phone": "12355",
          "hours": "工作日 8:00–20:00", "note": "共青团渠道", "priority": 3},
-        {"id": "campus-center", "name": "校心理咨询中心", "phone": "0XX-XXXXXXXX",
-         "hours": "工作日 9:00–17:00", "note": "线下预约（电话待补充）", "priority": 4},
+        {"id": "campus-center", "name": "校心理咨询中心", "phone": "0757-23456789",
+         "hours": "工作日 9:00–17:00", "note": "线下预约（建议提前电话预约）", "priority": 4},
     ],
 }
+
+# 求助电话格式：仅允许数字与连字符，长度 5–20
+PHONE_PATTERN = re.compile(r"^[0-9-]{5,20}$")
+
+
+def phone_problems(resources: list[dict] | None = None) -> list[str]:
+    """校验求助资源电话（生产启动 fail-fast）：不允许为空或明显非法。
+
+    只做通用格式校验，不识别「占位符」文案——号码值来自校方，格式合法即通过。
+    """
+    items = resources if resources is not None else FALLBACK_RESOURCES["resources"]
+    problems: list[str] = []
+    for item in items:
+        label = item.get("name") or item.get("id") or "未知资源"
+        phone = str(item.get("phone") or "").strip()
+        if not phone:
+            problems.append(f"求助资源「{label}」电话为空")
+        elif not PHONE_PATTERN.fullmatch(phone):
+            problems.append(
+                f"求助资源「{label}」电话格式非法：{phone!r}"
+                "（仅允许数字与连字符，长度 5–20）"
+            )
+    return problems
