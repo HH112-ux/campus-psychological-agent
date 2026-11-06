@@ -2,13 +2,16 @@
    被 index.wxss / logs.wxss 通过 @import 共用；页面内不得再重复定义情绪色值。
    表达只靠「描边粗细 + 内核填充 + 外环 + 内间隙」四个维度，
    色值沿用 P0 已收敛的语义色，不新增任何 hex。
-   贴签下仍必须有文字标签（不用颜色单独区分情绪）。 */
+   贴签下仍必须有文字标签（不用颜色单独区分情绪）。
+   --emo-ink 只用于装饰色点；文字标签用同色相更深的 --emo-text（复用语义令牌），
+   保证对白底 ≥4.5:1，满足 WCAG AA 正文要求。 */
 
 /* 打卡词汇 calm / ok / low / anxious / irritable
    日志词汇 calm / ok / depressed / anxious / angry / other
    low↔depressed、irritable↔angry 为同一情绪的两套后端词汇，合并在同一条规则里 */
 .emo--calm {
   --emo-ink: #6fae7f;
+  --emo-text: var(--success);
   --emo-bg: #f1f7f2;
   --emo-ring: 0;
   --emo-fill: 0.85;
@@ -16,6 +19,7 @@
 
 .emo--ok {
   --emo-ink: #6fae7f;
+  --emo-text: var(--success);
   --emo-bg: #f1f7f2;
   --emo-ring: 2rpx;
   --emo-fill: 0.4;
@@ -24,6 +28,7 @@
 .emo--depressed,
 .emo--low {
   --emo-ink: #6b7fa8;
+  --emo-text: var(--info);
   --emo-bg: #f0f2f6;
   --emo-ring: 2rpx;
   --emo-fill: 0.25;
@@ -32,6 +37,7 @@
 
 .emo--anxious {
   --emo-ink: #e06666;
+  --emo-text: var(--danger);
   --emo-bg: #fcf0f0;
   --emo-ring: 2rpx;
   --emo-fill: 0.55;
@@ -42,6 +48,7 @@
 .emo--angry,
 .emo--irritable {
   --emo-ink: #e0913e;
+  --emo-text: var(--warn);
   --emo-bg: #fcf4eb;
   --emo-ring: 4rpx; /* 粗描边：读作「紧绷」 */
   --emo-fill: 0.8;
@@ -50,6 +57,7 @@
 /* 其他：直接消费中性文字色，避免与 --text-3 重复定义同一个 hex */
 .emo--other {
   --emo-ink: var(--text-3);
+  --emo-text: var(--text-2);
   --emo-bg: #f2f1f0;
   --emo-ring: 2rpx;
   --emo-fill: 0.5;

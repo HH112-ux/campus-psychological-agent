@@ -192,7 +192,7 @@
 .tl-label {
   font-size: var(--fs-body);
   font-weight: 600;
-  color: var(--emo-ink, var(--text));
+  color: var(--emo-text, var(--text));
 }
 
 .tl-int {
