@@ -16,6 +16,24 @@ from app.core import ratelimit
 from app.core.exceptions import BizError
 
 
+def test_redis_client_sets_socket_timeouts(monkeypatch):
+    """网络黑洞时快速失败：客户端必须显式设置连接与读取超时。"""
+    from app.core import redis_client
+
+    monkeypatch.setattr(get_settings(), "redis_url", "redis://127.0.0.1:6399/0")
+    monkeypatch.setattr(redis_client, "_client", None)
+
+    async def _run():
+        client = await redis_client.get_client()
+        kwargs = client.connection_pool.connection_kwargs
+        await redis_client.close_client()
+        return kwargs
+
+    kwargs = asyncio.run(_run())
+    assert kwargs["socket_connect_timeout"] == 2
+    assert kwargs["socket_timeout"] == 2
+
+
 class FakeRedisZSet:
     """内存 ZSET，语义与 ratelimit._SLIDING_WINDOW_LUA 完全一致（只用于验证调用契约）。"""
 

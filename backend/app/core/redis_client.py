@@ -22,7 +22,12 @@ async def get_client():
         import redis.asyncio as aioredis
 
         _client = aioredis.Redis.from_url(
-            get_settings().redis_url, decode_responses=True
+            get_settings().redis_url,
+            decode_responses=True,
+            # 显式超时：Redis 网络黑洞时快速失败并走 fail-open，
+            # 不能按 redis-py 默认的「无限等待」把主链路拖住。
+            socket_connect_timeout=2,
+            socket_timeout=2,
         )
     return _client
 
