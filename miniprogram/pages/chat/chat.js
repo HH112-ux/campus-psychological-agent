@@ -349,7 +349,7 @@ Page({
           // P3：本轮情绪识别角标（type / intensity / evidence）
           this._patchAi({ emotion: decorateEmotion(payload) })
         } else if (event === 'done') {
-          this.finishTurn(payload.degraded)
+          this.finishTurn(payload.degraded, payload.truncated)
         } else if (event === 'error') {
           this.handleStreamBreak()
         }
@@ -420,9 +420,13 @@ Page({
     this.setData({ messages: this.data.messages.filter((m) => m.key !== key) })
   },
 
-  finishTurn(degraded) {
+  finishTurn(degraded, truncated) {
     if (this._sseTask) this._sseTask = null
-    this._patchAi({ degraded: !!degraded, content: this._streamText || '我在听。' })
+    this._patchAi({
+      degraded: !!degraded,
+      truncated: !!truncated,
+      content: this._streamText || '我在听。',
+    })
     this.setData({ sending: false, typing: false })
     this.scrollToBottom()
   },

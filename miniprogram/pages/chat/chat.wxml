@@ -36,7 +36,8 @@
             <view wx:else class="typing">
               <view class="dot"></view><view class="dot"></view><view class="dot"></view>
             </view>
-            <view wx:if="{{item.degraded && item.content}}" class="degraded">连接不稳定，已为你保留</view>
+            <view wx:if="{{item.truncated && item.content}}" class="degraded">回答较长被截断，已为你保留已生成内容</view>
+            <view wx:elif="{{item.degraded && item.content}}" class="degraded">连接不稳定，已为你保留</view>
             <view wx:if="{{item.emotion}}" class="emotion-badge {{item.emotion.colorClass}}">
               本轮识别：{{item.emotion.emotionText}} · {{item.emotion.intensity}}/10
             </view>
