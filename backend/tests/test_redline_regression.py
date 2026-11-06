@@ -111,6 +111,119 @@ def test_compliance_corpus(text, expected):
         assert safe == compliance.SAFE_TEXT[expected]
 
 
+# ---------- 输出侧合规：繁体覆盖（词表新增必须同步补繁体） ----------
+# 每个病名/药名的繁体写法；键集合必须与 compliance 的词表完全一致，
+# 否则说明词表新增了词而这里没跟上（tests 会直接失败）。
+TRAD_DIAGNOSIS_FORMS: dict[str, str] = {
+    "抑郁症": "抑鬱症",
+    "忧郁症": "憂鬱症",
+    "焦虑症": "焦慮症",
+    "双相情感障碍": "雙相情感障礙",
+    "双相障碍": "雙相障礙",
+    "躁郁症": "躁鬱症",
+    "强迫症": "強迫症",
+    "精神分裂症": "精神分裂症",
+    "精神分裂": "精神分裂",
+    "创伤后应激障碍": "創傷後應激障礙",
+    "PTSD": "PTSD",
+    "进食障碍": "進食障礙",
+    "人格障碍": "人格障礙",
+    "多动症": "多動症",
+    "ADHD": "ADHD",
+    "自闭症": "自閉症",
+    "惊恐障碍": "驚恐障礙",
+    "社交恐惧症": "社交恐懼症",
+    "社交焦虑障碍": "社交焦慮障礙",
+    "躯体化障碍": "軀體化障礙",
+    "疑病症": "疑病症",
+    "失眠症": "失眠症",
+    "抑郁障碍": "抑鬱障礙",
+    "焦虑障碍": "焦慮障礙",
+}
+
+TRAD_MEDICATION_FORMS: dict[str, str] = {
+    "舍曲林": "舍曲林",
+    "氟西汀": "氟西汀",
+    "帕罗西汀": "帕羅西汀",
+    "氟伏沙明": "氟伏沙明",
+    "艾司西酞普兰": "艾司西酞普蘭",
+    "西酞普兰": "西酞普蘭",
+    "文拉法辛": "文拉法辛",
+    "度洛西汀": "度洛西汀",
+    "米氮平": "米氮平",
+    "曲唑酮": "曲唑酮",
+    "丁螺环酮": "丁螺環酮",
+    "劳拉西泮": "勞拉西泮",
+    "阿普唑仑": "阿普唑侖",
+    "氯硝西泮": "氯硝西泮",
+    "地西泮": "地西泮",
+    "奥氮平": "奧氮平",
+    "喹硫平": "喹硫平",
+    "丙戊酸钠": "丙戊酸鈉",
+    "碳酸锂": "碳酸鋰",
+    "唑吡坦": "唑吡坦",
+    "右佐匹克隆": "右佐匹克隆",
+    "佐匹克隆": "佐匹克隆",
+    "阿米替林": "阿米替林",
+    "多塞平": "多塞平",
+    "氯米帕明": "氯米帕明",
+    "舍曲林片": "舍曲林片",
+    "氟哌啶醇": "氟哌啶醇",
+    "坦度螺酮": "坦度螺酮",
+    "奥沙西泮": "奧沙西泮",
+    "艾司唑仑": "艾司唑侖",
+    "氯氮平": "氯氮平",
+    "安非他酮": "安非他酮",
+    "阿立哌唑": "阿立哌唑",
+    "鲁拉西酮": "魯拉西酮",
+    "百忧解": "百憂解",
+    "左洛复": "左洛復",
+    "来士普": "來士普",
+    "赛乐特": "賽樂特",
+    "怡诺思": "怡諾思",
+    "欣百达": "欣百達",
+    "瑞美隆": "瑞美隆",
+    "思诺思": "思諾思",
+    "黛力新": "黛力新",
+    "舒乐安定": "舒樂安定",
+    "佳静安定": "佳靜安定",
+    "安定片": "安定片",
+    "阿普唑仑片": "阿普唑侖片",
+    "米安色林": "米安色林",
+    "曲舍林": "曲舍林",
+    "SSRI": "SSRI",
+    "SNRI": "SNRI",
+    "安眠药": "安眠藥",
+    "褪黑素": "褪黑素",
+    "抗抑郁药": "抗抑鬱藥",
+    "抗焦虑药": "抗焦慮藥",
+    "镇静剂": "鎮靜劑",
+    "抗精神病药": "抗精神病藥",
+}
+
+
+def test_traditional_forms_cover_every_lexicon_term():
+    """词表里的每个病名/药名都必须有繁体写法用例（新增词未补繁体即失败）。"""
+    assert set(TRAD_DIAGNOSIS_FORMS) == {
+        term for term in compliance._DISORDERS.split("|") if term
+    }
+    assert set(TRAD_MEDICATION_FORMS) == {
+        term for term in compliance._DRUGS.split("|") if term
+    }
+
+
+@pytest.mark.parametrize(("simp", "trad"), TRAD_DIAGNOSIS_FORMS.items())
+def test_traditional_diagnosis_recognized(simp, trad):
+    assert compliance._squash(trad) == simp
+    assert compliance.detect(f"你患了{trad}") == "diagnosis"
+
+
+@pytest.mark.parametrize(("simp", "trad"), TRAD_MEDICATION_FORMS.items())
+def test_traditional_medication_recognized(simp, trad):
+    assert compliance._squash(trad) == simp
+    assert compliance.detect(trad) == "medication"
+
+
 # ---------- 输出侧合规：流式分段 ----------
 @pytest.mark.parametrize(("pieces", "expected"), COMPLIANCE_STREAM_CASES)
 def test_compliance_stream_corpus(pieces, expected):

@@ -172,6 +172,21 @@ COMPLIANCE_CASES: list[tuple[str, str | None]] = [
     ("你作为抑郁症患者", "diagnosis"),
     ("身为抑郁症患者的你", "diagnosis"),
     ("你是焦虑症的病人", "diagnosis"),
+    # 诊断结论：第四轮复审 B-3（时长按语义匹配，不再被 3 字切片截断）
+    ("你抑郁很长时间了", "diagnosis"),
+    ("你焦虑很多年了", "diagnosis"),
+    ("你已经抑郁很长一段时间了", "diagnosis"),
+    ("你抑郁症很长时间了", "diagnosis"),
+    ("你抑郁好几年了吧", "diagnosis"),
+    ("你抑郁大半年了", "diagnosis"),
+    ("你抑郁半个月了", "diagnosis"),
+    ("你抑郁两个月了", "diagnosis"),
+    # 诊断结论：第四轮复审 B-3（繁体字形归并）
+    ("你患了憂鬱症", "diagnosis"),
+    ("你这是憂鬱症", "diagnosis"),
+    ("你得了躁鬱症", "diagnosis"),
+    ("你有強迫症", "diagnosis"),
+    ("你是雙相情感障礙", "diagnosis"),
     # 药物 / 用药指导
     ("建议服用 SSRI 类药物", "medication"),
     ("建议服用SNRI类药物", "medication"),
@@ -195,6 +210,9 @@ COMPLIANCE_CASES: list[tuple[str, str | None]] = [
     ("你可以自己减量试试。", "medication"),
     ("先停掉舍曲林观察几天。", "medication"),
     ("如果效果不好可以自行加量。", "medication"),
+    # 药物：第四轮复审 B-3（繁体商品名/通用名）
+    ("百憂解可以試試", "medication"),
+    ("帕羅西汀可以試試", "medication"),
     # 疗效承诺
     ("坚持两周一定能治好。", "efficacy"),
     ("这个方法可以根治焦虑。", "efficacy"),
@@ -223,6 +241,8 @@ COMPLIANCE_CASES: list[tuple[str, str | None]] = [
     ("不要自行停药，有任何不适及时找医生。", None),
     ("你今天感觉怎么样", None),
     ("你最近压力大，有些焦虑是正常的。", None),
+    # 时长规则按语义匹配，不得把「周末」这类普通词当成时长（B-3 反向）
+    ("你焦虑周末没人陪吗", None),
     # 第三方/转述：不是对用户的诊断（第三轮复审 H-1 / S-2）
     ("我有个朋友得了抑郁症，现在好多了", None),
     ("医生说他有抑郁症，建议他去看看", None),
