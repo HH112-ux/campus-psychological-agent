@@ -40,8 +40,12 @@ from app.services.crisis_data import (
 )
 
 # 词库缓存：{ts, l1, l2}
+# `ts` 为 `None` 表示「缓存已失效、下次调用必须回源」，而不是用某个时间戳数值
+# （如 0.0）隐式表达失效：`time.monotonic()` 在 Linux 上是开机时长，主机重启后
+# 头 60 秒内 `now - 0.0 < 60` 会把「刚被置失效」误判成「仍然新鲜」，运营在 DB
+# 追加的红线词要等到 uptime 超过 TTL 才生效。状态用 `None` 显式表达，与 uptime 无关。
 _CACHE_TTL_SECONDS = 60.0
-_cache: dict = {"ts": 0.0, "l1": list(LEVEL1_PHRASES), "l2": list(LEVEL2_PHRASES)}
+_cache: dict = {"ts": None, "l1": list(LEVEL1_PHRASES), "l2": list(LEVEL2_PHRASES)}
 
 # ---------- 安全语境豁免（白名单） ----------
 # 判定方向：**默认命中即危机**，只有在危机词紧邻位置出现明确的否定/限定词，或
@@ -253,13 +257,16 @@ def _dedupe_overlapping(hits: list[str]) -> list[str]:
 
 
 def refresh_lexicon_cache() -> None:
-    """运营热更新后可手动清缓存。"""
-    _cache["ts"] = 0.0
+    """运营热更新后可手动清缓存：把 `ts` 置 `None`，下一次加载必然回源。"""
+    _cache["ts"] = None
 
 
 async def _load_lexicon() -> tuple[list[str], list[str]]:
     now = time.monotonic()
-    if now - _cache["ts"] < _CACHE_TTL_SECONDS:
+    last = _cache["ts"]
+    # 只有「确实写入过时间戳」且未超过 TTL 才算新鲜；`None` 单独表达失效状态，
+    # 不参与数值比较，因此不受 monotonic 冷启动（开机不足 60 秒）影响。
+    if last is not None and now - last < _CACHE_TTL_SECONDS:
         return _cache["l1"], _cache["l2"]
 
     l1: list[str] = []

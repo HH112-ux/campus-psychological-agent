@@ -42,6 +42,12 @@ jobs:
         working-directory: backend
         run: ruff check .
 
+      # 诊断信息（不影响门禁）：坐实 runner 冷启动假设——Linux 的 monotonic 是开机时长，
+      # 若该值 < 词库缓存 TTL(60s)，旧的 0.0 哨兵写法会在此环境下暴露误判。
+      - name: 诊断 · 记录 runner uptime
+        working-directory: backend
+        run: python -c "import time; print(f'time.monotonic() = {time.monotonic():.1f}s')"
+
       - name: pytest
         working-directory: backend
         run: pytest -q

@@ -4,6 +4,9 @@
 """
 from __future__ import annotations
 
+import asyncio
+import types
+
 import pytest
 
 from app.services import crisis
@@ -283,3 +286,62 @@ def test_db_lexicon_merges_with_builtin(client, db):
     l1 = client.portal.call(_run)
     assert "想死" in l1, "内置红线词表被数据库词库整体替换了"
     assert "自定义危机词" in l1
+
+
+# ---------- 缓存失效状态（与宿主机 uptime 无关） ----------
+class _FakeCursor:
+    """最小 motor cursor 替身：只支持 `async for`。"""
+
+    def __init__(self, docs: list[dict]):
+        self._docs = list(docs)
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if not self._docs:
+            raise StopAsyncIteration
+        return self._docs.pop(0)
+
+
+class _FakeLexiconDb:
+    """最小 motor database 替身：只实现 `db[集合].find(...)` 这一条读取路径。"""
+
+    def __init__(self, docs: list[dict]):
+        self._docs = docs
+
+    def __getitem__(self, _name: str):
+        return types.SimpleNamespace(find=lambda _query: _FakeCursor(self._docs))
+
+
+def test_refresh_reloads_source_when_monotonic_starts_small(monkeypatch):
+    """refresh 后必须回源读 DB，不能被「开机时长 < TTL」挡在缓存里。
+
+    复现生产冷启动：Linux 的 `monotonic` 是开机时长，主机重启后头 60 秒内
+    `now - 0.0 < 60` 会让「刚被置失效」的缓存继续被当成新鲜，运营在 DB 追加的
+    红线词不生效。这里把 monotonic 固定为 30 秒，结论只取决于缓存状态写法，
+    与本机 uptime 无关（旧写法下本用例必红）。
+    """
+    monkeypatch.setattr(crisis, "time", types.SimpleNamespace(monotonic=lambda: 30.0))
+    monkeypatch.setattr(
+        crisis,
+        "mongo",
+        types.SimpleNamespace(
+            db=_FakeLexiconDb([{"phrase": "冷启动新增词", "level": 1, "enabled": True}])
+        ),
+    )
+
+    original = dict(crisis._cache)
+    try:
+        # 预置一份「刚写入」的旧缓存，只有走缓存才会返回它
+        crisis._cache.update(ts=30.0, l1=["缓存旧词"], l2=[])
+        crisis.refresh_lexicon_cache()
+        assert crisis._cache["ts"] is None, "失效状态应显式置空，不能靠时间戳数值表达"
+
+        l1, _ = asyncio.run(crisis._load_lexicon())
+    finally:
+        crisis._cache.update(original)
+
+    assert "冷启动新增词" in l1, "refresh 后仍未回源读 DB（走了缓存）"
+    assert "缓存旧词" not in l1, "refresh 后仍返回了缓存里的旧词表"
+    assert "想死" in l1, "内置红线词表应继续参与并集"
