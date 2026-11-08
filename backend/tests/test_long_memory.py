@@ -68,12 +68,14 @@ def test_parse_empty_and_invalid():
 # ---------- 落库（加密 / 去重 / 上限） ----------
 
 
-def _uid(client, openid="mock_test_user"):
-    """取指定 openid 用户的 _id（默认 conftest 环境里的默认测试用户）。
+def _uid(client, openid: str | None = None):
+    """取登录用户的 _id；默认读配置里的 mock openid，不在测试里写死身份。
 
     不再用「取库内唯一用户」启发式：并发/残留用户下该启发式会取错身份；
-    改为显式 openid，行为确定（与用户隔离用例的显式断言口径一致）。
+    改为按 `settings.wx_mock_openid` 显式查找——CI 会把该值覆盖成
+    `mock_ci_user`，写死 `mock_test_user` 会查不到用户而对 None 取下标。
     """
+    openid = openid or get_settings().wx_mock_openid
 
     async def _fetch():
         return (await mongo.db[COLL_USERS].find_one({"openid": openid}))["_id"]

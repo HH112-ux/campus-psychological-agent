@@ -410,7 +410,9 @@ def _sync_db():
     return client, client[os.environ.get("MONGODB_DB", "xinyu_test")]
 
 
-def _uid_by_openid(openid="mock_test_user"):
+def _uid_by_openid(openid: str | None = None):
+    """按 openid 取用户 _id；默认读配置，避免在测试里写死 CI 会覆盖的身份。"""
+    openid = openid or get_settings().wx_mock_openid
     client, sdb = _sync_db()
     doc = sdb[COLL_USERS].find_one({"openid": openid})
     client.close()

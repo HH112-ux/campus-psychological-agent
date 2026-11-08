@@ -12,6 +12,7 @@ import pymongo
 import pytest
 from bson import ObjectId
 
+from app.config import get_settings
 from app.core.timeutil import now_cst
 from app.db.indexes import COLL_MESSAGES, COLL_SESSIONS, COLL_USERS
 from app.services import bad_cases
@@ -28,7 +29,7 @@ def seeded(db):
     client, sdb = _sync_db()
     now = now_cst()
     uid, sid = ObjectId(), ObjectId()
-    sdb[COLL_USERS].insert_one({"_id": uid, "openid": "mock_test_user"})
+    sdb[COLL_USERS].insert_one({"_id": uid, "openid": get_settings().wx_mock_openid})
     sdb[COLL_SESSIONS].insert_one(
         {"_id": sid, "user_id": uid, "title": "考试焦虑", "status": "active", "created_at": now}
     )
