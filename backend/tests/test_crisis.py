@@ -248,6 +248,39 @@ def test_real_crisis_continuation_not_exempted():
         assert detect(text).level == "high", f"真实求助被误放：{text!r}"
 
 
+# ---------- 第九轮复审：反问/反讽后缀不得被否定豁免放过 ----------
+REVERSAL_CASES = [
+    "我不想死才怪",
+    "我不 想死 才怪",
+    "我不想死是假的",
+    "我不 想死 是假的",
+    "我不想死怎么可能",
+    "我不\u200b想死\u200b才怪",
+    "我不想自杀才怪",
+]
+
+
+@pytest.mark.parametrize("text", REVERSAL_CASES)
+def test_reversal_suffix_blocks_negation_exemption(text):
+    assert detect(text).level == "high", f"反问/反讽被当成否定豁免：{text!r}"
+
+
+NEGATION_KEPT = [
+    "我不想死",
+    "我不 想死",
+    "我不想死，我还没活够",
+    "我不想死，我想活着",
+    "我没想过自杀",
+    "我不想死了",
+    "我不想死，是假的吧",  # 标点是硬边界，后缀跨分句不生效
+]
+
+
+@pytest.mark.parametrize("text", NEGATION_KEPT)
+def test_real_negation_still_exempt(text):
+    assert detect(text).level == "none", f"真实否定被误判：{text!r}"
+
+
 # ---------- 收窄后真实危机仍必须命中 ----------
 CRISIS_STILL_CAUGHT = [
     ("我想死", "high"),

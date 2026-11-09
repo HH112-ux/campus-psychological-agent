@@ -72,6 +72,11 @@ _NEG_TOKEN_RE = re.compile(r"不|没")
 _GREETING_SUFFIX_RE = re.compile(r"(?:你|您|你们|我|我们)了(?!解|结|却|然|断|不起)")
 # 夸张：「热得要死了」里的「要死了」由「得」引出
 _EXAGGERATION_LEAD = "得"
+# 反问/反讽后缀：紧跟在被否定的危机词之后，把否定语义整个翻转
+# （「我不想死才怪」= 想死；「我不想死是假的」=「不想死」这件事是假的）。
+# 只认**同一分句内、紧接危机词**的后缀：中间出现标点即按语义断开，不在此列
+# （「我不想死，才怪」仍按否定豁免）。空白与零宽字符透明，与否定距离同口径。
+_REVERSAL_SUFFIX_RE = re.compile(r"^(?:才怪|才不是|是假的|怎么可能|巴不得)")
 # ---------- 断句口径（两套，勿混用） ----------
 # 原则：**标点表示语义边界；空白与零宽字符只表示排版断行，不代表语义边界。**
 # 由此拆成两套，分别服务两类完全不同的问题：
@@ -212,7 +217,12 @@ def _is_exempt(
     after_raw = normalize(_raw_after(raw_text, raw_end, 6))
 
     if _NEG_PREFIX_RE.search(before_raw) and len(_NEG_TOKEN_RE.findall(before_raw)) < 2:
-        # 否定词与危机词必须在同一分句内紧邻；双重否定（「不是不想死」）不豁免
+        # 否定词与危机词必须在同一分句内紧邻；双重否定（「不是不想死」）不豁免。
+        # 但反问/反讽后缀会把否定语义翻转（「不想死才怪」= 想死），此时不豁免；
+        # 后缀必须紧跟危机词、且中间无标点，真实的否定表达（「我不想死，
+        # 我还没活够」）句内没有这类后缀，仍按否定豁免。
+        if _REVERSAL_SUFFIX_RE.match(after_raw):
+            return False
         return True
     if phrase == "想死" and _GREETING_SUFFIX_RE.match(after_raw):
         return True
