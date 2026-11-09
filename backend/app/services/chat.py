@@ -200,13 +200,14 @@ def _schedule_memory_extraction(turn: Turn) -> None:
 
 
 async def _generate_nonstream(turn: Turn) -> tuple[str, bool]:
-    """非流式生成，失败重试 1 次；仍失败返回降级话术。"""
+    """非流式生成，按 provider.max_attempts 重试；仍失败返回降级话术。"""
     messages = await _build_messages(turn)
     prompt_chars = sum(len(m["content"]) for m in messages)
     provider, tier = select_chat_provider(
         turn.content, turn.crisis.level, turn.latest_emotion
     )
-    for _ in range(2):
+    # 容灾 provider 内部已完成主备切换（max_attempts=1），避免「重试 × 切备」相乘放大调用次数
+    for _ in range(provider.max_attempts):
         try:
             text = await provider.generate(
                 messages, temperature=CHAT_TEMPERATURE, max_tokens=CHAT_MAX_TOKENS
@@ -232,7 +233,7 @@ class _StreamTruncated(Exception):
 async def _stream_deltas(turn: Turn) -> AsyncIterator[str]:
     """真流式：模型增量到达即产出，不再等整段生成完。
 
-    - 首块前失败（连接/超时/空响应）重试 1 次；
+    - 首块前失败（连接/超时/空响应）按 provider.max_attempts 重试；
     - 已产出内容后失败：抛 _StreamTruncated，由调用侧保留已下发内容并在
       done 帧标记，不再静默当作正常结束。
     """
@@ -242,7 +243,8 @@ async def _stream_deltas(turn: Turn) -> AsyncIterator[str]:
         turn.content, turn.crisis.level, turn.latest_emotion
     )
     emitted_chars = 0
-    for _ in range(2):
+    # 同上：容灾 provider 已内含主备切换，不再叠加重试
+    for _ in range(provider.max_attempts):
         produced = 0
         try:
             async for delta in provider.stream(

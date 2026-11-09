@@ -34,6 +34,10 @@ class FallbackProvider(LLMProvider):
         self._primary = primary
         self._backup = backup
 
+    # 本层已在内部做「主 → 备」切换，调用方不应再叠加重试：
+    # 上层已有 2 次重试，若这里仍为 2，最坏情况会打 2×2=4 次真实模型调用。
+    max_attempts = 1
+
     async def generate(
         self, messages: list[dict], temperature: float = 0.7, max_tokens: int = 1024
     ) -> str:

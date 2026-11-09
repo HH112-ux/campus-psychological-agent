@@ -114,6 +114,58 @@ async def _collect(stream):
     return [c async for c in stream]
 
 
+# ---------- 重试次数封顶（避免「上层重试 × 主备切换」相乘） ----------
+
+def test_fallback_provider_disables_outer_retry():
+    """容灾 provider 内部已切备，上层不应再重试；裸 provider 保持原有的重试 1 次。"""
+    assert FallbackProvider.max_attempts == 1
+    assert ZhipuProvider.max_attempts == 2
+
+
+def test_chat_retry_does_not_multiply_fallback_attempts(monkeypatch):
+    """双 provider 全失败时，真实调用应为 2 次（主 1 + 备 1），而不是 2×2=4 次。"""
+    import app.services.chat as chat_svc
+    from app.services.crisis import CrisisResult
+
+    counts = {"primary": 0, "backup": 0}
+
+    class _CountingBoom(LLMProvider):
+        def __init__(self, key: str) -> None:
+            self.key = key
+
+        async def generate(self, messages, temperature=0.7, max_tokens=1024):
+            counts[self.key] += 1
+            raise RuntimeError(f"{self.key} boom")
+
+        async def stream(self, messages, temperature=0.7, max_tokens=1024):
+            counts[self.key] += 1
+            raise RuntimeError(f"{self.key} boom")
+            yield  # pragma: no cover — 保持 async generator 契约
+
+    fb = FallbackProvider(primary=_CountingBoom("primary"), backup=_CountingBoom("backup"))
+    monkeypatch.setattr(chat_svc, "select_chat_provider", lambda *a, **k: (fb, "chat"))
+
+    async def _fake_build(turn):
+        return []
+
+    async def _fake_notify(channel):
+        return None
+
+    monkeypatch.setattr(chat_svc, "_build_messages", _fake_build)
+    monkeypatch.setattr(chat_svc.alerting, "notify_llm_degraded", _fake_notify)
+
+    turn = chat_svc.Turn(
+        user={"_id": "u"},
+        session={"_id": "s"},
+        content="你好",
+        user_message_id="mid",
+        crisis=CrisisResult(),
+    )
+    text, degraded = asyncio.run(chat_svc._generate_nonstream(turn))
+    assert degraded is True and text == chat_svc.DEGRADED_REPLY
+    assert counts == {"primary": 1, "backup": 1}
+
+
 # ---------- 工厂函数 ----------
 
 def test_get_chat_provider_no_qwen_is_plain_zhipu(monkeypatch):
