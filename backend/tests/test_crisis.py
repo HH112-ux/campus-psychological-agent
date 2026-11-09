@@ -152,6 +152,8 @@ COLLISION_FORMS: dict[str, tuple[str, ...]] = {
     "不想活跃": ("不想活跃", "不想活躍"),
     "不想活蹦乱跳": ("不想活蹦乱跳", "不想活蹦亂跳"),
     "不想活跳跳": ("不想活跳跳",),  # 「活跳跳」是「活蹦乱跳」的简省说法，繁简同形
+    "不想活泼": ("不想活泼", "不想活潑"),
+    "不想活受罪": ("不想活受罪",),  # 「受罪」繁简同形
     "寻死觅活": ("寻死觅活", "尋死覓活"),
 }
 COLLISION_WORDS = tuple(w for words in crisis._COLLISION_WORDS.values() for w in words)
@@ -308,6 +310,26 @@ def test_sleeping_pill_preparation_is_mid(text):
 @pytest.mark.parametrize("text", ["安眠药", "医生给我开了安眠药", "我帮室友带了安眠药"])
 def test_plain_sleeping_pill_mention_is_not_crisis(text):
     assert detect(text).level == "none", f"正常用药被误判：{text!r}"
+
+
+# ---------- 第九轮复审：白名单边界补齐（活泼 / 活受罪） ----------
+@pytest.mark.parametrize(
+    "text",
+    [
+        "我不想活泼",
+        "我不想活潑",
+        "我今天不想活泼只想安静",
+        "我不想活受罪",
+        "我 不 想 活 受 罪",
+    ],
+)
+def test_collocation_family_is_exempt(text):
+    assert detect(text).level == "none", f"完整词被误判：{text!r}"
+
+
+@pytest.mark.parametrize("text", ["我不想活，受罪", "我不想活\u200b受罪"])
+def test_collocation_still_requires_contiguous_word(text):
+    assert detect(text).level == "high", f"整词被切断仍应命中：{text!r}"
 
 
 # ---------- 收窄后真实危机仍必须命中 ----------
