@@ -14,8 +14,10 @@
 """
 from __future__ import annotations
 
+import asyncio
 import re
 import time
+import weakref
 from dataclasses import dataclass, field
 
 from bson import ObjectId
@@ -46,6 +48,22 @@ from app.services.crisis_data import (
 # 追加的红线词要等到 uptime 超过 TTL 才生效。状态用 `None` 显式表达，与 uptime 无关。
 _CACHE_TTL_SECONDS = 60.0
 _cache: dict = {"ts": None, "l1": list(LEVEL1_PHRASES), "l2": list(LEVEL2_PHRASES)}
+
+# 刷新单飞：缓存失效后，同一事件循环内只允许一个协程查库，其余协程等它完成后
+# 复用同一份结果，避免并发请求各自查一次库。锁按事件循环分别持有——测试里每个
+# `asyncio.run()` 都是新循环，模块级单个 Lock 会被首个循环绑定，跨循环使用会
+# 直接 RuntimeError；WeakKeyDictionary 保证循环回收后锁随之释放。
+_reload_locks: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+
+
+def _reload_lock() -> asyncio.Lock:
+    loop = asyncio.get_running_loop()
+    lock = _reload_locks.get(loop)
+    if lock is None:
+        lock = asyncio.Lock()
+        _reload_locks[loop] = lock
+    return lock
+
 
 # ---------- 安全语境豁免（白名单） ----------
 # 判定方向：**默认命中即危机**，只有在危机词紧邻位置出现明确的否定/限定词，或
@@ -283,26 +301,33 @@ async def _load_lexicon() -> tuple[list[str], list[str]]:
     if last is not None and now - last < _CACHE_TTL_SECONDS:
         return _cache["l1"], _cache["l2"]
 
-    l1: list[str] = []
-    l2: list[str] = []
-    db = mongo.db
-    if db is not None:
-        async for doc in db[COLL_CRISIS_LEXICON].find({"enabled": True}):
-            phrase = normalize(doc.get("phrase", ""))
-            if not phrase:
-                continue
-            if doc.get("level") == 1:
-                l1.append(phrase)
-            elif doc.get("level") == 2:
-                l2.append(phrase)
+    async with _reload_lock():
+        # 等锁期间可能已有别的协程完成刷新，二次检查后再决定是否真的查库
+        now = time.monotonic()
+        last = _cache["ts"]
+        if last is not None and now - last < _CACHE_TTL_SECONDS:
+            return _cache["l1"], _cache["l2"]
 
-    # 数据库词库只做「追加」，与内置词表取并集：
-    # 若这里改成替换（l1 or LEVEL1_PHRASES），运营只要在库里写一条词，内置红线
-    # 词表就整体失效，危机召回会直接坍塌。
-    l1 = sorted(set(LEVEL1_PHRASES) | set(l1))
-    l2 = sorted(set(LEVEL2_PHRASES) | set(l2))
-    _cache.update(ts=now, l1=l1, l2=l2)
-    return l1, l2
+        l1: list[str] = []
+        l2: list[str] = []
+        db = mongo.db
+        if db is not None:
+            async for doc in db[COLL_CRISIS_LEXICON].find({"enabled": True}):
+                phrase = normalize(doc.get("phrase", ""))
+                if not phrase:
+                    continue
+                if doc.get("level") == 1:
+                    l1.append(phrase)
+                elif doc.get("level") == 2:
+                    l2.append(phrase)
+
+        # 数据库词库只做「追加」，与内置词表取并集：
+        # 若这里改成替换（l1 or LEVEL1_PHRASES），运营只要在库里写一条词，内置红线
+        # 词表就整体失效，危机召回会直接坍塌。
+        l1 = sorted(set(LEVEL1_PHRASES) | set(l1))
+        l2 = sorted(set(LEVEL2_PHRASES) | set(l2))
+        _cache.update(ts=now, l1=l1, l2=l2)
+        return l1, l2
 
 
 @dataclass

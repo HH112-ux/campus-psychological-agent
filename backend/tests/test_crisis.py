@@ -429,3 +429,44 @@ def test_refresh_reloads_source_when_monotonic_starts_small(monkeypatch):
     assert "冷启动新增词" in l1, "refresh 后仍未回源读 DB（走了缓存）"
     assert "缓存旧词" not in l1, "refresh 后仍返回了缓存里的旧词表"
     assert "想死" in l1, "内置红线词表应继续参与并集"
+
+
+class _SlowCursor(_FakeCursor):
+    """每次取文档前让出一次事件循环，制造真实的并发等待。"""
+
+    async def __anext__(self):
+        await asyncio.sleep(0)
+        return await super().__anext__()
+
+
+class _CountingLexiconDb(_FakeLexiconDb):
+    """记录 `db[集合]` 被访问的次数（每次加载查一次库），并让查询真正并发。"""
+
+    def __init__(self, docs: list[dict]):
+        super().__init__(docs)
+        self.queries = 0
+
+    def __getitem__(self, _name: str):
+        self.queries += 1
+        return types.SimpleNamespace(find=lambda _query: _SlowCursor(self._docs))
+
+
+def test_concurrent_reload_queries_db_once(monkeypatch):
+    """缓存失效后并发加载只查一次库（单飞），其余协程复用同一结果。"""
+    db = _CountingLexiconDb([{"phrase": "并发新增词", "level": 2, "enabled": True}])
+    monkeypatch.setattr(crisis, "mongo", types.SimpleNamespace(db=db))
+    monkeypatch.setattr(crisis, "time", types.SimpleNamespace(monotonic=lambda: 30.0))
+
+    original = dict(crisis._cache)
+    try:
+        crisis.refresh_lexicon_cache()
+
+        async def _run():
+            return await asyncio.gather(*(crisis._load_lexicon() for _ in range(10)))
+
+        results = asyncio.run(_run())
+    finally:
+        crisis._cache.update(original)
+
+    assert db.queries == 1, f"并发 10 次加载查库 {db.queries} 次，单飞未生效"
+    assert all("并发新增词" in l2 for _, l2 in results), "等待方未复用刷新结果"
