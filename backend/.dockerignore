@@ -1,0 +1,27 @@
+# 构建上下文只保留 requirements.txt、app/、scripts/（见 Dockerfile 的 COPY 语句）。
+# 排除项同时承担两个作用：缩小上下文体积、避免把本地密钥/虚拟环境打进镜像层。
+.git
+.gitignore
+.dockerignore
+.env
+.env.*
+!.env.example
+
+# Python 本地环境与缓存
+.venv
+venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+.mypy_cache
+htmlcov
+.coverage
+
+# 测试、文档与本地编排文件（镜像运行不需要）
+tests
+docs
+*.md
+docker-compose*.yml
+Dockerfile
+nginx
