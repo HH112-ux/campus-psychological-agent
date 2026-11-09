@@ -46,8 +46,14 @@ class FallbackProvider(LLMProvider):
             )
             try:
                 return await self._backup.generate(messages, temperature, max_tokens)
-            except Exception:  # noqa: BLE001 —— 备用也失败：把主异常抛给调用方
-                raise primary_exc
+            except Exception as backup_exc:  # noqa: BLE001 —— 备用也失败
+                # 主异常仍是调用方看到的那个（保持既有降级分支不变），
+                # 但把备用异常挂到 __cause__ 上，别让排障时丢掉「备用为什么也没成」。
+                logger.info(
+                    "backup provider.generate 也异常（%s）",
+                    type(backup_exc).__name__,
+                )
+                raise primary_exc from backup_exc
 
     async def stream(
         self, messages: list[dict], temperature: float = 0.7, max_tokens: int = 1024
@@ -70,5 +76,9 @@ class FallbackProvider(LLMProvider):
             try:
                 async for delta in self._backup.stream(messages, temperature, max_tokens):
                     yield delta
-            except Exception:  # noqa: BLE001
-                raise primary_exc
+            except Exception as backup_exc:  # noqa: BLE001 —— 备用也失败
+                logger.info(
+                    "backup provider.stream 也异常（%s）",
+                    type(backup_exc).__name__,
+                )
+                raise primary_exc from backup_exc

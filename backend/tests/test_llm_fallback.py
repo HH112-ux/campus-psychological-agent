@@ -63,8 +63,11 @@ def test_generate_both_fail_raises_primary_exc():
         primary=_BoomProvider(RuntimeError("primary boom")),
         backup=_BoomProvider(ValueError("backup boom")),
     )
-    with pytest.raises(RuntimeError, match="primary boom"):
+    with pytest.raises(RuntimeError, match="primary boom") as exc_info:
         asyncio.run(fb.generate([]))
+    # 主异常仍是对外可见的那个，但备用异常必须挂在 __cause__ 上，不能被吞掉
+    assert isinstance(exc_info.value.__cause__, ValueError)
+    assert str(exc_info.value.__cause__) == "backup boom"
 
 
 # ---------- FallbackProvider.stream ----------
@@ -102,8 +105,9 @@ def test_stream_both_fail_raises_primary_exc():
         primary=_BoomProvider(RuntimeError("primary")),
         backup=_BoomProvider(ValueError("backup")),
     )
-    with pytest.raises(RuntimeError, match="primary"):
+    with pytest.raises(RuntimeError, match="primary") as exc_info:
         asyncio.run(_collect(fb.stream([])))
+    assert isinstance(exc_info.value.__cause__, ValueError)
 
 
 async def _collect(stream):
