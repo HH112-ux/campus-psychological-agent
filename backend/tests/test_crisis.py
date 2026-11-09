@@ -281,6 +281,35 @@ def test_real_negation_still_exempt(text):
     assert detect(text).level == "none", f"真实否定被误判：{text!r}"
 
 
+# ---------- 第九轮复审：遗书 / 安眠药覆盖缺口 ----------
+@pytest.mark.parametrize(
+    "text",
+    [
+        "遗书",
+        "遺書",
+        "我写好了遗书",
+        "我不 想死，遗书都写好了",
+        "我吞了一把安眠药",
+        "我吃了一整瓶安眠药",
+    ],
+)
+def test_suicide_note_and_pill_ingestion_are_high(text):
+    assert detect(text).level == "high", f"强信号漏判：{text!r}"
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["我买好了安眠药", "我买了安眠药", "我囤安眠药", "我买了一盒安眠药"],
+)
+def test_sleeping_pill_preparation_is_mid(text):
+    assert detect(text).level == "mid", f"准备行为应定级 mid：{text!r}"
+
+
+@pytest.mark.parametrize("text", ["安眠药", "医生给我开了安眠药", "我帮室友带了安眠药"])
+def test_plain_sleeping_pill_mention_is_not_crisis(text):
+    assert detect(text).level == "none", f"正常用药被误判：{text!r}"
+
+
 # ---------- 收窄后真实危机仍必须命中 ----------
 CRISIS_STILL_CAUGHT = [
     ("我想死", "high"),
