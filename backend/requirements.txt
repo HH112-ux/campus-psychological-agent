@@ -10,5 +10,11 @@ PyJWT==2.15.1
 cryptography==44.0.3
 python-multipart==0.0.32  # V5 语音转写：接收 multipart 音频上传
 
+# 模型调用层：只使用 ChatOpenAI 作为 OpenAI 兼容端点的传输实现。
+# openai 必须 <3：3.x 会引入 httpx2 运行时分支，与现有 httpx 0.28 并存。
+langchain-openai==1.7.4
+langchain-core==1.7.7
+openai==2.54.0
+
 # 说明：pytest / ruff 等测试与质量工具见 requirements-dev.txt，
 # 生产镜像只安装本文件，避免把测试工具带进运行时。
