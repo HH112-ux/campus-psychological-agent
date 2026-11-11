@@ -30,7 +30,8 @@ services:
     container_name: xinyu-nginx
     restart: unless-stopped
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     ports:
       - "80:80"
       - "443:443"
