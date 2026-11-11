@@ -157,3 +157,43 @@ def test_migration_dry_run_and_idempotent(monkeypatch, encryption_key):
     assert docs[2]["title"] is None  # 空值原样保留
 
     assert asyncio.run(_migrate_text_field(COLL_SESSIONS, "title", False)) == 0
+
+
+def test_migrate_main_returns_failure_without_key(monkeypatch, capsys):
+    """P2：缺少 DATA_ENCRYPTION_KEY 时必须以非 0 退出码失败，不能被运维脚本当成功。"""
+    from scripts import migrate_encrypt_sensitive_fields as mig
+
+    monkeypatch.setitem(get_settings().__dict__, "data_encryption_key", "")
+    assert asyncio.run(mig.main(False)) == 1
+    assert "[FAIL]" in capsys.readouterr().out
+
+
+def test_migrate_main_exit_code_reflects_verify_result(monkeypatch):
+    """P2：抽样解密失败返回 1，成功返回 0（迁移脚本退出码可被 CI / 运维脚本判断）。"""
+    from scripts import migrate_encrypt_sensitive_fields as mig
+
+    monkeypatch.setitem(get_settings().__dict__, "data_encryption_key", "k" * 32)
+
+    async def _noop_connect():
+        return None
+
+    async def _zero(*args, **kwargs):
+        return 0
+
+    async def _false():
+        return False
+
+    async def _true():
+        return True
+
+    monkeypatch.setattr(mig.mongo, "connect", _noop_connect)
+    monkeypatch.setattr(type(mig.mongo), "is_connected", property(lambda self: True))
+    monkeypatch.setattr(mig, "_migrate_text_field", _zero)
+    monkeypatch.setattr(mig, "_migrate_message_emotion", _zero)
+    monkeypatch.setattr(mig, "_migrate_risk_matched", _zero)
+
+    monkeypatch.setattr(mig, "_verify_sample", _false)
+    assert asyncio.run(mig.main(False)) == 1
+
+    monkeypatch.setattr(mig, "_verify_sample", _true)
+    assert asyncio.run(mig.main(False)) == 0

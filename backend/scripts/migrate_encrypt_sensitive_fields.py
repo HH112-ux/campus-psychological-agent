@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import sys
 
 from app.config import get_settings
 from app.core.crypto import decrypt, encrypt_optional_text, is_encrypted
@@ -108,15 +109,16 @@ async def _verify_sample() -> bool:
         return False
 
 
-async def main(dry_run: bool) -> None:
+async def main(dry_run: bool) -> int:
+    """执行迁移，返回进程退出码：0 成功，1 失败（供运维脚本 / CI 判断）。"""
     if not get_settings().data_encryption_key:
         print("[FAIL] DATA_ENCRYPTION_KEY 未配置：拒绝执行，避免把明文误判为完成迁移")
-        return
+        return 1
 
     await mongo.connect()
     if not mongo.is_connected:
         print("[FAIL] MongoDB 未连接，请先启动 mongod / 检查 MONGODB_URI")
-        return
+        return 1
 
     counts = {
         "emotion_records.evidence": await _migrate_text_field(
@@ -132,12 +134,13 @@ async def main(dry_run: bool) -> None:
         print(f"[{mode}] {name}: {count} 条")
     if not dry_run and not await _verify_sample():
         print("[FAIL] 抽样解密失败：请确认 DATA_ENCRYPTION_KEY 与历史数据一致")
-        return
+        return 1
     print(f"[{mode}] 迁移完成，可重复执行（已加密记录会自动跳过）")
+    return 0
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="历史明文敏感字段加密迁移")
     parser.add_argument("--dry-run", action="store_true", help="只统计不写入")
     args = parser.parse_args()
-    asyncio.run(main(args.dry_run))
+    sys.exit(asyncio.run(main(args.dry_run)))
