@@ -31,6 +31,7 @@
 | [eval-cost-p5.md](eval-cost-p5.md) | 压测与模型成本核对（P5） |
 | [review-package-p5.md](review-package-p5.md) | 小程序提审材料包 |
 | [bad-case-review-template.md](bad-case-review-template.md) | bad-case 双周复盘模板 |
+| [langchain-migration-plan.md](langchain-migration-plan.md) | 模型调用层迁移到 LangChain 的范围、对齐矩阵与分阶段方案 |
 | [../backend/README.md](../backend/README.md) | 后端本地开发、目录与接口自测 |
 | [../miniprogram/README.md](../miniprogram/README.md) | 小程序导入、调试与提审注意 |
 | [../CONTRIBUTING.md](../CONTRIBUTING.md) | 开发流程与提交规范 |
