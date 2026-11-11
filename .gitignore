@@ -71,3 +71,5 @@ bad-cases*.json
 # ===== 微信开发者工具误生成的配置（仅 miniprogram/ 下的正式配置入库）=====
 /project.config.json
 /backend/project.config.json
+/.miniapp/
+/.brooks-lint-history.json
