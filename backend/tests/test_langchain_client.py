@@ -74,3 +74,22 @@ def test_build_client_accepts_empty_api_key():
         timeout_seconds=5.0,
     )
     assert client.request_timeout.read == 5.0
+
+
+def test_request_payload_keeps_max_tokens_field():
+    """智谱/DashScope 只认 max_tokens，不得被改成 max_completion_tokens。"""
+    client = build_client(
+        model="glm-4-air",
+        api_key="sk-test",
+        base_url="https://open.bigmodel.cn/api/paas/v4",
+        timeout_seconds=30.0,
+    )
+    payload = client._get_request_payload(
+        to_lc_messages([{"role": "user", "content": "hi"}]),
+        temperature=0.8,
+        max_tokens=400,
+    )
+    assert payload["max_tokens"] == 400
+    assert "max_completion_tokens" not in payload
+    assert payload["temperature"] == 0.8
+    assert payload["messages"] == [{"role": "user", "content": "hi"}]
