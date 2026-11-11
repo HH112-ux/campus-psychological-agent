@@ -80,6 +80,8 @@ Page({
         api.patch(`/api/v1/sessions/${id}`, { title: name.slice(0, 20) }).then(() => {
           wx.showToast({ title: '已重命名', icon: 'success' })
           this.loadList()
+        }).catch(() => {
+          wx.showToast({ title: '重命名失败，请重试', icon: 'none' })
         })
       },
     })
@@ -97,6 +99,8 @@ Page({
         api.del(`/api/v1/sessions/${id}`).then(() => {
           wx.showToast({ title: '已删除', icon: 'success' })
           this.loadList()
+        }).catch(() => {
+          wx.showToast({ title: '删除失败，请重试', icon: 'none' })
         })
       },
     })
