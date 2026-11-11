@@ -326,7 +326,13 @@ async def build_injection(user_id: ObjectId, current_text: str) -> list[str]:
     query = _terms(current_text)
     scored: list[tuple[int, dict]] = []
     for doc in docs:
-        overlap = len(query & _terms(decrypt(doc.get("content"))))
+        # P-2：单条记忆解密失败（换密钥 / 脏数据）只跳过该条，绝不阻断对话。
+        try:
+            content = decrypt(doc.get("content"))
+        except Exception:  # noqa: BLE001
+            logger.exception("长期记忆解密失败，跳过该条 memory=%s", doc.get("_id"))
+            continue
+        overlap = len(query & _terms(content))
         if overlap > 0:
             scored.append((overlap, doc))
     scored.sort(key=lambda pair: pair[0], reverse=True)
@@ -334,7 +340,10 @@ async def build_injection(user_id: ObjectId, current_text: str) -> list[str]:
     lines: list[str] = []
     used = 0
     for _, doc in scored:
-        content = decrypt(doc.get("content")).strip()
+        try:
+            content = decrypt(doc.get("content")).strip()
+        except Exception:  # noqa: BLE001 —— 同上，坏数据跳过
+            continue
         if not content:
             continue
         if len(lines) >= settings.long_memory_inject_max_items:
