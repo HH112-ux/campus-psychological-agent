@@ -110,3 +110,71 @@ def test_optional_text_helpers():
     assert not crypto.is_encrypted("明文")
     assert crypto.decrypt_optional_text(stored) == "明天出分，有点坐不住"
     assert crypto.decrypt_optional_text(None) is None
+
+
+def _b64key() -> str:
+    return base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("ascii")
+
+
+def test_envelope_carries_key_id(monkeypatch):
+    """P2：新密文信封必须写入 key_id，便于轮换审计。"""
+    _reset_crypto()
+    from app.config import get_settings
+
+    settings = get_settings()
+    monkeypatch.setitem(settings.__dict__, "data_encryption_key", _b64key())
+    monkeypatch.setitem(settings.__dict__, "data_encryption_key_id", "v2")
+
+    stored = crypto.encrypt("带版本号的密文")
+    assert stored["key_id"] == "v2"
+    assert crypto.decrypt(stored) == "带版本号的密文"
+
+
+def test_rotation_previous_key_decrypts_old_data(monkeypatch):
+    """P2：轮换后旧密文（含无 key_id 的历史信封）经 previous 旧钥仍可解密。"""
+    from app.config import get_settings
+
+    settings = get_settings()
+    old_key, new_key = _b64key(), _b64key()
+
+    _reset_crypto()
+    monkeypatch.setitem(settings.__dict__, "data_encryption_key", old_key)
+    monkeypatch.setitem(settings.__dict__, "data_encryption_key_id", "v1")
+    monkeypatch.setitem(settings.__dict__, "data_encryption_key_previous", "")
+    legacy = crypto.encrypt("轮换前的对话")
+    # 历史信封没有 key_id：模拟版本化之前写入的数据
+    legacy.pop("key_id")
+
+    # 轮换：当前钥换新，旧钥进 previous
+    _reset_crypto()
+    monkeypatch.setitem(settings.__dict__, "data_encryption_key", new_key)
+    monkeypatch.setitem(settings.__dict__, "data_encryption_key_id", "v2")
+    monkeypatch.setitem(settings.__dict__, "data_encryption_key_previous", old_key)
+
+    assert crypto.decrypt(legacy) == "轮换前的对话"
+    fresh = crypto.encrypt("轮换后的对话")
+    assert fresh["key_id"] == "v2"
+    assert crypto.decrypt(fresh) == "轮换后的对话"
+
+
+def test_rotation_without_previous_key_raises(monkeypatch):
+    """P2：未配置 previous 时旧密文必须显式失败，不能静默返回空串。"""
+    import pytest
+    from cryptography.exceptions import InvalidTag
+
+    from app.config import get_settings
+
+    settings = get_settings()
+    old_key, new_key = _b64key(), _b64key()
+
+    _reset_crypto()
+    monkeypatch.setitem(settings.__dict__, "data_encryption_key", old_key)
+    monkeypatch.setitem(settings.__dict__, "data_encryption_key_previous", "")
+    legacy = crypto.encrypt("旧密钥下的数据")
+
+    _reset_crypto()
+    monkeypatch.setitem(settings.__dict__, "data_encryption_key", new_key)
+    monkeypatch.setitem(settings.__dict__, "data_encryption_key_previous", "")
+
+    with pytest.raises(InvalidTag):
+        crypto.decrypt(legacy)

@@ -5,13 +5,20 @@
 - 密钥从环境变量 DATA_ENCRYPTION_KEY 加载，base64url 编码的 32 字节；
 - 未配置密钥时（dev 模式）透明存取（content 字段为明文字符串），
   prod 模式下强制要求密钥，否则启动报错；
-- 加密后存 { "__enc": true, "iv": b64, "ct": b64, "tag": b64 } 结构。
+- 加密后存 { "__enc": true, "key_id": "...", "iv": b64, "ct": b64, "tag": b64 } 结构。
+
+密钥轮换兼容性（P2）：
+- 新密文信封带 key_id（默认 v1），历史信封没有该字段也能照常解密；
+- 轮换步骤：把新钥写入 DATA_ENCRYPTION_KEY、版本号改为新 id，旧钥写入
+  DATA_ENCRYPTION_KEY_PREVIOUS；旧密文先用当前钥解密，InvalidTag 再回退旧钥；
+- 历史数据不做批量重写也能继续读；确认全量重写完成后才可移除 previous。
 """
 from __future__ import annotations
 
 import base64
 import secrets
 
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from app.config import get_settings
@@ -23,6 +30,20 @@ _IV_LEN = 12  # GCM 推荐 12 字节 nonce
 # 单例：避免每次加解密都生成新的 AESGCM 实例
 _aesgcm: AESGCM | None = None
 _disabled: bool = False
+# 旧钥（轮换兜底）：按配置原文缓存，配置变化时自动重建
+_prev_raw: str = ""
+_prev_aesgcm: AESGCM | None = None
+
+
+def _load_key(raw: str, label: str) -> AESGCM:
+    """解析 base64url 32 字节密钥，格式错误直接报错（不允许静默降级）。"""
+    try:
+        key = base64.urlsafe_b64decode(raw)
+    except Exception as exc:
+        raise RuntimeError(f"{label} 不是合法的 base64url：{exc}") from exc
+    if len(key) != 32:
+        raise RuntimeError(f"{label} 解码后应为 32 字节，实际 {len(key)} 字节")
+    return AESGCM(key)
 
 
 def _init() -> AESGCM | None:
@@ -40,14 +61,25 @@ def _init() -> AESGCM | None:
         _disabled = True
         return None
 
-    try:
-        key = base64.urlsafe_b64decode(raw)
-    except Exception as exc:
-        raise RuntimeError(f"DATA_ENCRYPTION_KEY 不是合法的 base64url：{exc}") from exc
-    if len(key) != 32:
-        raise RuntimeError(f"DATA_ENCRYPTION_KEY 解码后应为 32 字节，实际 {len(key)} 字节")
-    _aesgcm = AESGCM(key)
+    _aesgcm = _load_key(raw, "DATA_ENCRYPTION_KEY")
     return _aesgcm
+
+
+def _key_id() -> str:
+    """当前写入使用的密钥版本号（用于密文信封审计）。"""
+    return get_settings().data_encryption_key_id.strip() or "v1"
+
+
+def _previous() -> AESGCM | None:
+    """轮换期间的旧钥；未配置时返回 None。"""
+    global _prev_raw, _prev_aesgcm
+    raw = get_settings().data_encryption_key_previous.strip()
+    if not raw:
+        return None
+    if _prev_raw != raw:
+        _prev_aesgcm = _load_key(raw, "DATA_ENCRYPTION_KEY_PREVIOUS")
+        _prev_raw = raw
+    return _prev_aesgcm
 
 
 def is_enabled() -> bool:
@@ -58,7 +90,7 @@ def is_enabled() -> bool:
 def encrypt(plaintext: str) -> str | dict:
     """加密明文。未启用加密时原样返回（明文字符串）。
 
-    返回 dict 结构（含 iv/ct/tag）或原始明文。
+    返回 dict 结构（含 key_id/iv/ct/tag）或原始明文。
     """
     aes = _init()
     if aes is None:
@@ -70,17 +102,22 @@ def encrypt(plaintext: str) -> str | dict:
     ciphertext = ct[:-16]
     return {
         ENC_KEY: True,
+        "key_id": _key_id(),
         "iv": base64.b64encode(iv).decode("ascii"),
         "ct": base64.b64encode(ciphertext).decode("ascii"),
         "tag": base64.b64encode(tag).decode("ascii"),
     }
 
 
+def _decrypt_with(aes: AESGCM, iv: bytes, ct: bytes, tag: bytes) -> str:
+    return aes.decrypt(iv, ct + tag, associated_data=None).decode("utf-8")
+
+
 def decrypt(stored: str | dict | None) -> str:
     """解密存储值。未启用加密或值为明文时原样返回。
 
     - None → 空字符串
-    - dict（带 __enc 标记）→ 解密
+    - dict（带 __enc 标记）→ 解密；当前钥失败时回退轮换旧钥
     - str → 明文，原样返回
     """
     if stored is None:
@@ -95,8 +132,13 @@ def decrypt(stored: str | dict | None) -> str:
         iv = base64.b64decode(stored["iv"])
         ct = base64.b64decode(stored["ct"])
         tag = base64.b64decode(stored["tag"])
-        plaintext = aes.decrypt(iv, ct + tag, associated_data=None)
-        return plaintext.decode("utf-8")
+        try:
+            return _decrypt_with(aes, iv, ct, tag)
+        except InvalidTag:
+            previous = _previous()
+            if previous is None:
+                raise
+            return _decrypt_with(previous, iv, ct, tag)
     # 其他类型（数字等）：转字符串
     return str(stored)
 

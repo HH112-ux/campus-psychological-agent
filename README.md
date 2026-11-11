@@ -115,7 +115,7 @@ curl http://localhost:8000/health
 cd backend
 .venv/bin/ruff check .
 .venv/bin/pytest -q
-# 当前基线：1134 passed, 1 skipped（共 1135 项）
+# 当前基线：1137 passed, 1 skipped（共 1138 项）
 # 唯一 skip：tests/test_ratelimit_redis.py 的真 Redis 集成用例，设置 REDIS_TEST_URL 后启用
 
 # 小程序：JS 语法检查 + 单元测试

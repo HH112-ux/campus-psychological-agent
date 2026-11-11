@@ -31,6 +31,10 @@ class Settings(BaseSettings):
 
     # 数据加密（P4 起启用）
     data_encryption_key: str = ""
+    # 密钥版本化（轮换用）：新密文信封写入该 id 便于审计；轮换时把旧钥配到 previous，
+    # 旧数据仍可解密（写入统一用当前钥），全部重写完成后再移除 previous。
+    data_encryption_key_id: str = "v1"
+    data_encryption_key_previous: str = ""
 
     # 微信小程序（P1 登录链路）
     wx_appid: str = ""
