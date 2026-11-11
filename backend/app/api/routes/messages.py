@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 
 from fastapi import APIRouter, Depends
@@ -16,16 +17,40 @@ from app.core.exceptions import (
     BizError,
 )
 from app.core.responses import ok_response
+from app.core.timeutil import now_cst, to_iso
 from app.db.oid import parse_oid
 from app.models.message import FeedbackRequest, MessageSend
 from app.services import chat
 from app.services import messages as messages_svc
 from app.services import sessions as sessions_svc
+from app.services.crisis import get_resources
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["messages"])
 
 # 持有中继任务强引用（与 chat._background_tasks 同理）
 _relay_tasks: set[asyncio.Task] = set()
+
+# prepare 阶段（读会话 / 落库 / 危机检测）异常时的降级文案：
+# 用户已经发出消息，不能只回一个 500；至少把内置求助热线递到面前。
+PREPARE_FAILED_REPLY = (
+    "我这边刚刚没接住你的消息，你愿意再发一次吗？如果现在很难受，可以先拨下面的电话。"
+)
+
+
+async def _degraded_payload() -> dict:
+    """DB 不可用时的降级响应：结构与正常非流式响应一致，附带内置热线卡片。"""
+    resources = (await get_resources())["resources"]
+    return {
+        "message_id": "",
+        "assistant_reply": PREPARE_FAILED_REPLY,
+        "emotion": None,
+        "risk_level": "none",
+        "crisis": {"level": "mid", "show_card": True, "resources": resources},
+        "degraded": True,
+        "created_at": to_iso(now_cst()),
+    }
 
 
 def _sse_frame(event: str, data: dict) -> str:
@@ -75,9 +100,30 @@ async def _with_heartbeat(events, interval: float):
 async def send_message(
     session_id: str, body: MessageSend, current_user: dict = Depends(get_current_user)
 ):
-    # 先校验归属并完成 prepare（长度/轮次/限流/危机），错误以普通 JSON 返回
-    session = await sessions_svc.get_owned_session(session_id, current_user["_id"])
-    turn = await chat.prepare_turn(current_user, session, body.content)
+    # 先校验归属并完成 prepare（长度/轮次/限流/危机），错误以普通 JSON 返回；
+    # 内部/DB 异常不抛 500：降级为带内置热线的回复，保证求助入口始终可用
+    try:
+        session = await sessions_svc.get_owned_session(session_id, current_user["_id"])
+        turn = await chat.prepare_turn(current_user, session, body.content)
+    except BizError:
+        raise
+    except Exception:  # noqa: BLE001
+        logger.exception("prepare_turn 失败，降级为带求助热线的回复")
+        payload = await _degraded_payload()
+
+        if not body.stream or not get_settings().stream_enabled:
+            return ok_response(payload)
+
+        async def degraded_stream():
+            yield _sse_frame("crisis", payload["crisis"])
+            yield _sse_frame("delta", {"content": payload["assistant_reply"]})
+            yield _sse_frame("done", {"message_id": "", "degraded": True, "truncated": False})
+
+        return StreamingResponse(
+            degraded_stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     # P5 降级开关：stream_enabled=false 时统一走非流式 JSON 路径
     if not body.stream or not get_settings().stream_enabled:

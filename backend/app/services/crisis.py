@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import time
 import weakref
@@ -40,6 +41,8 @@ from app.services.crisis_data import (
     LEVEL2_PHRASES,
     LEVEL2_SCORE_PER_HIT,
 )
+
+logger = logging.getLogger(__name__)
 
 # 词库缓存：{ts, l1, l2}
 # `ts` 为 `None` 表示「缓存已失效、下次调用必须回源」，而不是用某个时间戳数值
@@ -314,14 +317,18 @@ async def _load_lexicon() -> tuple[list[str], list[str]]:
         l2: list[str] = []
         db = mongo.db
         if db is not None:
-            async for doc in db[COLL_CRISIS_LEXICON].find({"enabled": True}):
-                phrase = normalize(doc.get("phrase", ""))
-                if not phrase:
-                    continue
-                if doc.get("level") == 1:
-                    l1.append(phrase)
-                elif doc.get("level") == 2:
-                    l2.append(phrase)
+            try:
+                async for doc in db[COLL_CRISIS_LEXICON].find({"enabled": True}):
+                    phrase = normalize(doc.get("phrase", ""))
+                    if not phrase:
+                        continue
+                    if doc.get("level") == 1:
+                        l1.append(phrase)
+                    elif doc.get("level") == 2:
+                        l2.append(phrase)
+            except Exception:  # noqa: BLE001 —— 读库失败不得让危机检测整体失效
+                logger.exception("危机词库读库失败，本轮回退内置词表")
+                l1, l2 = [], []
 
         # 数据库词库只做「追加」，与内置词表取并集：
         # 若这里改成替换（l1 or LEVEL1_PHRASES），运营只要在库里写一条词，内置红线
@@ -402,16 +409,19 @@ async def record_risk_event(
     """
     if mongo.db is None:
         return
-    await mongo.db[COLL_RISK_EVENTS].insert_one(
-        {
-            "user_id": user_id,
-            "session_id": session_id,
-            "level": level,
-            "trigger": trigger,
-            "matched": [encrypt_optional_text(x) for x in matched],
-            "created_at": now_cst(),
-        }
-    )
+    try:
+        await mongo.db[COLL_RISK_EVENTS].insert_one(
+            {
+                "user_id": user_id,
+                "session_id": session_id,
+                "level": level,
+                "trigger": trigger,
+                "matched": [encrypt_optional_text(x) for x in matched],
+                "created_at": now_cst(),
+            }
+        )
+    except Exception:  # noqa: BLE001 —— 审计写入失败不得阻断求助链路
+        logger.exception("risk_events 写入失败（不阻断危机响应）")
     # M4/M5 ③：高危事件通知值班人（旁路告警，永不抛出；只含 ID 不含命中词）
     if level == "high":
         await alerting.notify_high_risk_event(str(user_id), str(session_id), trigger)
@@ -456,7 +466,11 @@ async def handle_detection(
 
     此函数封装"消息进来后危机侧应该做什么"，chat 只管校验+落库+编排。
     """
-    crisis = await detect_risk(text, session)
+    try:
+        crisis = await detect_risk(text, session)
+    except Exception:  # noqa: BLE001 —— 检测异常不得把整轮对话打成 500
+        logger.exception("危机检测异常，本轮按未命中继续")
+        return CrisisResult(level="none"), None, {}
     session_set: dict = {}
     crisis_payload: dict | None = None
 
@@ -504,7 +518,11 @@ async def get_resources() -> dict:
     """求助资源（公开接口）；DB 为权威源，失败用内置兜底副本。"""
     db = mongo.db
     if db is not None:
-        doc = await db[COLL_CRISIS_RESOURCES].find_one({"_id": "current"})
+        try:
+            doc = await db[COLL_CRISIS_RESOURCES].find_one({"_id": "current"})
+        except Exception:  # noqa: BLE001 —— 求助资源绝不能因读库失败而缺失
+            logger.exception("求助资源读库失败，使用内置兜底副本")
+            return FALLBACK_RESOURCES
         if doc and doc.get("resources"):
             return {
                 "version": doc.get("version", 1),
