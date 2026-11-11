@@ -241,6 +241,28 @@ async def recover_user(user_id: ObjectId) -> bool:
     return False
 
 
+async def purge_user_data(user: dict) -> None:
+    """物理删除单个用户的全部数据（含用户文档本身）。
+
+    由到期清理任务与「超过恢复期后重新注册」共用，保证两条路径删除口径一致。
+    """
+    uid = user["_id"]
+    # 先取 session_ids（消息随会话归属），再按登记表逐集合删除
+    session_ids = [
+        s["_id"] async for s in mongo.db[COLL_SESSIONS].find({"user_id": uid}, {"_id": 1})
+    ]
+    for entry in USER_DATA_COLLECTIONS:
+        if entry.owner == OWNER_VIA_SESSIONS:
+            if session_ids:
+                await mongo.db[entry.name].delete_many(
+                    {"session_id": {"$in": session_ids}}
+                )
+        else:
+            await mongo.db[entry.name].delete_many({"user_id": uid})
+    await mongo.db[COLL_USERS].delete_one({"_id": uid})
+    logger.info("物理删除用户 %s 全部数据", uid)
+
+
 async def purge_expired_data() -> int:
     """物理删除已过恢复期的用户数据（定时任务调用）。
 
@@ -252,22 +274,8 @@ async def purge_expired_data() -> int:
     )
     count = 0
     async for user in cursor:
-        uid = user["_id"]
-        # 先取 session_ids（消息随会话归属），再按登记表逐集合删除
-        session_ids = [
-            s["_id"] async for s in mongo.db[COLL_SESSIONS].find({"user_id": uid}, {"_id": 1})
-        ]
-        for entry in USER_DATA_COLLECTIONS:
-            if entry.owner == OWNER_VIA_SESSIONS:
-                if session_ids:
-                    await mongo.db[entry.name].delete_many(
-                        {"session_id": {"$in": session_ids}}
-                    )
-            else:
-                await mongo.db[entry.name].delete_many({"user_id": uid})
-        await mongo.db[COLL_USERS].delete_one({"_id": uid})
+        await purge_user_data(user)
         count += 1
-        logger.info("物理删除用户 %s 全部数据", uid)
     return count
 
 

@@ -45,7 +45,7 @@ Human-on-the-Loop：人给意图与约束，AI 在护栏内自主执行，高风
 4. **SSE 协议不得改坏**：心跳帧、截断标记、断连后继续生成并落库，三者行为改变即视为回归。
 5. **文档落盘**：新增文档放 `docs/`，kebab-case，纯 Markdown；不生成 HTML 文档，命名豁免见
    `docs/repo-governance.md`。
-6. **测试基线以实跑为准**：当前 `1128 passed, 1 skipped`（共 1129 项，2026-11-11 实跑；
+6. **测试基线以实跑为准**：当前 `1131 passed, 1 skipped`（共 1132 项，2026-11-11 实跑；
    口径为 MongoDB 可用、未设置 `REDIS_TEST_URL`）。基线变化必须同步改 README，否则文档门禁失败。
 7. **模型层边界**：传输实现集中在 `backend/app/llm/`；LangChain 仅用于模型传输，不引入
    chain / memory / agent。`backend/tests/test_llm_boundary.py` 会拦截越界 import。

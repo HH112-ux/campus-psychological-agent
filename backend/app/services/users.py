@@ -3,19 +3,40 @@ from __future__ import annotations
 
 from bson import ObjectId
 from bson.errors import InvalidId
+from pymongo.errors import DuplicateKeyError
 
 from app.core.timeutil import now_cst, to_iso
 from app.db.indexes import COLL_USERS
 from app.db.mongo import mongo
 from app.db.oid import parse_oid
+from app.services.privacy import purge_user_data, recover_user
 
 
 async def get_or_create_by_openid(
     openid: str, nickname: str | None = None, avatar: str | None = None
 ) -> tuple[dict, bool]:
-    """按 openid 查找或创建用户，返回 (用户文档, 是否新用户)。"""
+    """按 openid 查找或创建用户，返回 (用户文档, 是否新用户)。
+
+    openid 唯一索引会被软删记录占用，因此「查不到活跃用户」时还要区分：
+    - 恢复期内（erase_at 未到）再次登录：撤销软删，接回同一身份（30 天承诺）；
+    - 已过恢复期：先物理删除旧身份全部数据，再以同一 openid 注册新身份。
+    """
     coll = mongo.db[COLL_USERS]
     user = await coll.find_one({"openid": openid, "deleted_at": None})
+    if user is None:
+        deleted = await coll.find_one({"openid": openid})
+        if deleted is not None:
+            # 恢复期判定交给 Mongo 查询，避免 Python 侧 aware/naive 时区比较差异
+            expired = await coll.find_one(
+                {"_id": deleted["_id"], "erase_at": {"$lte": now_cst()}}
+            )
+            if expired is not None:
+                await purge_user_data(expired)
+            else:
+                await recover_user(deleted["_id"])
+                user = await coll.find_one(
+                    {"_id": deleted["_id"], "deleted_at": None}
+                )
     if user:
         # 若本次带了昵称/头像（用户授权），顺手更新
         update: dict = {}
@@ -40,7 +61,14 @@ async def get_or_create_by_openid(
         "updated_at": now,
         "deleted_at": None,
     }
-    result = await coll.insert_one(doc)
+    try:
+        result = await coll.insert_one(doc)
+    except DuplicateKeyError:
+        # 并发首登：另一请求已先插入（或刚完成恢复），回读同一身份即可
+        existing = await coll.find_one({"openid": openid, "deleted_at": None})
+        if existing is None:
+            raise
+        return existing, False
     doc["_id"] = result.inserted_id
     return doc, True
 
