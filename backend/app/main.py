@@ -39,16 +39,18 @@ async def lifespan(app: FastAPI):
     if settings.env == "prod" and settings.shared_state_backend != "redis":
         # 生产多实例下内存限流各实例独立计数、形同虚设（G4）；不阻断启动，但必须可见
         logger.warning("生产环境 SHARED_STATE_BACKEND 非 redis，限流/告警冷却/计数不跨实例共享")
-    # M3：到期数据物理删除必须真实生效（G7），否则「软删 N 天后物理删除」的合规承诺不兑现
+    # M3：到期数据物理删除必须真实生效（G7），否则「软删 N 天后物理删除」的合规承诺不兑现。
+    # 调度器内部循环自带 try/except，Mongo 未连通时当次失败、下个周期自动重试，
+    # 因此不再以「启动瞬间 is_connected」为前置条件，避免慢启动导致调度永不启动。
     purge_task = (
         asyncio.create_task(privacy_svc.run_purge_scheduler())
-        if settings.data_purge_enabled and mongo.is_connected
+        if settings.data_purge_enabled
         else None
     )
     # V3：主动关怀每日扫描（未配置订阅模板 ID 时安全跳过，不阻塞主链路）
     caring_task = (
         asyncio.create_task(caring_svc.run_caring_scheduler())
-        if settings.caring_enabled and mongo.is_connected
+        if settings.caring_enabled
         else None
     )
     try:
