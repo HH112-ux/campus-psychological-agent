@@ -118,8 +118,9 @@ cd backend
 # 当前基线：1131 passed, 1 skipped（共 1132 项）
 # 唯一 skip：tests/test_ratelimit_redis.py 的真 Redis 集成用例，设置 REDIS_TEST_URL 后启用
 
-# 小程序：JS 语法检查
+# 小程序：JS 语法检查 + 单元测试
 find miniprogram -name '*.js' -print0 | xargs -0 -n1 node --check
+node --test miniprogram/tests/*.test.js
 ```
 
 CI 见 [.github/workflows/ci.yml](.github/workflows/ci.yml)：`ruff + pytest`、`node --check`、情绪与长期记忆评估回归门（未配置 `ZHIPU_API_KEY` 时评估 job 打印 SKIP 并以 0 退出，不代表评估达标）。评估口径见 [docs/eval-gate.md](docs/eval-gate.md)。

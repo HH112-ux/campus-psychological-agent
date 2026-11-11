@@ -35,6 +35,17 @@ function decorateEmotion(emo) {
   return { ...emo, emotionText: meta.text, colorClass: meta.colorClass }
 }
 
+// 流式请求失败的可读提示（B-10：非 2xx / 非事件流一律走这里，不得静默丢弃回复）
+function streamErrorMessage(err) {
+  const status = err && (err.statusCode || err.code)
+  if (status === 401) return '登录状态已过期，请退出后重新进入小程序'
+  if (status === 403) return '当前账号暂时无法发送消息，请稍后再试'
+  if (status === 429) return '消息发送太频繁，休息一下再试'
+  if (typeof status === 'number' && status >= 500) return '服务暂时不可用，请稍后重试'
+  if (err && err.code === -3) return '服务响应格式异常，请稍后重试'
+  return '刚刚连接中断了，这句话没有发出去，再试一次好吗？'
+}
+
 Page({
   data: {
     sessionId: '',
@@ -362,20 +373,24 @@ Page({
         } else if (event === 'done') {
           this.finishTurn(payload.degraded, payload.truncated)
         } else if (event === 'error') {
-          this.handleStreamBreak()
+          this.handleStreamBreak((payload && payload.message) || '')
         }
       },
       onError: (err) => {
         if (err && err.code === -2) {
           // 不支持分块：该请求未走对话，直接非流式
           this.sendNonStream(content)
-        } else {
-          this.handleStreamBreak()
+          return
         }
+        // 200 + application/json：服务端关了流式（stream_enabled=false），按普通响应渲染
+        if (err && err.code === -3 && this._applyJsonReply(err.body)) return
+        this.handleStreamBreak(streamErrorMessage(err))
       },
       onComplete: () => {
-        // done 事件已收尾；兜底
-        if (this.data.sending) this.finishTurn(false)
+        // done 事件已收尾；兜底：无任何增量时必须报错，不得伪造回复
+        if (!this.data.sending) return
+        if (this._streamText) this.finishTurn(false)
+        else this.handleStreamBreak('这条回复没有成功生成，请再试一次。')
       },
     })
   },
@@ -401,13 +416,43 @@ Page({
       })
   },
 
-  // 流式中断：已收到内容则保留；无内容则本地提示（不自动重发，避免重复落库）
-  handleStreamBreak() {
-    if (!this._streamText) {
-      this._patchAi({ content: '刚刚网络开了个小差，等一下再发给我好吗？', degraded: true })
+  // 流式中断：已收到内容则保留；无内容则给出可读错误（不自动重发，避免重复落库）
+  handleStreamBreak(message) {
+    const hasText = !!this._streamText
+    if (!hasText) {
+      this._patchAi({
+        content: message || '刚刚连接中断了，这句话没有发出去，再试一次好吗？',
+        degraded: true,
+      })
     }
     this.setData({ sending: false, typing: false })
-    wx.showToast({ title: '连接中断，已保留已回复内容', icon: 'none' })
+    wx.showToast({
+      title: hasText
+        ? '连接中断，已保留已回复内容'
+        : (message ? '发送失败，请重试' : '连接中断，请重试'),
+      icon: 'none',
+    })
+  },
+
+  // 服务端关闭流式时返回普通 JSON（{code:0,data:{assistant_reply,...}}），按真实响应渲染
+  _applyJsonReply(body) {
+    let bodyObj = null
+    try {
+      bodyObj = JSON.parse(body || '')
+    } catch (e) {
+      return false
+    }
+    const d = bodyObj && bodyObj.data
+    if (!d || typeof d.assistant_reply !== 'string') return false
+    if (d.crisis) this.applyCrisis(d.crisis)
+    this._streamText = d.assistant_reply
+    this._patchAi({
+      content: d.assistant_reply,
+      degraded: !!d.degraded,
+      emotion: decorateEmotion(d.emotion),
+    })
+    this.finishTurn(!!d.degraded)
+    return true
   },
 
   applyCrisis(payload) {
@@ -433,11 +478,15 @@ Page({
 
   finishTurn(degraded, truncated) {
     if (this._sseTask) this._sseTask = null
-    this._patchAi({
-      degraded: !!degraded,
-      truncated: !!truncated,
-      content: this._streamText || '我在听。',
-    })
+    const patch = { degraded: !!degraded, truncated: !!truncated }
+    if (this._streamText) {
+      patch.content = this._streamText
+    } else {
+      // 协议层 done 但无内容：给出可读失败提示，绝不用「我在听。」这类伪造文案兜底
+      patch.content = '这条回复没有成功生成，请再试一次。'
+      patch.degraded = true
+    }
+    this._patchAi(patch)
     this.setData({ sending: false, typing: false })
     this.scrollToBottom()
   },

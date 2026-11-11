@@ -56,8 +56,9 @@ Human-on-the-Loop：人给意图与约束，AI 在护栏内自主执行，高风
 # 后端：静态检查 + 全量测试
 cd backend && ruff check . && pytest -q
 
-# 小程序：全量 JS 语法门
+# 小程序：全量 JS 语法门 + 单元测试
 find miniprogram -name '*.js' -print0 | xargs -0 -n1 node --check
+node --test miniprogram/tests/*.test.js
 
 # 文档：README 事实校验（需 MongoDB；CI 的 docs job 同款命令）
 cd backend && python scripts/check_docs_facts.py

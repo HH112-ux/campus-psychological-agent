@@ -73,6 +73,9 @@ jobs:
       - name: node --check 全量 JS
         run: find miniprogram -name '*.js' -print0 | xargs -0 -n1 node --check
 
+      - name: node:test 单元测试（流式状态码契约）
+        run: node --test miniprogram/tests/*.test.js
+
   eval:
     name: 评估回归门 · 情绪一致率（E1）
     runs-on: ubuntu-latest

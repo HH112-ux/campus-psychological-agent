@@ -67,6 +67,12 @@ function parseFrame(raw, onEvent) {
   onEvent(event, payload)
 }
 
+function bodyText(res, buffer) {
+  // 分块接收时正文在 buffer 里，res.data 通常为空；优先取已解码的完整正文
+  if (buffer && buffer.trim()) return buffer
+  return res && typeof res.data === 'string' ? res.data : ''
+}
+
 function openSse({ url, data, token, onEvent, onError, onComplete, idleMs = 10000 }) {
   const decoder = createUtf8Decoder()
   let buffer = ''
@@ -101,10 +107,37 @@ function openSse({ url, data, token, onEvent, onError, onComplete, idleMs = 1000
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    success() {
+    success(res) {
       if (finished) return
       finished = true
       clearIdle()
+      const status = (res && res.statusCode) || 0
+      const headers = (res && res.header) || {}
+      const contentType = String(
+        headers['Content-Type'] || headers['content-type'] || ''
+      ).toLowerCase()
+      const body = bodyText(res, buffer)
+      // 非 2xx：后端以普通 JSON 返回错误（401/403/429/5xx），绝不能当 SSE 静默丢弃
+      if (status && (status < 200 || status >= 300)) {
+        onError && onError({
+          code: status,
+          statusCode: status,
+          message: `HTTP ${status}`,
+          body,
+        })
+        return
+      }
+      // 2xx 但不是事件流（如 stream_enabled=false 的普通 JSON 降级）：同样走错误分支，
+      // 由上层决定「按普通响应渲染」还是「给出可读提示」，不允许伪造回复。
+      if (contentType && contentType.indexOf('text/event-stream') < 0) {
+        onError && onError({
+          code: -3,
+          statusCode: status,
+          message: '响应不是事件流',
+          body,
+        })
+        return
+      }
       // 处理可能残留的最后一帧
       if (buffer.trim()) parseFrame(buffer, onEvent)
       onComplete && onComplete()
