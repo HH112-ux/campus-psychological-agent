@@ -121,7 +121,7 @@ curl http://localhost:8000/health
 # {"code":0,"message":"ok","data":{"status":"ok","service":"xinyu-backend",
 #  "version":"0.1.0","env":"dev","db":"connected"}}
 
-.venv/bin/python3.12 -m pytest -q     # 1114 passed, 1 skipped（共 1115 项；skip：真 Redis 集成，按需设置 REDIS_TEST_URL）
+.venv/bin/python3.12 -m pytest -q     # 1128 passed, 1 skipped（共 1129 项；skip：真 Redis 集成，按需设置 REDIS_TEST_URL）
 .venv/bin/ruff check .               # 静态检查无 error
 .venv/bin/python3.12 -m scripts.test_llm # 智谱最简调用（需配置 ZHIPU_API_KEY，未配置时打印 SKIP）
 ```

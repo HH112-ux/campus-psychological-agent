@@ -5,6 +5,22 @@
 - 适用仓库：`campus-psychological-agent`
 - 结论先行：**只迁移模型调用层**（`ZhipuProvider` / `QwenProvider` 的 HTTP 传输），不引入 LangChain 的 chain、memory、agent、retriever；`LLMProvider` 接口、`FallbackProvider`、路由、SSE 与全部确定性链路保持原样。
 
+## 0. 实施状态（2026-11-11）
+
+| 阶段 | 提交 | 结果 |
+|---|---|---|
+| P0 依赖与适配模块 | `5872488` | `langchain_client.py` + 9 例单测；`1122 passed, 1 skipped` |
+| P1 provider 切换传输层 | `7cafcd3` | 手写 httpx/SSE 下线；`test_llm_transport.py` 5 例；`1127 passed, 1 skipped` |
+| P2 文档与边界守卫 | 本计划同批提交 | README 技术栈对齐；`test_llm_boundary.py` 1 例；`1128 passed, 1 skipped` |
+
+实施中发现的额外缺陷：`langchain-openai 1.x` 会把请求体里的 `max_tokens` 改名为
+`max_completion_tokens`，而智谱 v4 与 DashScope compatible-mode 只认 `max_tokens`
+（被忽略则失去回复长度上限，被拒绝则整链路不可用）。已在 `ChatOpenAICompat` 的
+请求体层还原字段名，并由 `test_request_payload_keeps_max_tokens_field` 锁定。
+
+仍未覆盖：没有真实 GLM / DashScope key，仅用本地假端点验证了请求形状与流式解析；
+上线前需在验收环境补一次真实调用。
+
 ## 1. 真实盘点（非估算）
 
 ### 1.1 现有抽象

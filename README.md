@@ -26,7 +26,11 @@
 | 小程序 | 微信小程序原生 WXML / WXSS / JavaScript |
 | 部署 | Docker Compose（`api` + `mongo` + `nginx`，`prod` profile） |
 
-> 模型调用为自封装的 `LLMProvider` 抽象（`backend/app/llm/`），**未使用 LangChain**。
+> 模型调用对外仍是自封装的 `LLMProvider` 抽象（`backend/app/llm/`），传输层使用
+> `langchain-openai` 的 `ChatOpenAI`。只替换 HTTP/SSE 传输，**不引入** LangChain 的
+> chain / memory / agent；危机判定、合规过滤、长期记忆与 SSE 协议均不依赖 LangChain。
+> 该依赖使镜像增加约 50 MB（实测 24 个包），并带入 `httpx2` 作为 LangSmith 的传递依赖
+> （本项目不启用 LangSmith）。
 
 ## 目录结构
 
@@ -111,7 +115,7 @@ curl http://localhost:8000/health
 cd backend
 .venv/bin/ruff check .
 .venv/bin/pytest -q
-# 当前基线：1114 passed, 1 skipped（共 1115 项）
+# 当前基线：1128 passed, 1 skipped（共 1129 项）
 # 唯一 skip：tests/test_ratelimit_redis.py 的真 Redis 集成用例，设置 REDIS_TEST_URL 后启用
 
 # 小程序：JS 语法检查
