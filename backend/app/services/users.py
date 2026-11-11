@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from bson import ObjectId
+from bson.errors import InvalidId
 
 from app.core.timeutil import now_cst, to_iso
 from app.db.indexes import COLL_USERS
@@ -45,8 +46,14 @@ async def get_or_create_by_openid(
 
 
 async def get_by_id(user_id: str) -> dict | None:
+    # P-15：令牌合法但 sub 非法时，应表现为"未登录"（401）而非"资源不存在"（404），
+    # 避免客户端按 401 重登录的逻辑失效。非法 ObjectId 一律按"查无此人"处理。
+    try:
+        oid = ObjectId(user_id)
+    except (InvalidId, TypeError):
+        return None
     return await mongo.db[COLL_USERS].find_one(
-        {"_id": parse_oid(user_id), "deleted_at": None}
+        {"_id": oid, "deleted_at": None}
     )
 
 
