@@ -66,6 +66,7 @@
 
 | 文档 | 时间 | 对应 commit | 说明 |
 |---|---|---|---|
+| [code-review-round2-2026-11-11.md](code-review-round2-2026-11-11.md) | 2026-11-11 | `c285a95` | 第二轮全仓审查（10 项阻断回验 + P2 五项 + LangChain 重扫 + 健康度） |
 | [code-review-2026-11-11.md](code-review-2026-11-11.md) | 2026-11-11 | `eda4ac6` | 全仓上线前审查（8 项阻断回验 + LangChain 专项 + 健康度） |
 | [launch-readiness-review-2026-11-11.md](launch-readiness-review-2026-11-11.md) | 2026-11-11 | `8f87bfa` | 第 10 轮上线就绪度全量审查 |
 | [code-review-recheck-round9-2026-11-08.md](code-review-recheck-round9-2026-11-08.md) | 2026-11-08 | `e90f9bf` | 第九轮完整代码审查 |
