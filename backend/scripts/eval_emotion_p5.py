@@ -3,7 +3,8 @@
 用法（backend/ 目录，需 .env 中的 ZHIPU_API_KEY）：
     .venv/bin/python scripts/eval_emotion_p5.py          # 出报告，永远退出 0
     .venv/bin/python scripts/eval_emotion_p5.py --gate   # E1 回归门：严格一致率 < 80% 退出 1
-    未配置 ZHIPU_API_KEY 时打印 SKIP 并退出 0（CI 无 secret 环境不阻塞）
+    未配置 ZHIPU_API_KEY 时默认打印 SKIP 并退出 0；CI 门禁必须加 --require-key，
+    此时缺 secret 会显式失败（退出 1），避免评估门静默跳过。
 
 - 评估集：scripts/eval-data/emotion_eval_v2.json（四类均衡 + 对抗 ≥10 + 语音转写噪声 asr-*，
   随新能力按 docs/eval-gate.md §4 约定扩充）
@@ -43,8 +44,15 @@ STRICT_THRESHOLD = 0.8  # go/no-go 阈值（E1 回归门：--gate 时低于此�
 
 async def main() -> int:
     gate = "--gate" in sys.argv
+    require_key = "--require-key" in sys.argv
     settings = get_settings()
     if not settings.zhipu_api_key:
+        if require_key:
+            print(
+                "FAIL: 未配置 ZHIPU_API_KEY，评估门要求真实评估（--require-key），拒绝静默跳过",
+                file=sys.stderr,
+            )
+            return 1
         print("SKIP: 未配置 ZHIPU_API_KEY，跳过情绪评估回归门")
         return 0
     items = json.loads(EVAL_FILE.read_text(encoding="utf-8"))

@@ -3,7 +3,8 @@
 用法（backend/ 目录，需 .env 中的 ZHIPU_API_KEY）：
     .venv/bin/python scripts/eval_long_memory.py          # 出报告，永远退出 0
     .venv/bin/python scripts/eval_long_memory.py --gate   # E1 回归门：综合命中率 < 80% 退出 1
-    未配置 ZHIPU_API_KEY 时打印 SKIP 并退出 0（CI 无 secret 环境不阻塞）
+    未配置 ZHIPU_API_KEY 时默认打印 SKIP 并退出 0；门禁场景加 --require-key
+    则缺 secret 显式失败（退出 1），避免评估门静默跳过。
 
 - 评估集：scripts/eval-data/memory_eval_v1.json（正向 12 + 对抗 6：一次性情绪/
   危机内容/闲聊/琐事/反讽/他人事件，随 bad-case 按 docs/eval-gate.md §4 约定扩充）
@@ -59,8 +60,15 @@ def _judge(expect: list[dict], items: list[dict]) -> tuple[bool, bool]:
 
 async def main() -> int:
     gate = "--gate" in sys.argv
+    require_key = "--require-key" in sys.argv
     settings = get_settings()
     if not settings.zhipu_api_key:
+        if require_key:
+            print(
+                "FAIL: 未配置 ZHIPU_API_KEY，评估门要求真实评估（--require-key），拒绝静默跳过",
+                file=sys.stderr,
+            )
+            return 1
         print("SKIP: 未配置 ZHIPU_API_KEY，跳过长期记忆评估回归门")
         return 0
     items = json.loads(EVAL_FILE.read_text(encoding="utf-8"))
