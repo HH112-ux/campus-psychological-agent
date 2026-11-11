@@ -41,48 +41,63 @@ class FallbackProvider(LLMProvider):
     async def generate(
         self, messages: list[dict], temperature: float = 0.7, max_tokens: int = 1024
     ) -> str:
+        primary_exc: Exception | None = None
         try:
-            return await self._primary.generate(messages, temperature, max_tokens)
-        except Exception as primary_exc:  # noqa: BLE001
+            result = await self._primary.generate(messages, temperature, max_tokens)
+            if result and result.strip():
+                return result
+            # P-16：主返回空内容视为失败，切备用（空回复对用户无意义）
+            logger.info("primary provider.generate 返回空内容，切备用")
+            primary_exc = RuntimeError("primary provider returned empty content")
+        except Exception as exc:  # noqa: BLE001
+            primary_exc = exc
             logger.info(
                 "primary provider.generate 异常（%s），切备用",
-                type(primary_exc).__name__,
+                type(exc).__name__,
             )
-            try:
-                return await self._backup.generate(messages, temperature, max_tokens)
-            except Exception as backup_exc:  # noqa: BLE001 —— 备用也失败
-                # 主异常仍是调用方看到的那个（保持既有降级分支不变），
-                # 但把备用异常挂到 __cause__ 上，别让排障时丢掉「备用为什么也没成」。
-                logger.info(
-                    "backup provider.generate 也异常（%s）",
-                    type(backup_exc).__name__,
-                )
-                raise primary_exc from backup_exc
+        try:
+            return await self._backup.generate(messages, temperature, max_tokens)
+        except Exception as backup_exc:  # noqa: BLE001 —— 备用也失败
+            logger.info(
+                "backup provider.generate 也异常（%s）",
+                type(backup_exc).__name__,
+            )
+            # 主异常仍是调用方看到的那个（保持既有降级分支不变），
+            # 但把备用异常挂到 __cause__ 上，别让排障时丢掉「备用为什么也没成」。
+            raise primary_exc from backup_exc
 
     async def stream(
         self, messages: list[dict], temperature: float = 0.7, max_tokens: int = 1024
     ) -> AsyncIterator[str]:
-        """仅当主未产出任何 chunk 就抛异常时切备；已产出部分则重抛让调用方保留。"""
+        """主未产出任何 chunk（异常或空流）时切备；已产出部分则重抛让调用方保留。"""
         produced = False
+        primary_exc: Exception | None = None
         try:
             async for delta in self._primary.stream(messages, temperature, max_tokens):
                 produced = True
                 yield delta
-        except Exception as primary_exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             if produced:
                 # 已有部分产出：重抛给 chat.py 走「保留部分」路径，不拼接两段 LLM 回复
                 raise
-            # 主完全未产出：切备用例
+            primary_exc = exc
             logger.info(
                 "primary provider.stream 未产出即异常（%s），切备用例",
-                type(primary_exc).__name__,
+                type(exc).__name__,
             )
-            try:
-                async for delta in self._backup.stream(messages, temperature, max_tokens):
-                    yield delta
-            except Exception as backup_exc:  # noqa: BLE001 —— 备用也失败
-                logger.info(
-                    "backup provider.stream 也异常（%s）",
-                    type(backup_exc).__name__,
-                )
-                raise primary_exc from backup_exc
+        else:
+            # P-16：主流正常结束但一个 chunk 都没产出，也切备用
+            if not produced:
+                logger.info("primary provider.stream 返回空流，切备用例")
+                primary_exc = RuntimeError("primary provider returned empty stream")
+        if produced:
+            return
+        try:
+            async for delta in self._backup.stream(messages, temperature, max_tokens):
+                yield delta
+        except Exception as backup_exc:  # noqa: BLE001 —— 备用也失败
+            logger.info(
+                "backup provider.stream 也异常（%s）",
+                type(backup_exc).__name__,
+            )
+            raise primary_exc from backup_exc
