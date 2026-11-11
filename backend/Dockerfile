@@ -21,4 +21,7 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# 反代后取真实客户端 IP：--proxy-headers 让 uvicorn 采信 X-Forwarded-For，
+# 但只信任 FORWARDED_ALLOW_IPS 里的来源（compose 中设为内部网段，见 docker-compose.yml）。
+# 未设置时保持 uvicorn 默认的 127.0.0.1，裸 docker run 不会误信外部伪造头。
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]

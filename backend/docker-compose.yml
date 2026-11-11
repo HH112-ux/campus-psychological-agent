@@ -55,6 +55,9 @@ services:
     environment:
       # 强制生产模式：即便 .env 漏改 ENV，也一定会跑生产配置校验（mock 登录/弱密钥直接拒绝启动）
       ENV: prod
+      # 只信任内部网段转发来的 X-Forwarded-For（否则登录限流键恒为 nginx 容器 IP，
+      # 全校共用 10 次/分钟）；api 不发布端口，外部无法直连伪造该头
+      FORWARDED_ALLOW_IPS: 172.28.0.0/16
     depends_on:
       mongo:
         condition: service_healthy
@@ -64,3 +67,10 @@ services:
 
 volumes:
   mongo-data:
+
+networks:
+  # 固定内部网段：与 api 的 FORWARDED_ALLOW_IPS 保持一致（只信任来自本网段的转发头）
+  default:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
