@@ -105,7 +105,7 @@ campus-psychological-agent/
 | Job | 检查项 | 本地等价命令 |
 |---|---|---|
 | backend | 依赖安装 → `ruff check .` → `pytest -q`（含 MongoDB 服务容器） | `ruff check .` + `pytest -q` |
-| miniprogram | 全量 JS 语法门 | `find miniprogram -name '*.js' -exec node --check {} +` |
+| miniprogram | 全量 JS 语法门 | `find miniprogram -name '*.js' -exec node --check {} \;` |
 
 - **合入 `main` 前 CI 必须为绿**；本地可在功能分支上先跑同一门槛再提 PR。
 - CI 与本地使用同一配置（`backend/pyproject.toml` 的 ruff/pytest 规则），不允许「本地过、CI 不过」的口径差。
