@@ -43,7 +43,7 @@ SAFE_TEXT: dict[str, str] = {
 
 # 精神科常见诊断名（明确病名）
 _DISORDERS = (
-    "抑郁症|忧郁症|焦虑症|双相情感障碍|双相障碍|躁郁症|强迫症|精神分裂症|精神分裂|"
+    "抑郁症|忧郁症|焦虑症|双相情感障碍|双相障碍|双相|躁郁症|强迫症|精神分裂症|精神分裂|"
     "创伤后应激障碍|PTSD|进食障碍|人格障碍|多动症|ADHD|自闭症|"
     "惊恐障碍|社交恐惧症|社交焦虑障碍|躯体化障碍|疑病症|失眠症|"
     "抑郁障碍|焦虑障碍"
@@ -58,6 +58,9 @@ _DIAG_VERB_RE = re.compile(
     r"就是|属于|患有|患了|患上了?|患(?!者)|得了|确诊(?:为|是)?|诊断(?:为|是)?|"
     r"符合|满足|达到|典型"
 )
+# 命名/归类动词：「你这叫抑郁症」「这种状态称作焦虑障碍」。
+# 只认紧贴病名前的写法（结尾锚定），避免「你叫我怎么能不焦虑」被当成诊断。
+_NAME_VERB_RE = re.compile(r"(?:叫|叫做|称作|称做|算作)[是为]?$")
 # 分度/倾向词（轻中度、疑似…）
 _SEVERITY_RE = re.compile(r"轻度|中度|重度|轻中度|疑似|偏重|倾向(?:于)?")
 # 病程/时长：裸病名后接时长，等同于「你已经病了多久」的结论式判断。
@@ -125,6 +128,13 @@ _EFFICACY_STRONG_RE = re.compile(
     r"百分百(?:能|会)?(?:治好|治愈|好)"
 )
 _TREATMENT_CTX_RE = re.compile(r"吃药|服药|用药|药物|这个药|那种药|治疗|疗法|疗程")
+# 无「一定/保证」也属于承诺：「你能治好我的抑郁」「这个药能治好你」；
+# 「吃点药就好了」「吃了这个药就会好」。前面加否定（不能/不服药）不算承诺。
+_EFFICACY_PROMISE_RE = re.compile(
+    r"(?<!不)(?:能|会|可以)(?:治好|治愈|根治)"
+    r"|(?<![不别勿])(?:吃|服|用)(?:了|过)?(?:点|些|一点|一些|这个|那个|这种|那种)?药"
+    r"[^，。！？、；;,\s]{0,8}(?:就|会|能)?好(?=了|起来|[，。！？]|$)"
+)
 _EFFICACY_RESULT_RE = re.compile(
     r"(?:就|一定|肯定|保证|绝对|百分百|包|很快|马上|几天|一周|两周|一个月|坚持)"
     r"(?:能|会|可以|就能|就会|即可)?(?:治好|治愈|康复|痊愈|好起来|见效)"
@@ -172,7 +182,7 @@ _T2S = str.maketrans(
         # —— 判断/疗效/用药词（保证「確診」「換藥」「見效」等语境同样可识别）——
         "診": "诊", "確": "确", "屬": "属", "於": "于", "許": "许", "聽": "听",
         "傾": "倾", "較": "较", "蠻": "蛮", "兒": "儿", "見": "见", "證": "证",
-        "徹": "彻", "換": "换", "調": "调",
+        "徹": "彻", "換": "换", "調": "调", "稱": "称",
     }
 )
 
@@ -241,7 +251,12 @@ def _diagnosis(text: str) -> bool:
         # 「你作为抑郁症患者」「身为抑郁症患者的你」：用户本人即患者
         if _USER_ROLE_PRE_RE.search(pre) or _USER_ROLE_POST_RE.match(post):
             return True
-        if _DIAG_VERB_RE.search(pre) or _SEVERITY_RE.search(pre) or _CLASSIFY_RE.search(pre):
+        if (
+            _DIAG_VERB_RE.search(pre)
+            or _NAME_VERB_RE.search(pre)
+            or _SEVERITY_RE.search(pre)
+            or _CLASSIFY_RE.search(pre)
+        ):
             return True
         if _PERSON_RE.search(pre) and (_INFER_RE.search(pre) or re.search(r"[是有]", pre)):
             return True
@@ -312,7 +327,7 @@ def _drug_or_advice_hit(sentence: str) -> bool:
 
 
 def _efficacy_hit(sentence: str) -> bool:
-    if _EFFICACY_STRONG_RE.search(sentence):
+    if _EFFICACY_STRONG_RE.search(sentence) or _EFFICACY_PROMISE_RE.search(sentence):
         return True
     return bool(_TREATMENT_CTX_RE.search(sentence) and _EFFICACY_RESULT_RE.search(sentence))
 
