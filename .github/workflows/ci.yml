@@ -16,6 +16,12 @@ jobs:
         image: mongo:7
         ports:
           - 27017:27017
+        # 无 healthcheck 时步骤可能在 mongod 就绪前启动 → 集成用例静默 skip、门禁假绿
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
       redis:
         image: redis:7
         ports:
@@ -125,6 +131,11 @@ jobs:
         image: mongo:7
         ports:
           - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v4
 

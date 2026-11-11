@@ -50,6 +50,12 @@ _CLEAN_COLLS = [
 def client():
     with TestClient(app) as c:
         if not mongo.is_connected:
+            # CI 下 Mongo 未就绪必须显式失败：否则集成用例整体 skip、门禁假绿（CI 已挂 healthcheck）
+            if os.environ.get("CI"):
+                pytest.fail(
+                    "CI 环境 MongoDB 不可用：集成用例不得静默跳过，"
+                    "请检查 service healthcheck 与 MONGODB_URI"
+                )
             pytest.skip(
                 "本地 MongoDB 未启动：本次跳过全部 DB 集成用例（危机入库/加密落库/隐私物理删除均未验证）"
             )
