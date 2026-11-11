@@ -9,7 +9,7 @@ from tests.helpers import auth, create_session, login
 
 def test_consent(client, db):
     """隐私同意：记录 consent_at + 政策版本。"""
-    token = login(client)
+    token = login(client, consent=False)
     # 初始未同意
     resp = client.get("/api/v1/users/me", headers=auth(token))
     assert resp.json()["data"]["consented"] is False
@@ -30,13 +30,38 @@ def test_consent(client, db):
 
 def test_consent_reject_disagree(client, db):
     """不同意时返回 400。"""
-    token = login(client)
+    token = login(client, consent=False)
     resp = client.post(
         "/api/v1/users/me/consent",
         json={"agree": False},
         headers=auth(token),
     )
     assert resp.status_code == 400
+
+
+def test_business_routes_require_consent(client, db):
+    """B-3：未同意时业务接口一律 403/2007，读取同意状态与同意接口仍可用。"""
+    token = login(client, consent=False)
+    headers = auth(token)
+
+    # 允许：查看本人信息（前端据此决定是否进同意流程）
+    assert client.get("/api/v1/users/me", headers=headers).status_code == 200
+
+    # 拦截：建会话 / 打卡等业务接口
+    blocked = client.post("/api/v1/sessions", json={}, headers=headers)
+    assert blocked.status_code == 403
+    body = blocked.json()
+    assert body["code"] == 2007
+    assert body["data"]["consent_required"] is True
+    assert client.get("/api/v1/emotion/checkins/today", headers=headers).status_code == 403
+
+    # 同意后放行
+    client.post(
+        "/api/v1/users/me/consent",
+        json={"agree": True, "policy_version": "1.0"},
+        headers=headers,
+    )
+    assert client.post("/api/v1/sessions", json={}, headers=headers).status_code == 201
 
 
 def test_export_data(client, db):

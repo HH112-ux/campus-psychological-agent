@@ -4,7 +4,7 @@ from __future__ import annotations
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app.core.exceptions import CODE_ACCESS_TOKEN_INVALID, BizError
+from app.core.exceptions import CODE_ACCESS_TOKEN_INVALID, CODE_CONSENT_REQUIRED, BizError
 from app.core.security import TYPE_ACCESS, decode_token
 from app.services import users as users_svc
 
@@ -22,3 +22,19 @@ async def get_current_user(
     if not user:
         raise BizError(CODE_ACCESS_TOKEN_INVALID, "用户不存在或已注销", http_status=401)
     return user
+
+
+async def get_consented_user(current_user: dict = Depends(get_current_user)) -> dict:
+    """业务接口统一依赖：必须已同意隐私政策（B-3，服务端强制而非前端约定）。
+
+    例外（继续用 get_current_user）：/auth/*、/health、/crisis/resources、
+    /users/me（读取同意状态）、POST /users/me/consent、DELETE /users/me/data（删除权）。
+    """
+    if not current_user.get("consent_at"):
+        raise BizError(
+            CODE_CONSENT_REQUIRED,
+            "请先阅读并同意《隐私政策》",
+            http_status=403,
+            data={"consent_required": True},
+        )
+    return current_user

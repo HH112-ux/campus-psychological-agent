@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, File, UploadFile
 
-from app.core.deps import get_current_user
+from app.core.deps import get_consented_user
 from app.core.responses import ok_response
 from app.services import speech
 
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/v1/speech", tags=["speech"])
 @router.post("/transcribe")
 async def transcribe(
     file: UploadFile = File(..., description="录音文件（mp3/aac 等）"),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_consented_user),
 ):
     """语音转文字：音频只用于本次转写，转写后即弃。"""
     audio = await file.read()

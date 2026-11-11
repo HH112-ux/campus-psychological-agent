@@ -27,6 +27,13 @@ function clearTokens() {
   wx.removeStorageSync(ACCESS_KEY)
   wx.removeStorageSync(REFRESH_KEY)
 }
+// 本地同意状态缓存（服务端 consent_at 为准，本地只用于入口拦截；B-3）
+function setConsented(value) {
+  const u = wx.getStorageSync(USER_KEY) || {}
+  u.consented = !!value
+  wx.setStorageSync(USER_KEY, u)
+  return u
+}
 
 // ---------- 原始请求（Promise，解包统一响应 {code,message,data}） ----------
 function rawRequest({ url, method = 'GET', data = {}, header = {}, auth = true, timeout = 15000 }) {
@@ -123,6 +130,8 @@ async function request(config, depth = 0) {
   try {
     return await rawRequest(config)
   } catch (err) {
+    // 2007 = 未同意隐私政策：同步清掉本地缓存，由页面引导去同意
+    if (err && err.code === 2007) setConsented(false)
     const unauthorized = err.httpStatus === 401 || err.code === 1002 || err.code === 1003
     if (!unauthorized) throw err
     if (depth === 0) {
@@ -190,6 +199,7 @@ module.exports = {
   getLocalUser() {
     return wx.getStorageSync(USER_KEY) || {}
   },
+  setConsented,
   get(url, extra = {}) {
     return request({ url, method: 'GET', ...extra })
   },

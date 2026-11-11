@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from app.core.deps import get_current_user
+from app.core.deps import get_consented_user
 from app.core.exceptions import CODE_NOT_FOUND, BizError
 from app.core.responses import ok_response
 from app.db.oid import parse_oid
@@ -17,13 +17,13 @@ router = APIRouter(prefix="/api/v1/memories", tags=["memories"])
 
 
 @router.get("")
-async def list_memories(current_user: dict = Depends(get_current_user)):
+async def list_memories(current_user: dict = Depends(get_consented_user)):
     """查看该用户的长期记忆（按最近更新倒序；无记录时 memories 为空数组）。"""
     return ok_response(await long_memory.list_memories(current_user["_id"]))
 
 
 @router.delete("/{memory_id}")
-async def delete_memory(memory_id: str, current_user: dict = Depends(get_current_user)):
+async def delete_memory(memory_id: str, current_user: dict = Depends(get_consented_user)):
     """删除单条记忆；不存在或不属于该用户返回 2001（HTTP 404）。"""
     deleted = await long_memory.delete_memory(current_user["_id"], parse_oid(memory_id))
     if not deleted:
@@ -32,6 +32,6 @@ async def delete_memory(memory_id: str, current_user: dict = Depends(get_current
 
 
 @router.delete("")
-async def clear_memories(current_user: dict = Depends(get_current_user)):
+async def clear_memories(current_user: dict = Depends(get_consented_user)):
     """清空该用户全部长期记忆，返回删除条数。"""
     return ok_response({"deleted": await long_memory.clear_memories(current_user["_id"])})

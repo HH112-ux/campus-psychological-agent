@@ -82,6 +82,17 @@ Page({
         })
       })
       .catch((err) => {
+        // B-3：未同意隐私政策，服务端返回 2007；对话页不建会话，引导回首页同意
+        if (err && err.code === 2007) {
+          wx.showModal({
+            title: '需要先同意隐私政策',
+            content: '请先在首页阅读并同意《隐私政策》，再开始对话。',
+            showCancel: false,
+            confirmText: '去首页',
+            success: () => wx.switchTab({ url: '/pages/index/index' }),
+          })
+          return
+        }
         if (err && err.code === 2003) {
           wx.showModal({
             title: '会话数量已达上限',

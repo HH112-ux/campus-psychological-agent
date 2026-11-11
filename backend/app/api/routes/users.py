@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from app.core.deps import get_current_user
+from app.core.deps import get_consented_user, get_current_user
 from app.core.exceptions import CODE_BUSINESS_VALIDATION, BizError
 from app.core.responses import ok_response
 from app.models.auth import ConsentRequest, EraseRequest
@@ -36,14 +36,14 @@ async def consent(body: ConsentRequest, current_user: dict = Depends(get_current
 
 
 @router.get("/me/caring")
-async def get_caring(current_user: dict = Depends(get_current_user)):
+async def get_caring(current_user: dict = Depends(get_consented_user)):
     """V3 主动关怀状态：是否开启 + 是否仍有订阅授权配额。"""
     return ok_response(await caring.get_caring_state(current_user["_id"]))
 
 
 @router.put("/me/caring")
 async def update_caring(
-    body: CaringSettingUpdate, current_user: dict = Depends(get_current_user)
+    body: CaringSettingUpdate, current_user: dict = Depends(get_consented_user)
 ):
     """V3 主动关怀开关：用户可随时开启/关闭主动问候。"""
     return ok_response(await caring.set_caring_enabled(current_user["_id"], body.enabled))
@@ -51,14 +51,14 @@ async def update_caring(
 
 @router.post("/me/caring/subscribe")
 async def subscribe_caring(
-    body: CaringSubscribeRequest, current_user: dict = Depends(get_current_user)
+    body: CaringSubscribeRequest, current_user: dict = Depends(get_consented_user)
 ):
     """V3 订阅授权回填：小程序 wx.requestSubscribeMessage 结果（同意则 +1 发送配额）。"""
     return ok_response(await caring.record_subscription(current_user["_id"], body.granted))
 
 
 @router.get("/me/data/export")
-async def export_data(current_user: dict = Depends(get_current_user)):
+async def export_data(current_user: dict = Depends(get_consented_user)):
     """P4 数据导出：导出用户全部数据为 JSON（PIPL 行权）。"""
     data = await privacy_svc.export_user_data(current_user["_id"])
     return ok_response(data)

@@ -4,7 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 
 from app.core.crypto import decrypt_optional_text
-from app.core.deps import get_current_user
+from app.core.deps import get_consented_user
 from app.core.responses import ok_response
 from app.core.timeutil import to_iso
 from app.models.session import SessionCreate, SessionRename
@@ -17,13 +17,13 @@ router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
 async def list_sessions(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_consented_user),
 ):
     return ok_response(await svc.list_sessions(current_user["_id"], page, page_size))
 
 
 @router.post("", status_code=201)
-async def create_session(body: SessionCreate, current_user: dict = Depends(get_current_user)):
+async def create_session(body: SessionCreate, current_user: dict = Depends(get_consented_user)):
     s = await svc.create_session(current_user["_id"], body.title)
     return ok_response(
         {
@@ -38,19 +38,19 @@ async def create_session(body: SessionCreate, current_user: dict = Depends(get_c
 
 
 @router.get("/{session_id}")
-async def session_detail(session_id: str, current_user: dict = Depends(get_current_user)):
+async def session_detail(session_id: str, current_user: dict = Depends(get_consented_user)):
     return ok_response(await svc.get_detail(session_id, current_user["_id"]))
 
 
 @router.patch("/{session_id}")
 async def rename_session(
-    session_id: str, body: SessionRename, current_user: dict = Depends(get_current_user)
+    session_id: str, body: SessionRename, current_user: dict = Depends(get_consented_user)
 ):
     s = await svc.rename_session(session_id, current_user["_id"], body.title)
     return ok_response(svc.serialize_session_brief(s))
 
 
 @router.delete("/{session_id}")
-async def delete_session(session_id: str, current_user: dict = Depends(get_current_user)):
+async def delete_session(session_id: str, current_user: dict = Depends(get_consented_user)):
     await svc.delete_session(session_id, current_user["_id"])
     return ok_response(None, message="已删除")

@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
 from app.config import get_settings
-from app.core.deps import get_current_user
+from app.core.deps import get_consented_user
 from app.core.exceptions import (
     CODE_BUSINESS_VALIDATION,
     CODE_MODEL_UNAVAILABLE,
@@ -98,7 +98,7 @@ async def _with_heartbeat(events, interval: float):
 
 @router.post("/sessions/{session_id}/messages")
 async def send_message(
-    session_id: str, body: MessageSend, current_user: dict = Depends(get_current_user)
+    session_id: str, body: MessageSend, current_user: dict = Depends(get_consented_user)
 ):
     # 先校验归属并完成 prepare（长度/轮次/限流/危机），错误以普通 JSON 返回；
     # 内部/DB 异常不抛 500：降级为带内置热线的回复，保证求助入口始终可用
@@ -149,7 +149,7 @@ async def send_message(
 
 @router.post("/messages/{message_id}/feedback")
 async def message_feedback(
-    message_id: str, body: FeedbackRequest, current_user: dict = Depends(get_current_user)
+    message_id: str, body: FeedbackRequest, current_user: dict = Depends(get_consented_user)
 ):
     if body.rating == "dislike" and not body.reason:
         raise BizError(CODE_BUSINESS_VALIDATION, "点踩时需要选择一个原因", http_status=400)

@@ -16,7 +16,8 @@ def test_wx_login_issues_tokens(client, db):
 
 
 def test_me_requires_and_returns_user(client, db):
-    token = login(client)
+    # 不自动同意：本用例验证首次登录时 consented 仍为 False
+    token = login(client, consent=False)
     resp = client.get("/api/v1/users/me", headers=auth(token))
     assert resp.status_code == 200
     data = resp.json()["data"]

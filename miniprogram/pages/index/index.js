@@ -71,21 +71,27 @@ Page({
     if (quote !== this.data.dailyQuote) this.setData({ dailyQuote: quote })
     api
       .ensureLogin()
-      .then(() => {
-        this.maybeShowConsent()
-        return this.loadHome()
+      // B-3：以服务端 consent_at 为准，未同意时不请求业务接口，直接进同意流程
+      .then(() => api.get('/api/v1/users/me'))
+      .then((me) => {
+        api.setConsented(!!me.consented)
+        if (!me.consented) {
+          this.maybeShowConsent()
+          return null
+        }
+        return this.loadHome(me)
       })
       .catch((err) => {
         wx.showToast({ title: (err && err.message) || '登录失败', icon: 'none' })
       })
   },
 
-  // P4/P5 隐私单独同意：首次进入且未同意时弹窗；本地标记防反复打扰，
-  // 「我的」页保留重新同意入口
+  // P4/P5 隐私单独同意：未同意时弹窗（不写持久标记，每次冷启动都会重新征询）；
+  // 同意成功后才写本地状态并放行，拒绝则停在首页，「我的」页保留重新同意入口
   maybeShowConsent() {
-    const u = api.getLocalUser()
-    if (u.consented || wx.getStorageSync('xinyu_consent_prompted')) return
-    wx.setStorageSync('xinyu_consent_prompted', true)
+    if (this._consentPrompted) return
+    if (api.getLocalUser().consented) return
+    this._consentPrompted = true
     wx.showModal({
       title: '隐私政策与使用同意',
       content:
@@ -96,16 +102,16 @@ Page({
       confirmText: '同意并继续',
       cancelText: '暂不同意',
       success: (res) => {
+        this._consentPrompted = false
         if (!res.confirm) {
-          wx.showToast({ title: '同意后可开始使用，稍后可在「我的」页开启', icon: 'none' })
+          wx.showToast({ title: '同意后才能记录与对话，可稍后在「我的」页开启', icon: 'none' })
           return
         }
         api
           .post('/api/v1/users/me/consent', { agree: true, policy_version: '1.0' })
           .then(() => {
-            const nu = api.getLocalUser()
-            nu.consented = true
-            wx.setStorageSync('xinyu_user', nu)
+            api.setConsented(true)
+            return this.loadHome()
           })
           .catch(() => {
             wx.showToast({ title: '同意保存失败，请稍后重试', icon: 'none' })
@@ -114,22 +120,34 @@ Page({
     })
   },
 
-  loadHome() {
+  // 入口门：未同意不进入对话 / 不写打卡数据（服务端同样会拦 2007）
+  requireConsent() {
+    if (api.getLocalUser().consented) return true
+    this.maybeShowConsent()
+    return false
+  },
+
+  loadHome(me) {
     const greeting = this.timeGreeting()
     this.setData({ greeting })
     // 并行拉取：用户信息（连续天数 + 记忆型问候）+ 今日打卡
     Promise.all([
-      api.get('/api/v1/users/me'),
+      me ? Promise.resolve(me) : api.get('/api/v1/users/me'),
       api.get('/api/v1/emotion/checkins/today'),
     ])
-      .then(([me, today]) => {
+      .then(([user, today]) => {
+        api.setConsented(!!user.consented)
         this.setData({
-          streak: me.checkin_streak || 0,
-          memoryGreeting: me.memory_greeting || '',
+          streak: user.checkin_streak || 0,
+          memoryGreeting: user.memory_greeting || '',
           todayCheckin: decorateCheckin(today),
         })
       })
-      .catch(() => {
+      .catch((err) => {
+        if (err && err.code === 2007) {
+          this.maybeShowConsent()
+          return
+        }
         wx.showToast({ title: '加载失败，请稍后重试', icon: 'none' })
       })
   },
@@ -156,6 +174,7 @@ Page({
   },
 
   submitCheckin() {
+    if (!this.requireConsent()) return
     const mood = this.data.selected
     if (!mood || this.data.submitting) return
     if (this.data.note.length > 200) {
@@ -189,6 +208,7 @@ Page({
   },
 
   startChat() {
+    if (!this.requireConsent()) return
     // 对话页是 tab，reLaunch 可带全新会话（onLoad 自动新建）
     wx.reLaunch({ url: '/pages/chat/chat' })
   },
