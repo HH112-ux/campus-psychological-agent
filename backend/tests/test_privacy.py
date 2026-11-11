@@ -211,3 +211,46 @@ def test_purge_expired_data(client, db):
     assert purged_before == 0, "恢复期未满不应被物理删除"
     assert purged_after == 1, "到期用户应被物理删除且计数为 1"
     assert all(v == 0 for v in remaining.values()), remaining
+
+
+def test_purge_scheduler_starts_without_db_connection(monkeypatch):
+    """P2：调度器创建不得依赖启动瞬间 Mongo 已连通。
+
+    慢启动 / 瞬时不可达时若跳过创建，「软删 N 天后物理删除」将永远不执行；
+    调度器自身循环已有失败重试，因此前置条件只应看配置开关。
+    """
+    import asyncio
+
+    from app import main as main_module
+    from app.config import get_settings
+
+    started = []
+
+    async def _fake_purge():
+        started.append("purge")
+        await asyncio.Event().wait()
+
+    async def _fake_caring():
+        await asyncio.Event().wait()
+
+    async def _noop(*args, **kwargs):
+        return None
+
+    monkeypatch.setitem(get_settings().__dict__, "data_purge_enabled", True)
+    monkeypatch.setitem(get_settings().__dict__, "caring_enabled", True)
+    monkeypatch.setattr(main_module.mongo, "connect", _noop)
+    monkeypatch.setattr(main_module.mongo, "disconnect", _noop)
+    monkeypatch.setattr(
+        type(main_module.mongo), "is_connected", property(lambda self: False)
+    )
+    monkeypatch.setattr(main_module.privacy_svc, "run_purge_scheduler", _fake_purge)
+    monkeypatch.setattr(main_module.caring_svc, "run_caring_scheduler", _fake_caring)
+    monkeypatch.setattr(main_module, "close_redis_client", _noop)
+
+    async def _run() -> None:
+        async with main_module.lifespan(None):
+            assert main_module.mongo.is_connected is False, "前置：模拟启动瞬间 DB 未连通"
+            await asyncio.sleep(0)
+
+    asyncio.run(_run())
+    assert started == ["purge"]
