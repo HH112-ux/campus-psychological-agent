@@ -5,21 +5,24 @@
 - 适用仓库：`campus-psychological-agent`
 - 结论先行：**只迁移模型调用层**（`ZhipuProvider` / `QwenProvider` 的 HTTP 传输），不引入 LangChain 的 chain、memory、agent、retriever；`LLMProvider` 接口、`FallbackProvider`、路由、SSE 与全部确定性链路保持原样。
 
-## 0. 实施状态（2026-11-11）
+## 0. 实施状态（2026-11-11，已完成）
+
+**状态：已完成。** P0–P2 全部落地，GLM 主通道已用真实端点验证（见第 10 节），
+迁移前基线 `1114 passed, 1 skipped` → 迁移后 `1128 passed, 1 skipped`，`ruff check .` 全程通过。
 
 | 阶段 | 提交 | 结果 |
 |---|---|---|
 | P0 依赖与适配模块 | `5872488` | `langchain_client.py` + 9 例单测；`1122 passed, 1 skipped` |
 | P1 provider 切换传输层 | `7cafcd3` | 手写 httpx/SSE 下线；`test_llm_transport.py` 5 例；`1127 passed, 1 skipped` |
-| P2 文档与边界守卫 | 本计划同批提交 | README 技术栈对齐；`test_llm_boundary.py` 1 例；`1128 passed, 1 skipped` |
+| P2 文档与边界守卫 | `1ecc3ef` | README 技术栈对齐；`test_llm_boundary.py` 1 例；`1128 passed, 1 skipped` |
 
 实施中发现的额外缺陷：`langchain-openai 1.x` 会把请求体里的 `max_tokens` 改名为
 `max_completion_tokens`，而智谱 v4 与 DashScope compatible-mode 只认 `max_tokens`
 （被忽略则失去回复长度上限，被拒绝则整链路不可用）。已在 `ChatOpenAICompat` 的
 请求体层还原字段名，并由 `test_request_payload_keeps_max_tokens_field` 锁定。
 
-仍未覆盖：没有真实 GLM / DashScope key，仅用本地假端点验证了请求形状与流式解析；
-上线前需在验收环境补一次真实调用。
+仍未覆盖：DashScope 备用通道未验证（`.env` 未配置 `QWEN_API_KEY`，`qwen_enabled` 默认关闭）；
+GLM 主通道已用真实端点验证，见第 10 节。
 
 ## 1. 真实盘点（非估算）
 
@@ -181,8 +184,9 @@ openai==2.54.0
 
 | 层级 | 操作 | 影响 |
 |---|---|---|
-| 代码级 | `git revert <P1 commit>` | 恢复手写 HTTP 实现，业务无感 |
-| 依赖级 | `git revert <P0 commit>` | 移除 LangChain 依赖，镜像回到基线 |
+| 代码级 | `git revert 7cafcd3` | 恢复手写 HTTP/SSE 实现，业务无感；P0 依赖与测试保留 |
+| 依赖级 | `git revert 5872488` | 移除 LangChain 依赖，镜像回到基线 |
+| 文档级 | `git revert 1ecc3ef` | 仅回退 README 与边界守卫，不影响运行 |
 | 发布级 | 重新构建镜像并滚动重启 | 无数据迁移、无 schema 变更、无配置变更 |
 | 数据级 | 无需回滚 | 本次不触碰数据库与加密字段 |
 
@@ -207,3 +211,37 @@ openai==2.54.0
 - 不改会话/记忆的加密、导出、删除逻辑。
 - 不引入 LangChain Memory / Chain / Agent / Retriever。
 - 不改数据库 schema，不做数据迁移。
+
+## 10. 真实端点验证（本地手工，2026-11-11）
+
+CI 不带真实密钥，因此本节是**本地一次性人工验证**，不是自动化用例；密钥只存在于
+`backend/.env`，未写入本文档、日志或提交。
+
+**配置核实（仅列变量与形态，不含值）**：`ZHIPU_API_KEY` 存在且非占位（长度 49 字符）；
+`ZHIPU_BASE_URL` 指向智谱 v4 开放平台；`MODEL_CHAT` 为 GLM 轻量档；`MODEL_LIGHT` 为
+更轻的档位。`.env` 未配置 `QWEN_*`，通义备用通道未验证（`qwen_enabled` 默认关闭）。
+
+**复现方式**：在 `backend/` 目录下，用项目配置（`get_settings()` 自动读取 `.env`）
+直接构造 `ZhipuProvider` 并调用 `generate` / `stream`；再用 `build_client` 发起一次
+`max_tokens=32` 的长文请求，读取响应的 `usage_metadata.output_tokens` 与
+`response_metadata.finish_reason`。整个过程只打印耗时、字符数、token 数与文本摘要，
+不打印任何密钥。
+
+**观测结果**：
+
+| 场景 | 观测值 | 结论 |
+|---|---|---|
+| 非流式 `generate` | 0.85s，返回 17 字 | 正常返回，无格式错误 |
+| 流式 `stream` | 首块 0.38s，总 0.51s，10 个增量，18 字 | 增量按序到达，未混入空块 |
+| `max_tokens=32` 长文请求 | `output_tokens=32`，`finish_reason=length` | 服务端接受 `max_tokens` 且按上限截断；若字段被改名为 `max_completion_tokens` 而遭忽略，输出不会被截断 |
+| 无效 key | HTTP 401，包装为 `RuntimeError`，`__cause__` 为鉴权异常 | 错误映射符合调用层「任意异常→重试/降级」的契约 |
+
+**结论**：GLM 主通道的请求形状、流式解析、长度上限与异常包装均与迁移前语义一致，
+`max_tokens` 还原修复在真实服务端生效。
+
+**遗留项**：
+
+- DashScope 备用通道未做真实调用验证，首次启用备用时需补一次；
+- `langsmith → httpx2` 作为第二套 HTTP 栈仍在依赖树中（不启用 LangSmith，由边界测试
+  限制其使用范围）；
+- 新增依赖实测 24 个包、约 50.0 MB，镜像同步增大约该量级。
