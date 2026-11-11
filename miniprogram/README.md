@@ -12,7 +12,8 @@ P3 已实现：四 TabBar 结构（首页/对话/情绪日志/我的）、五档
 ```
 miniprogram/
 ├── app.js / app.json / app.wxss   # 入口（预热登录、缓存求助资源）、四 TabBar 配置与全局样式
-├── project.config.json            # 开发者工具项目配置（urlCheck:false）
+├── config.js                      # 发布地址唯一入口（按 envVersion 选 develop/trial/release）
+├── project.config.json            # 开发者工具项目配置（urlCheck:true，域名校验默认开启）
 ├── sitemap.json
 ├── utils/
 │   ├── api.js                     # 请求封装：JWT 自动携带、401 静默刷新重放、wx.login
@@ -33,7 +34,7 @@ miniprogram/
 
 1. 下载并打开「微信开发者工具」（稳定版）。
 2. 选择「导入项目」，目录指向本 `miniprogram/` 文件夹，AppID 填 `wx641b560961211693`，后端选「不使用云服务」。
-3. 先启动后端（见 `../backend/README.md`，监听 127.0.0.1:8000）；开发阶段已在 `project.config.json` 关闭域名校验（`urlCheck: false`）。
+3. 先启动后端（见 `../backend/README.md`，监听 127.0.0.1:8000）。`project.config.json` 已开启域名校验（`urlCheck: true`，与线上一致，能及早暴露域名/证书问题）；本地连 127.0.0.1 时，在开发者工具「详情 → 本地设置」勾选「不校验合法域名…」即可，该开关只会写入已被 gitignore 的 `project.private.config.json`，不会污染共享配置。
 4. 本地无 `WX_SECRET` 时后端走 `WX_MOCK_LOGIN=true`，小程序 `wx.login` 拿到的 code 会被映射为固定 mock openid，无需真机即可打通登录与会话。
 
 ## P1 验收要点（回归）
@@ -60,8 +61,9 @@ miniprogram/
 
 - 对话页为 Tab 页：新建会话与进入历史会话均用 `wx.reLaunch`（tab 页不可 `navigateTo`），reLaunch 时 `onLoad` 重新执行并按 `session_id` 加载或新建。
 - 流式依赖基础库 `RequestTask.onChunkReceived`（基础库 2.20.1+，`libVersion: latest` 已满足）；进入对话页会用 `/health` 静默探测一次，不支持时自动改走非流式。
-- 真机预览需让手机与电脑在同一网络，并把 `app.js` 的 `apiBase` 改为电脑局域网 IP（如 `http://192.168.x.x:8000`）。
-- 正式提审前必须：配置 HTTPS 合法域名（后端需备案域名 + TLS）、重新开启域名校验、填入真实 `WX_SECRET` 并关闭 mock。
+- 真机预览需让手机与电脑在同一网络，并把 `config.js` 的 `API_BASE.develop` 改为电脑局域网 IP（如 `http://192.168.x.x:8000`）。
+- 正式提审前必须：在微信后台配置 request/uploadFile/downloadFile 合法域名（HTTPS + 已备案），并在 `config.js` 的 `API_BASE.trial` / `API_BASE.release` 填入与之一致的域名；同时填入真实 `WX_SECRET` 并关闭 mock。
+- `config.js` 中 trial/release 留空时会在控制台明确报错并快速失败，避免误用本地地址提审。
 - 主动关怀（V3）需在微信公众平台申请订阅消息模板，并把模板 ID 填入 `app.js` 的 `globalData.subscribeTemplateId`（与后端 `WX_SUBSCRIBE_TEMPLATE_ID` 一致）；未配置时该功能静默跳过，不影响其他链路。
 - 语音输入（V5）需在微信公众平台「用户隐私保护指引」声明麦克风用途；后端 `ASR_PROVIDER` 生产环境必须为 `http` 并配置 `ASR_ENDPOINT_URL` / `ASR_API_KEY`（`mock` 仅本地联调，生产启动校验会拒绝）；未配置或转写失败时前端自动降级为键盘输入。
 - 小程序内不展示、不落盘任何超出必要范围的心理敏感信息（对齐 SECURITY.md）。
