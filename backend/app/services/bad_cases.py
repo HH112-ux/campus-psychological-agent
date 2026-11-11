@@ -55,7 +55,7 @@ async def collect_bad_cases(since: datetime | None = None) -> list[dict]:
             {
                 "message_id": str(msg["_id"]),
                 "session_id": str(msg["session_id"]),
-                "session_title": (session or {}).get("title"),
+                "session_title": decrypt_optional_text((session or {}).get("title")),
                 "created_at": created_at.isoformat() if created_at else None,
                 "reason": feedback.get("reason"),
                 "user_message": decrypt(user_msg.get("content")) if user_msg else None,

@@ -87,7 +87,7 @@ async def export_user_data(user_id: ObjectId) -> dict:
     async for s in mongo.db[COLL_SESSIONS].find({"user_id": uid}).sort("created_at", 1):
         sessions.append({
             "session_id": str(s["_id"]),
-            "title": s.get("title", ""),
+            "title": decrypt_optional_text(s.get("title")) or "",
             "rounds": s.get("rounds", 0),
             "created_at": to_iso(s.get("created_at")) if s.get("created_at") else None,
             "last_msg_at": to_iso(s.get("last_msg_at")) if s.get("last_msg_at") else None,

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
 
+from app.core.crypto import decrypt_optional_text
 from app.core.deps import get_current_user
 from app.core.responses import ok_response
 from app.core.timeutil import to_iso
@@ -27,7 +28,7 @@ async def create_session(body: SessionCreate, current_user: dict = Depends(get_c
     return ok_response(
         {
             "session_id": str(s["_id"]),
-            "title": s.get("title") or "新的对话",
+            "title": decrypt_optional_text(s.get("title")) or "新的对话",
             "rounds": 0,
             "status": "active",
             "created_at": to_iso(s["created_at"]),

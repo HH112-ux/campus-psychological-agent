@@ -4,7 +4,7 @@ from __future__ import annotations
 from bson import ObjectId
 
 from app.config import get_settings
-from app.core.crypto import decrypt, decrypt_optional_text
+from app.core.crypto import decrypt, decrypt_optional_text, encrypt_optional_text
 from app.core.exceptions import (
     CODE_NOT_FOUND,
     CODE_RESOURCE_FORBIDDEN,
@@ -20,7 +20,7 @@ from app.db.oid import parse_oid
 def serialize_session_brief(s: dict) -> dict:
     return {
         "session_id": str(s["_id"]),
-        "title": s.get("title") or "新的对话",
+        "title": decrypt_optional_text(s.get("title")) or "新的对话",
         "rounds": s.get("rounds", 0),
         "status": s.get("status", "active"),
         "last_msg_at": to_iso(s["last_msg_at"]) if s.get("last_msg_at") else None,
@@ -41,7 +41,8 @@ async def create_session(user_id: ObjectId, title: str | None) -> dict:
     now = now_cst()
     doc = {
         "user_id": user_id,
-        "title": (title.strip() if title and title.strip() else None),
+        # B-4：标题常含用户首句自我暴露，与对话正文同口径加密落库
+        "title": encrypt_optional_text(title.strip()) if title and title.strip() else None,
         "rounds": 0,
         "status": "active",
         "crisis_score": 0,          # 二级语境词累计分
@@ -94,7 +95,7 @@ async def get_detail(session_id: str, user_id: ObjectId) -> dict:
     msgs.reverse()
     return {
         "session_id": str(s["_id"]),
-        "title": s.get("title") or "新的对话",
+        "title": decrypt_optional_text(s.get("title")) or "新的对话",
         "rounds": s.get("rounds", 0),
         "crisis_high_shown": s.get("crisis_high_shown", False),
         "messages": [_serialize_message(m) for m in msgs],
@@ -123,10 +124,11 @@ def _serialize_message(m: dict) -> dict:
 
 async def rename_session(session_id: str, user_id: ObjectId, title: str) -> dict:
     s = await get_owned_session(session_id, user_id)
+    encrypted = encrypt_optional_text(title.strip())
     await mongo.db[COLL_SESSIONS].update_one(
-        {"_id": s["_id"]}, {"$set": {"title": title.strip()}}
+        {"_id": s["_id"]}, {"$set": {"title": encrypted}}
     )
-    s["title"] = title.strip()
+    s["title"] = encrypted
     return s
 
 

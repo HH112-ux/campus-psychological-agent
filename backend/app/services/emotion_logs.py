@@ -81,7 +81,7 @@ async def _session_meta_for(ref_ids: set) -> dict:
     if not session_ids:
         return {ref: {"session_id": None, "title": None} for ref in ref_to_session}
     titles = {
-        str(s["_id"]): s.get("title")
+        str(s["_id"]): decrypt_optional_text(s.get("title"))
         async for s in mongo.db[COLL_SESSIONS].find(
             {"_id": {"$in": list(session_ids)}}, {"title": 1}
         )

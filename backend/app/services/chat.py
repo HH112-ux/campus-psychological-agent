@@ -26,7 +26,7 @@ from bson import ObjectId
 
 from app.config import get_settings
 from app.core import cost
-from app.core.crypto import encrypt
+from app.core.crypto import encrypt, encrypt_optional_text
 from app.core.exceptions import CODE_CONTENT_INVALID, CODE_SESSION_ROUND_LIMIT, BizError
 from app.core.ratelimit import hit_message_rate
 from app.core.timeutil import now_cst, to_iso
@@ -132,7 +132,8 @@ async def prepare_turn(user: dict, session: dict, raw_content: str) -> Turn:
     # 更新会话：最近活跃时间 + 首条消息回填标题 + 危机侧字段
     session_set: dict = {"last_msg_at": now_cst()}
     if not session.get("title"):
-        session_set["title"] = text[:12]
+        # B-4：首句常是自我暴露原文，标题与正文同口径加密后再落库
+        session_set["title"] = encrypt_optional_text(text[:12])
     session_set.update(crisis_session_set)
 
     if session_set:

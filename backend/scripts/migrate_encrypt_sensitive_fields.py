@@ -5,6 +5,7 @@
 - messages.emotion.evidence           助手消息上回填的情绪摘录
 - checkins.note                       打卡备注
 - risk_events.matched[]               风险事件命中词（模型兜底时为原句摘录）
+- sessions.title                      会话标题（首条消息前 12 字，B-4）
 
 用法（必须配置 DATA_ENCRYPTION_KEY，否则拒绝执行）：
     .venv/bin/python -m scripts.migrate_encrypt_sensitive_fields --dry-run
@@ -22,7 +23,13 @@ import asyncio
 
 from app.config import get_settings
 from app.core.crypto import decrypt, encrypt_optional_text, is_encrypted
-from app.db.indexes import COLL_CHECKINS, COLL_EMOTION_RECORDS, COLL_MESSAGES, COLL_RISK_EVENTS
+from app.db.indexes import (
+    COLL_CHECKINS,
+    COLL_EMOTION_RECORDS,
+    COLL_MESSAGES,
+    COLL_RISK_EVENTS,
+    COLL_SESSIONS,
+)
 from app.db.mongo import mongo
 
 
@@ -118,6 +125,7 @@ async def main(dry_run: bool) -> None:
         "messages.emotion.evidence": await _migrate_message_emotion(dry_run),
         "checkins.note": await _migrate_text_field(COLL_CHECKINS, "note", dry_run),
         "risk_events.matched": await _migrate_risk_matched(dry_run),
+        "sessions.title": await _migrate_text_field(COLL_SESSIONS, "title", dry_run),
     }
     mode = "DRY-RUN" if dry_run else "DONE"
     for name, count in counts.items():
