@@ -4,6 +4,35 @@
 
 ## [Unreleased]
 
+### 二期体验深项（m7 · E3 模型路由与成本基线 · 部分完成）
+
+- **E3 模型路由（启发式分流）**：新增 `app/llm/router.py` —— `select_tier(content, crisis_level, latest_emotion)` 规则分流：危机非 none、负面情绪（anxious/depressed/angry）、内容超 `cost_routing_light_max_chars` 均走主档；仅在「短句 + 无危机 + 非负面」时走轻量档。零额外 LLM 调用、零额外延迟。默认 `COST_ROUTING_ENABLED=false`，行为与改造前完全一致；开启后轻量档同样继承 E2 的主备容灾。
+- **E3 成本基线**：新增 `app/core/cost.py` —— 按档位累计调用次数与 prompt/completion 字符数，每 100 次输出一条结构化 info 日志（单次明细 debug），供日志系统按周聚合；不做看板、不落库、不换算货币（字符→token 粗估偏差大）。开关 `COST_TRACKING_ENABLED`（默认 true）。
+- **E3 长会话摘要压缩**：**deferred**。路线图自身标注「收益有限、摘要压缩有质量风险」，且当前成本量级约 0.02 元/天/用户；压缩丢失关键上下文会直接损害陪伴连贯性且难以用单测覆盖，本轮不引入。`services/memory.py` 顶部原有「超窗摘要预留」注释保持原样，后续如需启动须先扩 E1 评估集。
+- 新增 `test_cost_routing.py`（18 条契约测试），`test_alerting.py` 的 provider 打桩改为 patch 类方法以适配工厂化构造。全量 **220 passed, 1 skipped**。
+
+### 二期体验深项（m7 · E2 多模型容灾）
+
+- **E2 多模型容灾**：接入通义千问备用供应商（OpenAI 兼容接口 · DashScope compatible-mode v1），主 provider 异常自动切备用——`app/llm/qwen.py`（QwenProvider，结构与 ZhipuProvider 平行）、`app/llm/fallback.py`（FallbackProvider：generate 双失败抛主异常；stream 语义严格——仅当主完全未产出时切备，若主已产出部分再失败则重抛让 chat.py 走既有「保留部分」路径，禁止硬拼两段独立 LLM 回复）、`app/llm/__init__.py` 工厂 `get_chat_provider()` / `get_light_provider()` 统一出口（避免 chat / emotion / long_memory 三处拷贝粘贴 `_make_provider`）。配置开关 `qwen_enabled` + `qwen_api_key`（默认 false，存量部署零改动；启用需同时配 `qwen_model_chat` / `qwen_model_light` 与 `qwen_base_url`）。chat / emotion / long_memory 模块保留 `ZhipuProvider` 模块名以兼容既有 monkeypatch，所有既有测试零改动通过。新增 `test_llm_fallback.py`（13 条契约测试）。全量 **202 passed, 1 skipped**。
+
+### 代码健康度整改复审跟进（brooks-lint PR Review 97/100 → 三条 Suggestion 全清）
+
+- **S1 配置名漂移**：`ratelimit_backend` 实际同时驱动限流、告警冷却与失败率计数三套子系统，名不符实。更名为 `shared_state_backend`（`AliasChoices` 兼容旧环境变量 `RATELIMIT_BACKEND`，存量部署零改动），`.env.example`、`main.py` 启动告警口径同步更新。
+- **S2 样板收敛**：`core/counter.py` 的 `RedisCounter` 五个方法各自重复「局部导入 + try/except fail-open」模板；抽出 `_redis_safe` 统一出口（降级日志与返回值只在一处定义），`redis_client` 提升为模块级导入（无循环依赖）。
+- **S3 计数 TTL 原子化**：原 `INCR` 后「值==1 再 EXPIRE」两步之间存在崩溃窗口，可能留下无 TTL 的永久计数键；改为 Lua 脚本 `_INCR_WITH_TTL_LUA` 原子执行（与限流 ZSET 同款套路），`test_counter.py` 的 `FakeRedis`/`BoomRedis` 同步增加 `eval` 契约。
+
+全量 **189 passed, 1 skipped**（真 Redis 集成用例按 `REDIS_TEST_URL` 按需启用），`ruff check .` 无 error。
+
+### 代码健康度整改（brooks-lint Health Dashboard 92/100 → W1–W4 + S1–S2）
+
+- **W1 合规去散弹（`privacy.py`）**：数据导出 / 到期物理删除的集合清单收敛为单一权威来源 `app/db/user_data_registry.py`（声明式 `USER_DATA_COLLECTIONS` + `EXPORT_KEYS`），`purge_expired_data()` 改为遍历登记表——此前两处各自硬编码，V3/V4/V6 每新增一个数据能力都要同时改两处，漏改任一处即「导出缺失」或更严重的「到期漏删」合规风险。新增 `test_data_registry.py` 锁死「导出字段 ⊇ 登记表」与「purge 清空登记表每个集合」，补齐 `test_privacy.py::test_purge_expired_data` 未覆盖的 `care_messages` / `practice_logs` / `memories`。
+- **W2 知识去重**：三处重复实现收敛为共享模块——`app/core/llm_json.py`（`extract_json`：emotion 与 long_memory 逐字相同的模型输出解析器）、`app/core/text.py`（`normalize` + `KEEP_RE`：crisis 与 long_memory 共用的字符白名单）、`app/core/metrics.py`（失败率监控，见 W3）。新增 `test_llm_json.py`。
+- **W3 跨实例状态（M5 生产化补完）**：告警冷却表（原 `alerting._last_sent`）与失败率计数（原 emotion / long_memory 的 `_fail_count` / `_total_count`）为进程内全局变量，多实例部署下各算各的——同一高危事件可能重复推送、阈值告警永远凑不齐分母。统一收敛到 `app/core/counter.py`（复用限流同款 memory / redis 双后端，`RATELIMIT_BACKEND` 切换，Redis 不可达 fail-open），并抽出 `app/core/redis_client.py` 共享连接池（`ratelimit` 改为委托之，保留原模块名以便既有打桩）。`FailRateCounter` 改为经 `counter` 计数。新增 `test_counter.py`（memory / redis 契约 + fail-open + 阈值告警清零）。
+- **W4 测试去副作用（顺序依赖）**：`helpers.login(mock_openid=)` 会改写全局 `wx_mock_openid` 且不还原，导致结果依赖用例执行顺序；现由 conftest 新增 autouse 夹具 `_restore_settings` 对 `Settings` 单例做前后快照还原，`login()` 签名保持不变；`test_long_memory._uid()` 改为显式 `openid`，去掉「取库内唯一用户」启发式。
+- **S1 / S2**：统一测试 helper 导入为 `from tests.helpers import ...` 并在 `pyproject.toml` 固定 `pythonpath`；pytest 默认 `addopts = "-ra"` 使 skip 原因在汇总可见，`client` fixture 的 skip reason 补明「本次跳过全部 DB 集成用例（危机入库 / 加密落库 / 隐私物理删除均未验证）」。
+
+全量 **189 passed, 1 skipped**（真 Redis 集成用例按 `REDIS_TEST_URL` 按需启用），`ruff check .` 无 error。
+
 ### 二期门控项（M3 · M4 · M6）
 
 - **M5 ③ 监控告警 MVP + M4 值班人通知链路**：新增 `services/alerting.py`——企业微信群机器人 webhook（未配 URL 仅记 warning 日志），同一 key 冷却去抖（`ALERT_COOLDOWN_SECONDS`，默认 600s），异常永不抛出；三处敏感点接入：高危风险事件通知值班人（`record_risk_event` level=high）、模型兜底命中追加词库漏报信号（`handle_model_risk`）、LLM 重试失败降级告警（`chat.py` 非流式/流式三处返回点）。隐私红线：告警只含用户/会话 ID、级别与触发源，不含命中词与对话原文。新增 9 项测试（`test_alerting.py`）。

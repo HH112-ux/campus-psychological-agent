@@ -413,6 +413,8 @@ flowchart LR
 | **V4** | 练习卡片：呼吸 / 正念 / 行为激活可交互组件 | ✅ **已完成**（文案 [待专业审校]，音频形态未纳入本轮） | `services/practices.py` 目录 + `GET /practices` / `POST /practices/{id}/complete`；`practice_logs` 留档；小程序 `pages/practice`（呼吸动画 / 正念计时 / 行动清单），首页与「我的」页入口；5 项测试 |
 | **V5** | 语音入口：录音 → 转写 → 用户确认后发送（可选 TTS） | ✅ **ASR 入口已完成**（**TTS 语音回复未做**，待接第三方 TTS 服务评估后再定） | `services/speech.py`（提供方抽象 mock/http + 体积上限 + fail-safe 降级）；`POST /api/v1/speech/transcribe`；**音频不落库不落盘（测试断言）**；小程序对话页麦克风按钮（录音计时 / 转写中态）+ `utils/api.js` `uploadFile`；生产配置校验禁止 mock 提供方；E1 评估集 +6 条语音噪声样本（59 → 65）；11 项测试 |
 | **V6** | 长期记忆：跨会话记住人物/事件/偏好/情绪诱因，克制注入回复 | ✅ **已完成** | `services/long_memory.py`（异步抽取 + `content_hash` 去重 + 上限 100 + AES-256-GCM 加密）；prompt_v2 记忆段（2-gram 相关性筛选，条数/字数双上限）；`GET/DELETE /api/v1/memories` 三接口（查看/删单条/清空）；导出与物理删除纳入；小程序 `pages/memories` + 「我的」入口；E1 新增 `eval_long_memory.py --gate`（18 条含 6 对抗）；19 项测试 |
+| **E2** | 多模型容灾：通义千问备用供应商，主异常自动切备 | ✅ **已完成** | `app/llm/qwen.py`（QwenProvider，DashScope compatible-mode v1）、`app/llm/fallback.py`（FallbackProvider：generate 双失败抛主异常；stream 严格语义——主已产出部分时重抛让 chat 保留，不拼接两段回复）、`app/llm/__init__.py` 工厂 `get_chat_provider()` / `get_light_provider()`；`qwen_enabled` + `qwen_api_key` 配置开关（默认 false，存量零改动）；chat / emotion / long_memory 保留 `ZhipuProvider` 模块名兼容既有 monkeypatch；新增 `test_llm_fallback.py`（13 条契约）；全量 202 passed |
+| **E3** | 模型路由与成本优化：简单共情走轻量档、长会话摘要压缩、成本基线 | 🟡 **部分完成**（路由 + 成本基线已做；**摘要压缩 deferred**） | `app/llm/router.py`（`select_tier` 启发式：危机/负面情绪/长文本→主档，短句+平静→轻量档；零额外 LLM 调用）；`app/core/cost.py`（按档位累计次数与字符数，每 100 次结构化 info 日志）；`cost_routing_enabled=false` 默认关闭（存量行为不变）、`cost_tracking_enabled=true`；新增 `test_cost_routing.py`（18 条）；**摘要压缩未做**——路线图自标「收益有限、质量风险高」，启动前须先扩 E1 评估集；全量 220 passed |
 
 > 剩余门控（M1 提审、M2 校方合作、M5 生产化基建）仍为待启动/外部驱动项，见第三章关键路径。
 
