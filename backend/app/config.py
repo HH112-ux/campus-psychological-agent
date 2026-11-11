@@ -157,11 +157,16 @@ class Settings(BaseSettings):
 
         仅 env=prod 生效；dev/测试（默认 env=dev）不受影响。
         """
+        # 方向性校验先行：任何非 dev 环境都不允许 mock 登录。
+        # mock 模式下所有请求都映射到同一个固定 openid，一旦上线会让全校共用一个账号。
+        if self.env != "dev" and self.wx_mock_login:
+            raise ValueError(
+                "生产配置校验未通过：\n- WX_MOCK_LOGIN 必须为 false"
+                f"（env={self.env} 禁止 mock 登录，否则所有用户共用同一个 openid）"
+            )
         if self.env != "prod":
             return self
         problems: list[str] = []
-        if self.wx_mock_login:
-            problems.append("WX_MOCK_LOGIN 必须为 false（生产禁止 mock 登录，否则任何人可伪造身份）")
         if not self.wx_appid or not self.wx_secret:
             problems.append("WX_APPID / WX_SECRET 必须配置（真实登录与内容安全链路依赖）")
         if not self.wx_content_check_enabled:

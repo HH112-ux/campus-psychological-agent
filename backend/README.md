@@ -31,6 +31,8 @@ backend/
 ```bash
 # 1. 环境变量
 cp .env.example .env          # 填写 ZHIPU_API_KEY 等
+# 模板默认面向部署（ENV=prod、WX_MOCK_LOGIN=false）。本地纯开发：
+#   ENV=dev、WX_MOCK_LOGIN=true，否则会因缺少生产凭据直接拒绝启动
 
 # 2. MongoDB（两种方式任选）
 #    方式 A：本机原生 mongod（见项目根 README 的 MongoDB 安装说明）
@@ -73,9 +75,10 @@ python3.12 -m venv .venv
 真机登录需在小程序后台获取 `WX_SECRET`；本地无 Secret 时用 mock 模式（`.env`）：
 
 ```bash
+ENV=dev                    # 非 dev 环境一律拒绝 mock 登录（启动即失败）
 WX_APPID=wx641b560961211693
 WX_SECRET=                 # 本地留空
-WX_MOCK_LOGIN=true         # 本地 true：用固定 mock openid 模拟 code2session；真机置 false
+WX_MOCK_LOGIN=true         # 本地 true：用固定 mock openid 模拟 code2session；真机/部署置 false
 WX_MOCK_OPENID=mock_dev_openid
 ```
 

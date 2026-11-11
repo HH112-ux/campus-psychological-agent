@@ -52,6 +52,9 @@ services:
     container_name: xinyu-api
     restart: unless-stopped
     env_file: .env
+    environment:
+      # 强制生产模式：即便 .env 漏改 ENV，也一定会跑生产配置校验（mock 登录/弱密钥直接拒绝启动）
+      ENV: prod
     depends_on:
       mongo:
         condition: service_healthy

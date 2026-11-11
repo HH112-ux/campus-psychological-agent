@@ -36,6 +36,12 @@ def test_prod_mock_login_rejected():
         Settings(**_prod_kwargs(wx_mock_login=True))
 
 
+def test_non_dev_mock_login_rejected():
+    """B-2：非 dev 环境一律拒绝 mock 登录（staging 等同样不能让全校共用一个 openid）。"""
+    with pytest.raises(ValidationError, match="WX_MOCK_LOGIN"):
+        Settings(env="staging", wx_mock_login=True)
+
+
 def test_prod_missing_appid_secret_rejected():
     with pytest.raises(ValidationError, match="WX_APPID"):
         Settings(**_prod_kwargs(wx_appid="", wx_secret=""))
