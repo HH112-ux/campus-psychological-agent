@@ -33,8 +33,48 @@ cd backend
 ## 3. CI 行为
 
 - `eval` job 每次 push/PR 触发；`ZHIPU_API_KEY` 从仓库 Secrets 注入，命令带 `--require-key`。
-- **未配置 secret**：脚本打印 `FAIL` 退出 1，job 失败——评估门不允许静默跳过（fork PR 需仓库维护者补 secret 后重跑）。
+- **未配置 secret**：脚本打印 `FAIL` 退出 1，job 失败——评估门不允许静默跳过。
 - 评估成本：65 条 × `glm-4-flash` × 200 max_tokens + 18 条（长期记忆）× 300 max_tokens，单次可忽略。
+
+### 3.1 fork PR 的实际行为与处理策略
+
+**实际行为**：GitHub 对来自 fork 的 `pull_request` 事件**不会注入仓库 Secrets**，因此 `ZHIPU_API_KEY` 为空；`--require-key` 让 `eval` job 在 fork PR 上**必然失败**，日志为：
+
+```text
+FAIL: 未配置 ZHIPU_API_KEY，评估门要求真实评估（--require-key），拒绝静默跳过
+```
+
+这是预期行为，不是脚本缺陷，也不是 secret 配置错误。首次贡献者的 PR 还需要维护者先批准才会运行 workflow。
+
+**为什么保留 `--require-key`**：另一条路是把缺 key 当作 `SKIP` 退出 0，那样「eval 通过」会在没有任何真实评估发生的情况下变绿，评估门等于失效。宁可红，不可假绿。
+
+**维护者处理（二选一，必须留痕）**：
+
+1. **镜像到本仓库分支（首选，适用于任何 PR）**：由维护者把 fork 的提交拉到本仓库分支，在内部 PR 上触发 CI；secret 正常注入，eval 真实运行，合入以内部 PR 为准，原 fork PR 关闭并附链接。
+
+   ```bash
+   git fetch origin pull/<PR号>/head:pr-<PR号>
+   git push origin pr-<PR号>:review/pr-<PR号>
+   gh pr create --base main --head review/pr-<PR号> \
+     --title "<原标题>（镜像 #<PR号>）" \
+     --body "镜像自 #<PR号>：fork PR 无法获得仓库 secret，改由本仓库分支让 eval 门真实运行。"
+   ```
+
+2. **本地代跑 + 显式豁免（仅限不触碰 LLM 路径的 PR）**：维护者用自己的 key 在干净 checkout 上跑两条门禁命令，把输出尾部贴到 PR，再视 `eval` 是否为必需检查决定是否管理员合并。
+
+   ```bash
+   cd backend
+   .venv/bin/python scripts/eval_emotion_p5.py --gate --require-key
+   .venv/bin/python scripts/eval_long_memory.py --gate --require-key
+   ```
+
+   豁免条件：改动不涉及 `backend/app/llm/`、`backend/app/services/emotion.py`、`backend/app/services/long_memory.py`、`backend/scripts/eval-data/` 与评估脚本；豁免评论必须写明被验证的 commit SHA、两条命令的严格一致率/综合命中率，以及执行人。
+
+**禁止做法**（会把密钥或门禁交给不可信代码）：
+
+- 改用 `pull_request_target` 并 checkout fork 的 head：secrets 会暴露给 fork 代码，等于把 `ZHIPU_API_KEY` 交给任意贡献者；
+- 去掉 `--require-key`、加 `continue-on-error`、把缺失 key 改回 `SKIP`：评估门变假绿；
+- 在 fork 仓库配置同名 secret：上游 PR 的 `pull_request` 工作流不会使用它，既解决不了红灯，也扩大了密钥暴露面。
 
 ## 4. 扩充约定（新增 LLM 能力 → 新增评估样本）
 
