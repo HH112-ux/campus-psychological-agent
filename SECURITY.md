@@ -17,6 +17,7 @@
   - 微信小程序 AppSecret（仅存服务端）
   - 智谱 API Key
 - 轮换策略：怀疑泄露立即轮换；正常轮换周期建议 ≤ 90 天（内测期可放宽，提审前必须完成一次全量轮换）。
+- 对话内容加密钥的具体操作步骤（先配 `DATA_ENCRYPTION_KEY_PREVIOUS` 再切新钥、全量重写、验证与回退）见 [docs/encryption-key-rotation-runbook.md](docs/encryption-key-rotation-runbook.md)。
 - 泄露处置：立即撤销并轮换 → 检查访问日志确认影响面 → 更新部署文档密钥记录 → 复盘原因。
 
 ## 3. 依赖安全

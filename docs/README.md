@@ -51,6 +51,7 @@
 | 文档 | 说明 |
 |---|---|
 | [privacy-policy.md](privacy-policy.md) | 隐私政策终稿（数据处理、用户权利、留存与删除） |
+| [encryption-key-rotation-runbook.md](encryption-key-rotation-runbook.md) | 加密密钥轮换 runbook（顺序红线、重写、验证与回退） |
 | [../SECURITY.md](../SECURITY.md) | 安全策略：漏洞报告、密钥管理与数据保护 |
 
 ## 危机响应
