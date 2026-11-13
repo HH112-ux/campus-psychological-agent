@@ -1,0 +1,34 @@
+# SOURCE-VISIBLE 源码可见声明
+
+版权所有 (c) 2026 Caspian。保留所有权利。
+
+本项目采用「源码可见（source-visible）」发布方式，**不是**开源项目，也未采用任何开源许可证（包括 MIT、Apache-2.0、GPL 等）。本文件说明你可以在何种范围内使用本仓库的内容。
+
+## 允许
+
+- **阅读**：可自由阅读、浏览本仓库的源代码、文档与配置，用于学习、评估或技术交流。
+- **引用**：可在文章、论文、课程作业或内部技术文档中引用本项目的代码片段、设计思路或结论，但须注明来源（仓库地址与作者 Caspian），且引用不得构成对项目的整体复制。
+
+## 禁止
+
+- **商用**：禁止将本项目全部或部分（含代码、文档、设计、模型提示词与危机词库等内容）用于任何商业目的，包括但不限于收费产品或服务、商业咨询交付、商业培训，以及在商业产品中直接或间接使用。
+- **再分发**：禁止以任何形式再发布、分发、转让、镜像或公开托管本项目全部或部分内容，包括复制到其他仓库、打包进发行版或部署为对外服务。
+- **演绎与衍生**：禁止基于本项目创建衍生作品并对外发布；未经书面许可，不得移除或修改本声明与版权标识。
+
+## 其他
+
+- 本项目涉及校园心理陪伴场景，**不构成医疗器械或医疗服务**，不提供诊断、治疗或用药建议。
+- 如需在许可范围之外使用（包括商业授权、二次分发、合作开发），须事先取得版权所有者的书面授权。
+- 本声明不授予任何商标、专利或肖像权许可；代码按「现状」提供，不附带任何明示或默示担保。
+
+---
+
+# SOURCE-VISIBLE Notice
+
+Copyright (c) 2026 Caspian. All rights reserved.
+
+This repository is published as **source-visible**: it is **not** open source and is not licensed under any open source license (MIT, Apache-2.0, GPL or otherwise).
+
+- **Permitted**: reading the source, documentation and configuration; quoting short excerpts with attribution to this repository and the author (Caspian) for learning, evaluation or technical discussion.
+- **Prohibited**: any commercial use; any redistribution, mirroring, sublicensing or public hosting of the project in whole or in part; publishing derivative works; removing this notice or the copyright notice.
+- Written permission from the copyright holder is required for any use outside the scope above. The software is provided "as is", without warranty of any kind.
